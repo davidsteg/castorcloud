@@ -1,0 +1,24 @@
+{
+  "name": "@pc/provisioner",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "worker": "cross-env NODE_EXTRA_CA_CERTS=../../.dev-certs/ca.crt tsx src/worker.ts",
+    "e2e": "cross-env NODE_EXTRA_CA_CERTS=../../.dev-certs/ca.crt tsx src/e2e.ts",
+    "delete-tenant": "tsx src/delete-tenant.ts",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@pc/core": "^0.0.0",
+    "@pc/db": "^0.0.0",
+    "bullmq": "^5.81.5",
+    "dotenv": "^17.2.0"
+  },
+  "devDependencies": {
+    "@types/node": "^24.0.0",
+    "cross-env": "^10.1.0",
+    "tsx": "^4.20.0",
+    "typescript": "^5.8.0"
+  }
+}

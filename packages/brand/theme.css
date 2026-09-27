@@ -1,0 +1,13 @@
+/* Injected into every embedded service page by the node's skin proxy
+   (served at /_brand/theme.css). Service-specific overrides live in
+   services/<service>.css and are appended after this file. */
+@import url("./tokens.css");
+
+html, body {
+  font-family: var(--pc-font) !important;
+}
+
+/* The portal shell already provides navigation, account menu and logo. */
+html.pc-embedded [data-pc-hide] {
+  display: none !important;
+}

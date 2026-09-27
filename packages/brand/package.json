@@ -1,0 +1,10 @@
+{
+  "name": "@pc/brand",
+  "version": "0.0.0",
+  "private": true,
+  "description": "Brand tokens, the skin injected into embedded services, and the iframe bridge.",
+  "exports": {
+    "./tokens.css": "./tokens.css",
+    "./bridge-protocol": "./bridge-protocol.ts"
+  }
+}

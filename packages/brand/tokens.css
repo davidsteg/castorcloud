@@ -1,0 +1,47 @@
+/* Single source of truth for the brand (castorcloud.ch). Used by the portal
+   and by the skin injected into every embedded service (theme.css imports this).
+   Logo colours: cloud Swiss red #d52b1e, beaver navy #243447. */
+:root {
+  --pc-font: var(--font-inter, "Inter"), system-ui, -apple-system, "Segoe UI", sans-serif;
+  --pc-font-brand: var(--font-nunito, "Nunito"), var(--pc-font);
+  --pc-radius: 14px;
+
+  --pc-bg: #f7f9fb;
+  --pc-surface: #ffffff;
+  --pc-surface-2: #eef3f7;
+  --pc-text: #1d2b3a;          /* logo navy, slightly deeper for body text */
+  --pc-muted: #5b6878;
+  --pc-border: #dde5ec;
+  --pc-navy: #243447;
+  --pc-blue: #d52b1e;          /* logo cloud colour: marks, links, highlights (name kept for CSS) */
+  /* Swiss red: white text on it meets WCAG AA (4.9:1). */
+  --pc-accent: #d52b1e;
+  --pc-accent-hover: #b82317;
+  --pc-accent-contrast: #ffffff;
+  --pc-swiss: #d52b1e;         /* only for the small "CH" badge */
+  --pc-ok: #1f8a4c;
+
+  /* Breakdown chart series */
+  --pc-series-1: #243447;      /* servers & storage */
+  --pc-series-2: #9aa6b2;      /* VAT */
+  --pc-series-3: #d52b1e;      /* open source */
+  --pc-series-4: #3b6fd8;      /* payment fees */
+  --pc-series-5: #cfd8e1;      /* operations */
+  --pc-series-6: #d99a2b;      /* AI credit */
+}
+
+:root[data-pc-theme="dark"] {
+  --pc-bg: #0f1620;
+  --pc-surface: #16202c;
+  --pc-surface-2: #1d2936;
+  --pc-text: #e8eef4;
+  --pc-muted: #9aa8b6;
+  --pc-border: #2a3746;
+  --pc-accent: #ef4a3c;
+  --pc-accent-hover: #ff6154;
+  --pc-accent-contrast: #ffffff;
+  --pc-series-1: #e8eef4;
+  --pc-series-2: #6f7c89;
+  --pc-series-5: #3a4858;
+  --pc-series-6: #e0a23a;
+}

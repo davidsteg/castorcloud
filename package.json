@@ -1,0 +1,30 @@
+{
+  "name": "personal-cloud",
+  "private": true,
+  "workspaces": [
+    "apps/*",
+    "packages/*"
+  ],
+  "scripts": {
+    "dev": "turbo run dev",
+    "build": "turbo run build",
+    "lint": "turbo run lint",
+    "typecheck": "turbo run typecheck",
+    "db:generate": "npm run generate -w @pc/db",
+    "db:migrate": "npm run migrate -w @pc/db",
+    "cp:up": "docker compose -f infra/control-plane/docker-compose.yml --env-file .env up -d",
+    "cp:down": "docker compose -f infra/control-plane/docker-compose.yml --env-file .env down"
+  },
+  "devDependencies": {
+    "turbo": "^2.5.0",
+    "typescript": "^5.8.0"
+  },
+  "packageManager": "npm@11.19.0",
+  "allowScripts": {
+    "@prisma/client@6.19.3": true,
+    "prisma@6.19.3": true,
+    "@prisma/engines@6.19.3": true,
+    "esbuild@0.28.2": true,
+    "msgpackr-extract": false
+  }
+}

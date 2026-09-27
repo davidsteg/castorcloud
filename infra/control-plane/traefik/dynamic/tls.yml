@@ -1,0 +1,7 @@
+# Development TLS: one wildcard certificate from the local dev CA.
+tls:
+  stores:
+    default:
+      defaultCertificate:
+        certFile: /certs/wildcard.crt
+        keyFile: /certs/wildcard.key

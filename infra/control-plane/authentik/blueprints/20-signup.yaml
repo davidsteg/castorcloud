@@ -1,0 +1,63 @@
+# yaml-language-server: $schema=https://goauthentik.io/blueprints/schema.json
+# Self-service sign-up: e-mail registration and (optional) "Continue with Google".
+#
+# - Enrollment: the flow "default-enrollment-flow" is instantiated by the
+#   provisioner at startup (Authentik can't instantiate blueprints from a
+#   blueprint): with SMTP configured, new accounts must verify their e-mail;
+#   without it (development) the 2-stage flow is used.
+# - Google: enabled when PC_GOOGLE_CLIENT_ID is set. Matching mode "email_deny":
+#   a Google login never attaches to an existing account with the same e-mail
+#   (prevents takeover via a pre-registered, unverified account).
+version: 1
+metadata:
+  name: personal-cloud-signup
+  labels:
+    blueprints.goauthentik.io/instantiate: "true"
+entries:
+  - model: authentik_sources_oauth.oauthsource
+    conditions:
+      - !Env PC_GOOGLE_CLIENT_ID
+    identifiers:
+      slug: google
+    attrs:
+      name: Google
+      provider_type: google
+      consumer_key: !Env PC_GOOGLE_CLIENT_ID
+      consumer_secret: !Env PC_GOOGLE_CLIENT_SECRET
+      authentication_flow: !Find [authentik_flows.flow, [slug, default-source-authentication]]
+      enrollment_flow: !Find [authentik_flows.flow, [slug, default-source-enrollment]]
+      user_matching_mode: email_deny
+      enabled: true
+
+  # Login page: offer registration, and the Google button when configured.
+  - model: authentik_stages_identification.identificationstage
+    identifiers:
+      name: default-authentication-identification
+    attrs:
+      user_fields: [email, username]
+      enrollment_flow: !Find [authentik_flows.flow, [slug, default-enrollment-flow]]
+      show_source_labels: true
+  - model: authentik_stages_identification.identificationstage
+    conditions:
+      - !Env PC_GOOGLE_CLIENT_ID
+    identifiers:
+      name: default-authentication-identification
+    attrs:
+      sources:
+        - !Find [authentik_sources_oauth.oauthsource, [slug, google]]
+
+  # Login pages in the portal's look.
+  - model: authentik_brands.brand
+    identifiers:
+      domain: !Format ["auth.%s", !Env PC_BASE_DOMAIN]
+    attrs:
+      branding_title: !Env PC_BRAND_NAME
+      branding_custom_css: |
+        :root {
+          --pf-global--primary-color--100: #d52b1e;
+          --pf-global--primary-color--200: #b82317;
+          --pf-global--link--Color: #d52b1e;
+          --ak-accent: #d52b1e;
+        }
+        .pf-c-background-image, .ak-login-container { background: #f7f9fb !important; }
+        body { font-family: Inter, system-ui, -apple-system, "Segoe UI", sans-serif; }

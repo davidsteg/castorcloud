@@ -1,0 +1,6 @@
+/* Immich overrides. Selectors must be verified against the pinned Immich
+   version (see packages/stack-templates) before every upgrade. */
+html.pc-embedded {
+  --immich-primary: var(--pc-accent);
+}
+/* TODO(phase 2): hide Immich's top-bar logo and user avatar menu. */

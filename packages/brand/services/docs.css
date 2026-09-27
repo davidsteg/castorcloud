@@ -1,0 +1,6 @@
+/* Paperless-ngx overrides (Angular + Bootstrap). */
+html.pc-embedded {
+  --bs-primary: var(--pc-accent);
+  --pngx-primary: var(--pc-accent);
+}
+/* TODO(phase 2): hide the Paperless navbar brand and user dropdown. */

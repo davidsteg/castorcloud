@@ -1,0 +1,12 @@
+node_modules/
+.next/
+dist/
+.turbo/
+.env
+.env.*
+!.env.example
+*.log
+
+# Rendered tenant configs and secrets (dev)
+.tenants/
+.dev-certs/

@@ -1,0 +1,461 @@
+// English is the reference dictionary: every other language must provide the
+// same keys (enforced by the Dictionary type).
+const en = {
+  meta: {
+    title: "Your private cloud, hosted in Switzerland",
+    description:
+      "Photos, documents, timeline and flights in one private cloud. Open source, encrypted, hosted in Switzerland.",
+  },
+  nav: {
+    features: "Features",
+    assistant: "Assistant",
+    security: "Security",
+    pricing: "Pricing",
+    faq: "FAQ",
+    login: "Log in",
+    start: "Get started",
+    myCloud: "My cloud",
+  },
+  hero: {
+    badge: "Hosted in Switzerland",
+    title: "Your digital life.\nStored in Switzerland.",
+    lead:
+      "Photos, documents, places and flights – in one private cloud that belongs to you. No ads, no tracking, no training AI on your data.",
+    cta: "Build your plan",
+    secondary: "How we protect your data",
+    trust: ["Data centres in Switzerland", "Swiss data protection law (nFADP)", "100% open source", "Encrypted at rest"],
+  },
+  services: {
+    title: "Everything Google does for you. Without Google.",
+    lead: "Book only what you need. Every service is included in single sign-on and the same app.",
+    replaces: "Replaces",
+    items: {
+      photos: {
+        name: "Photos",
+        text: "Automatic backup from your phone, albums, face and object search, sharing with family.",
+        replaces: "Google Photos, iCloud Photos",
+      },
+      docs: {
+        name: "Documents",
+        text: "Scan letters and invoices; text recognition makes every page searchable and neatly tagged.",
+        replaces: "Google Drive scans, paper folders",
+      },
+      places: {
+        name: "Timeline",
+        text: "Your location history on a map: trips, visits and statistics – imported from Google in minutes.",
+        replaces: "Google Maps Timeline",
+      },
+      flights: {
+        name: "Flights",
+        text: "Every flight on a world map, with statistics, airlines and airports.",
+        replaces: "TripIt, flight apps",
+      },
+      assistant: {
+        name: "Assistant",
+        text: "Ask questions about your own data: “When was I in Lisbon, and where is the hotel invoice?”",
+        replaces: "Gemini, ChatGPT",
+      },
+    },
+  },
+  swiss: {
+    title: "Swiss hosting. Honest about security.",
+    lead:
+      "Your data stays in Swiss data centres and is subject to Swiss law. We tell you exactly what we protect – and where the limits are.",
+    points: [
+      {
+        title: "Stored in Switzerland",
+        text: "Servers and encrypted backups in Swiss data centres. Your data does not leave the country.",
+      },
+      {
+        title: "Encrypted per customer",
+        text: "Each customer gets their own encrypted storage volume. The keys are kept separately in a key service – never on the storage server.",
+      },
+      {
+        title: "No routine admin access",
+        text: "Our team has no everyday access to your data. Emergency access requires two people, is logged permanently and you are informed.",
+      },
+      {
+        title: "Open source",
+        text: "Every building block is open source and publicly auditable. No lock-in: you can export everything at any time.",
+      },
+    ],
+    more: "Read the full security model",
+  },
+  pricing: {
+    title: "Transparent pricing. Pay for what you use.",
+    lead: "Choose your services and storage. We show you exactly where every franc goes.",
+    monthly: "Monthly",
+    yearly: "Yearly",
+    yearlyHint: "2 months free",
+    base: "Base: account, single sign-on, encrypted backups, support",
+    services: "Services",
+    storage: "Storage",
+    members: "Household members",
+    membersHint: "You plus {n} more",
+    perMonth: "/ month",
+    perYear: "/ year",
+    effective: "equals {price} per month",
+    vatIncluded: "All prices in CHF incl. 8.1% VAT",
+    continue: "Continue",
+    minService: "Choose at least one service",
+    whereTitle: "Where your money goes",
+    whereLead: "Per month, for the configuration above:",
+    parts: {
+      vat: "Swiss VAT (8.1%)",
+      paymentFees: "Payment fees (Stripe)",
+      openSource: "Donation to open-source projects (10 % of the base price)",
+      infrastructure: "Servers, storage & backups in Switzerland",
+      operations: "Operations, support & development",
+      aiCredit: "AI credit (passed on to the AI provider)",
+    },
+    donationsTitle: "Your open-source donation goes to",
+    donationsNote: "10 % of the base price (without storage and AI credit). We pay out quarterly and publish the receipts.",
+    aiCredit: "Monthly AI credit",
+    aiCreditHint: "A hard monthly limit for AI usage. When it is used up, the assistant pauses until next month – or you raise it. Passed on without mark-up and never discounted.",
+  },
+  home: {
+    more: "Learn more",
+    pricingFrom: "from {price} per month",
+    pricingPoints: [
+      "Book only the services you need",
+      "Every franc transparently broken down",
+      "10 % of the base price goes to open source",
+      "Monthly or yearly – yearly saves 2 months",
+    ],
+    pricingCta: "Calculate your price",
+    assistantPoints: [
+      "Runs inside your own encrypted cloud",
+      "Only the question and a few excerpts go to the language model",
+      "Never used for AI training",
+      "Hard monthly limit via your AI credit",
+    ],
+    faqAll: "All questions",
+    startTitle: "Ready for your own cloud?",
+    startText: "Choose your services, see exactly what you pay – and your cloud is ready in minutes.",
+    startCta: "Build your plan",
+  },
+  openSourcePage: {
+    rolesTitle: "What each project does in your cloud",
+    login: "Sign-in and single sign-on",
+    credit: "Screenshot: {name} project ({license})",
+    noScreenshot: "No screenshot – the assistant appears as a chat inside your cloud.",
+    donationTitle: "How the donation works",
+    donationText: "10 % of the net base price (base fee, services and household members – without storage and AI credit) is set aside for the projects you actually use. Services fund their own project; the base fee is shared among the projects of your booked services. We pay out quarterly and publish the receipts.",
+  },
+  featuresPage: {
+    jump: "Jump to",
+    from: "{price} per month",
+    cta: "Start with {name}",
+    importLabel: "Moving in",
+    appsLabel: "Apps",
+    items: {
+      photos: {
+        headline: "All your photos. Safe in Switzerland.",
+        lead: "Your photo and video library like Google Photos – except it belongs to you. Your phone backs up every new picture automatically, and you find any photo in seconds.",
+        bullets: [
+          "Automatic backup from your phone, even in the background",
+          "Face recognition: all photos of a person in one click",
+          "Smart search in your own words, e.g. “dog at the lake”",
+          "A map of every place you took photos",
+          "Share albums – with your family or by link",
+          "“One year ago” memories, videos and live photos included",
+        ],
+        import: "Bring your whole Google Photos library via Google Takeout – including dates and places.",
+        apps: "Free Immich app for iPhone and Android; in the browser on any computer.",
+      },
+      docs: {
+        headline: "Never search for paperwork again.",
+        lead: "Scan or photograph letters, invoices and contracts – text recognition makes every page searchable and files it automatically in the right place.",
+        bullets: [
+          "Full-text search across all documents thanks to OCR",
+          "Learns as you go: assigns sender, document type and tags automatically",
+          "Import invoices automatically by forwarding e-mails",
+          "Custom fields such as amount, due date or contract end",
+          "Long-term archive as PDF/A, the original is kept",
+          "Share documents within your household with clear permissions",
+        ],
+        import: "Simply upload existing PDFs and scans or forward e-mails – the rest happens automatically.",
+        apps: "Community apps Swift Paperless (iPhone) and Paperless Mobile (Android); in the browser on any device.",
+      },
+      places: {
+        headline: "Your timeline – without Google reading along.",
+        lead: "Where were you last summer? Your trips, routes and visits on a map, with statistics per year, country and city – privately in your own cloud.",
+        bullets: [
+          "All your routes on the map, as tracks or heatmap",
+          "Trips with duration, distance and your photos from the way",
+          "Statistics: kilometres, countries and cities per year and month",
+          "Visited places are detected automatically",
+          "Record your location history with an app – as precise as you like",
+          "Export any time as GPX or GeoJSON",
+        ],
+        import: "Import your Google Maps Timeline from Google Takeout – years of history in minutes.",
+        apps: "Official Dawarich app for iPhone and Android; alternatively OwnTracks or Overland.",
+      },
+      flights: {
+        headline: "Every flight of your life on one map.",
+        lead: "Your personal flight log: every journey on the world map, with statistics on distance, flight time, airlines and airports.",
+        bullets: [
+          "World map with all your flight routes",
+          "Statistics: distance, flight hours, countries, airlines, airports",
+          "Details such as seat, class, aircraft type and notes",
+          "Log flights for the whole family",
+          "List and search across all past and upcoming flights",
+          "Export your data at any time",
+        ],
+        import: "Bring your flights from myFlightradar24, App in the Air or JetLog by import.",
+        apps: "In the browser on computer and phone.",
+      },
+      assistant: {
+        headline: "Ask your own data.",
+        lead: "The assistant knows your photos, documents, places and flights – and answers questions in plain language. It runs in your cloud and remembers what matters to you.",
+        bullets: [
+          "Questions across all services: “When was I in Lisbon?”",
+          "Finds documents: “Where is the bike warranty?”",
+          "Memory for preferences and facts – stored in your cloud",
+          "Only the question and matching excerpts go to the language model",
+          "No training on your data",
+          "Hard monthly limit via your AI credit",
+        ],
+        import: "Nothing to import – the assistant uses the data already in your cloud.",
+        apps: "Chat in the portal, installable as an app on your phone; optional Telegram.",
+      },
+    },
+  },
+  appsInfo: {
+    official: "Official app",
+    community: "Community app",
+    web: "In the browser – can also be installed as an app on your home screen.",
+    connect: "After signing in, your cloud shows you step by step how to connect the apps.",
+  },
+  setup: {
+    nav: "Set up apps",
+    home: "Overview",
+    welcome: "Welcome to your cloud",
+    setupHint: "Connect your phone now – it takes a few minutes.",
+    setupCta: "Set up apps",
+    title: "Set up apps",
+    lead: "How to connect your phone to your cloud. Scan the QR codes with your phone camera or copy the address.",
+    serverAddress: "Server address",
+    copy: "Copy",
+    copied: "Copied",
+    scanHint: "Scan with your phone camera",
+    notBooked: "Not booked",
+    photosSteps: [
+      "Install the Immich app.",
+      "On first start, enter the server address (or scan the QR code).",
+      "Tap “Continue” and sign in as usual.",
+      "Turn on automatic backup under “Backup”.",
+    ],
+    docsIosTitle: "iPhone: Swift Paperless",
+    docsIosSteps: [
+      "Install Swift Paperless.",
+      "Enter the server address.",
+      "Choose “OpenID Connect” sign-in and sign in as usual.",
+    ],
+    docsAndroidTitle: "Android: Paperless Mobile",
+    docsAndroidSteps: [
+      "Install Paperless Mobile.",
+      "Open “Documents” in your cloud, click your name at the top right → “My Profile” and generate an API key (token).",
+      "Enter the server address and the API key in the app.",
+    ],
+    placesSteps: [
+      "Install the Dawarich app.",
+      "In your cloud, open “Timeline” → Account → “API access”.",
+      "In the app, tap “Scan QR code” and scan the code shown there – address and key are filled in automatically.",
+    ],
+    placesOpen: "Open the timeline account page",
+    webTitle: "Flights and assistant as an app",
+    webText: "Open your cloud address in your phone's browser and add it to the home screen – it then starts like an app.",
+    webIos: "iPhone (Safari): Share icon → “Add to Home Screen”.",
+    webAndroid: "Android (Chrome): menu ⋮ → “Install app”.",
+    security: "The apps connect encrypted and directly to your cloud in Switzerland. You can revoke API keys at any time in the respective service.",
+  },
+  showcase: {
+    title: "One app. Everything that matters to you.",
+    lead: "Every service runs inside your own cloud and looks like one product – on the computer and on your phone.",
+    note: "Illustration with sample data",
+    captions: {
+      photos: "Your photo library with albums, people and places – backed up automatically from your phone.",
+      docs: "Every letter and invoice searchable by its full text, tagged and filed automatically.",
+      places: "Where you have been: trips, visits and routes on a map, imported from Google in minutes.",
+      flights: "Every flight on the world map, with distances, airlines and statistics.",
+      assistant: "Ask in plain language – the assistant searches your photos, documents, places and flights.",
+    },
+    sample: {
+      search: "Search",
+      albumTitle: "Summer in Ticino",
+      docTitle: "Invoice Hotel Lisboa",
+      docMeta: "Invoice · Travel · 14.05.2026",
+      placesTitle: "May 2026",
+      placesStat: "1'284 km · 6 cities",
+      flightsStat: "12 flights · 18'420 km",
+      question: "When was I in Lisbon, and where is the hotel invoice?",
+      answer: "You were in Lisbon from 12 to 16 May 2026 (flight LX 2084 from Zurich). The invoice from Hotel Lisboa is in Documents, tagged “Travel”. You also took 48 photos there.",
+    },
+  },
+  assistantInfo: {
+    title: "How the assistant works",
+    lead: "A personal assistant that knows your data – without handing it over.",
+    steps: [
+      {
+        title: "You ask",
+        text: "In the chat in your cloud, in the app on your phone or – if you want – via Telegram.",
+      },
+      {
+        title: "It searches in your cloud",
+        text: "The assistant (Hermes Agent) runs inside your own encrypted cloud and searches your photos, documents, places and flights there.",
+      },
+      {
+        title: "Only what is needed goes out",
+        text: "Only your question and the few matching excerpts are sent to the language model – never your whole library.",
+      },
+      {
+        title: "It remembers – with you",
+        text: "Its memory (preferences, facts you taught it) is stored in your encrypted cloud, not at the AI provider.",
+      },
+    ],
+    guaranteesTitle: "What we guarantee",
+    guarantees: [
+      "The language model only processes the request to write the answer.",
+      "Your data is never used to train AI models.",
+      "Providers that retain data are excluded – requests are not stored.",
+      "A hard monthly limit: you never pay more than your chosen AI credit.",
+    ],
+    provider: {
+      openrouter: "Requests are routed via OpenRouter exclusively to AI providers with zero data retention and no training; providers from China are excluded. OpenRouter is a US company – for maximum sovereignty we will also offer processing exclusively in Switzerland.",
+      swiss: "Requests are processed exclusively by a Swiss provider in data centres in Switzerland. Neither US nor Chinese companies are involved.",
+    },
+    channelsTitle: "Where you chat",
+    channels: [
+      {
+        name: "In your cloud",
+        text: "Chat directly in the web app – private and entirely under our roof.",
+      },
+      {
+        name: "As an app",
+        text: "Install the web app on your phone's home screen – it works like a native app.",
+      },
+      {
+        name: "Telegram (optional)",
+        text: "Convenient, but messages to bots are not end-to-end encrypted and pass through Telegram's servers. Off by default.",
+      },
+    ],
+  },
+  openSource: {
+    title: "Built on outstanding open source",
+    lead:
+      "We don't reinvent the wheel – we run the best open-source projects securely for you and give 10% of our revenue back to them.",
+  },
+  faq: {
+    title: "Frequently asked questions",
+    items: [
+      {
+        q: "Can you read my data?",
+        a: "Your data is encrypted on disk and in backups, and our team has no routine access. To offer search, face recognition and text recognition, our servers must process your data while it is running – that is why we don't claim to be “zero knowledge”. Any emergency access is logged and you are informed.",
+      },
+      {
+        q: "Where exactly is my data stored?",
+        a: "In data centres in Switzerland, including the encrypted backups. Payments are processed by Stripe; logging in with Google is optional.",
+      },
+      {
+        q: "Can I take my data with me?",
+        a: "Yes. Everything is based on open formats, and you can export photos, documents and history at any time.",
+      },
+      {
+        q: "Can I change my plan later?",
+        a: "Yes, services, storage and members can be adjusted monthly. You can cancel at any time at the end of the billing period.",
+      },
+      {
+        q: "Which apps can I use on my phone?",
+        a: "The official Immich app for photos and the official Dawarich app for your location history – both for iPhone and Android. For documents, the community apps Swift Paperless (iPhone) and Paperless Mobile (Android). Flights and the assistant run in the browser, optionally as an app on your home screen.",
+      },
+    ],
+  },
+  footer: {
+    tagline: "Your private cloud, hosted in Switzerland.",
+    legal: "Legal notice",
+    privacy: "Privacy policy",
+    terms: "Terms",
+    security: "Security",
+    hosted: "Hosted in Switzerland",
+  },
+  security: {
+    title: "Our security model",
+    lead: "What we protect, how we do it – and what is technically not possible.",
+    sections: [
+      {
+        title: "Encryption at rest",
+        text: "Each customer has their own encrypted volume (AES-256, LUKS2). The key is generated randomly, stored only wrapped in our separate key service and handed to the server in memory when the volume is opened. Stolen or decommissioned disks are unreadable.",
+      },
+      {
+        title: "Encrypted backups",
+        text: "Backups are encrypted before they leave the server, with a separate key per customer. The backup location only ever sees encrypted data.",
+      },
+      {
+        title: "Encryption in transit",
+        text: "All connections use TLS. Your services run in a stack of their own, isolated from other customers.",
+      },
+      {
+        title: "Access by our team",
+        text: "No routine access to customer data. Emergency access (e.g. a support case you request) requires two people, is logged in an append-only audit log and you are informed.",
+      },
+      {
+        title: "The honest limit",
+        text: "Search, face recognition and text recognition only work if the server can process your data while it runs. That is why we do not advertise “zero knowledge” encryption – we would rather be precise than make promises we can't keep.",
+      },
+      {
+        title: "Third parties",
+        text: "Payments: Stripe (card data never reaches us). Optional login with Google: Google learns that you log in. The optional assistant sends your question and the relevant excerpts to an AI provider – only if you book it.",
+      },
+    ],
+  },
+  signup: {
+    title: "Create your cloud",
+    lead: "Almost done. Choose a name and an address for your cloud.",
+    household: "Name",
+    householdPlaceholder: "e.g. Family Muster",
+    address: "Your address",
+    addressHint: "Lowercase letters, digits and hyphens.",
+    taken: "This address is already taken.",
+    invalid: "Please use 3–30 lowercase letters, digits or hyphens.",
+    summary: "Your plan",
+    accept: "I accept the terms and the privacy policy.",
+    pay: "Continue to payment",
+    payDev: "Create (development: without payment)",
+    signInFirst: "Please log in first – with Google or your e-mail address.",
+    signIn: "Log in or register",
+    change: "Change",
+  },
+  account: {
+    title: "My clouds",
+    empty: "You don't have a cloud yet.",
+    create: "Create a cloud",
+    open: "Open",
+    billing: "Invoices & subscription",
+    logout: "Log out",
+    status: { PENDING: "Waiting for payment", PROVISIONING: "Being set up", ACTIVE: "Active", SUSPENDED: "Suspended", DELETING: "Being deleted", DELETED: "Deleted", FAILED: "Setup problem" },
+  },
+  welcome: {
+    title: "Your cloud is being set up",
+    lead: "This takes a few minutes. You can leave this page open.",
+    steps: {
+      payment: "Payment confirmed",
+      identity: "Accounts and single sign-on",
+      storage: "Encrypted storage",
+      services: "Starting your services",
+      ready: "Ready",
+    },
+    failed: "Something went wrong. We have been notified and will fix it – you don't need to do anything.",
+    open: "Open my cloud",
+    readyTitle: "Your cloud is ready",
+  },
+} as const;
+
+type Widen<T> = T extends string
+  ? string
+  : T extends readonly (infer U)[]
+    ? readonly Widen<U>[]
+    : { [K in keyof T]: Widen<T[K]> };
+
+export type Dictionary = Widen<typeof en>;
+export default en satisfies Dictionary;

@@ -1,0 +1,127 @@
+# Control plane: edge proxy, identity provider, databases.
+# The portal and provisioner run on the host during development
+# (npm run dev) and are reached by Traefik through host.docker.internal.
+name: pc-control-plane
+
+services:
+  traefik:
+    image: traefik:v3.6
+    command:
+      - --providers.docker=true
+      - --providers.docker.exposedbydefault=false
+      - --providers.docker.network=pc-edge
+      - --providers.file.directory=/etc/traefik/dynamic
+      - --providers.file.watch=true
+      - --entrypoints.web.address=:80
+      - --entrypoints.web.http.redirections.entrypoint.to=websecure
+      - --entrypoints.web.http.redirections.entrypoint.scheme=https
+      - --entrypoints.websecure.address=:443
+      - --entrypoints.websecure.http.tls=true
+      - --api.dashboard=true
+      - --api.insecure=true
+    environment:
+      BASE_DOMAIN: ${BASE_DOMAIN}
+    ports:
+      - "80:80"
+      - "443:443"
+      - "8080:8080"
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+      - ./traefik/dynamic:/etc/traefik/dynamic:ro
+      # Dev certificates (infra/dev-certs/generate.sh). Production uses ACME.
+      - ../../.dev-certs:/certs:ro
+    extra_hosts:
+      - host.docker.internal:host-gateway
+    networks:
+      pc-edge:
+        # Lets containers reach public hostnames through Traefik
+        # (e.g. services calling the OIDC issuer server-to-server).
+        aliases:
+          - auth.${BASE_DOMAIN}
+          - app.${BASE_DOMAIN}
+    restart: unless-stopped
+
+  postgres:
+    image: postgres:17-alpine
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+    ports:
+      - "127.0.0.1:5432:5432"
+    volumes:
+      - postgres:/var/lib/postgresql/data
+      - ./postgres/init.sh:/docker-entrypoint-initdb.d/init.sh:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER}"]
+      interval: 5s
+      retries: 10
+    networks: [pc-internal]
+    restart: unless-stopped
+
+  redis:
+    image: redis:7-alpine
+    ports:
+      - "127.0.0.1:6379:6379"
+    volumes:
+      - redis:/data
+    networks: [pc-internal]
+    restart: unless-stopped
+
+  authentik-server:
+    image: ghcr.io/goauthentik/server:${AUTHENTIK_TAG}
+    command: server
+    environment: &authentik-env
+      AUTHENTIK_SECRET_KEY: ${AUTHENTIK_SECRET_KEY}
+      AUTHENTIK_POSTGRESQL__HOST: postgres
+      AUTHENTIK_POSTGRESQL__USER: ${POSTGRES_USER}
+      AUTHENTIK_POSTGRESQL__PASSWORD: ${POSTGRES_PASSWORD}
+      AUTHENTIK_POSTGRESQL__NAME: authentik
+      AUTHENTIK_BOOTSTRAP_EMAIL: ${AUTHENTIK_BOOTSTRAP_EMAIL}
+      AUTHENTIK_BOOTSTRAP_PASSWORD: ${AUTHENTIK_BOOTSTRAP_PASSWORD}
+      AUTHENTIK_BOOTSTRAP_TOKEN: ${AUTHENTIK_BOOTSTRAP_TOKEN}
+      AUTHENTIK_DISABLE_UPDATE_CHECK: "true"
+      AUTHENTIK_ERROR_REPORTING__ENABLED: "false"
+      # Consumed by blueprints via !Env
+      PC_BASE_DOMAIN: ${BASE_DOMAIN}
+      PC_PUBLIC_SCHEME: ${PUBLIC_SCHEME}
+      PC_BRAND_NAME: ${BRAND_NAME}
+      PC_PORTAL_CLIENT_ID: ${PORTAL_OIDC_CLIENT_ID}
+      PC_PORTAL_CLIENT_SECRET: ${PORTAL_OIDC_CLIENT_SECRET}
+      PC_GOOGLE_CLIENT_ID: ${GOOGLE_CLIENT_ID:-}
+      PC_GOOGLE_CLIENT_SECRET: ${GOOGLE_CLIENT_SECRET:-}
+    volumes:
+      - authentik-media:/media
+      - ./authentik/blueprints:/blueprints/custom:ro
+    depends_on:
+      postgres:
+        condition: service_healthy
+    labels:
+      - traefik.enable=true
+      - traefik.http.routers.authentik.rule=Host(`auth.${BASE_DOMAIN}`)
+      - traefik.http.routers.authentik.entrypoints=websecure
+      - traefik.http.services.authentik.loadbalancer.server.port=9000
+    networks: [pc-internal, pc-edge]
+    restart: unless-stopped
+
+  authentik-worker:
+    image: ghcr.io/goauthentik/server:${AUTHENTIK_TAG}
+    command: worker
+    environment: *authentik-env
+    volumes:
+      - authentik-media:/media
+      - ./authentik/blueprints:/blueprints/custom:ro
+    depends_on:
+      postgres:
+        condition: service_healthy
+    networks: [pc-internal]
+    restart: unless-stopped
+
+volumes:
+  postgres:
+  redis:
+  authentik-media:
+
+networks:
+  pc-internal:
+  pc-edge:
+    name: pc-edge

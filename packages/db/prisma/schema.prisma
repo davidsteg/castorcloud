@@ -1,0 +1,195 @@
+// Control-plane database: customers, their subscriptions, stacks and
+// provisioning state. Customer data itself never lives here – it stays in
+// each tenant's encrypted stack.
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum TenantStatus {
+  PENDING       // signed up, waiting for payment
+  PROVISIONING  // paid, stack being created
+  ACTIVE
+  SUSPENDED     // stack stopped (unpaid / cancelled), data kept during grace period
+  DELETING
+  DELETED
+  FAILED
+}
+
+enum ServiceKind {
+  PHOTOS    // Immich
+  DOCS      // Paperless-ngx
+  PLACES    // Dawarich
+  FLIGHTS   // AirTrail
+  ASSISTANT // Hermes agent
+}
+
+enum MemberRole {
+  OWNER
+  MEMBER
+}
+
+enum BillingInterval {
+  MONTH
+  YEAR
+}
+
+enum JobKind {
+  PROVISION
+  UPDATE   // services / storage / members changed
+  SUSPEND
+  RESUME
+  DELETE
+}
+
+enum JobStatus {
+  QUEUED
+  RUNNING
+  SUCCEEDED
+  FAILED
+}
+
+model Node {
+  id        String   @id @default(cuid())
+  name      String   @unique
+  /// "local" = the Docker host the provisioner runs on (development)
+  sshHost   String
+  sshUser   String   @default("deploy")
+  capacity  Int      // max tenant stacks on this node
+  enabled   Boolean  @default(true)
+  tenants   Tenant[]
+  createdAt DateTime @default(now())
+}
+
+model Tenant {
+  id                   String          @id @default(cuid())
+  slug                 String          @unique // <slug>.<BASE_DOMAIN>
+  displayName          String
+  locale               String          @default("de")
+  status               TenantStatus    @default(PENDING)
+  node                 Node?           @relation(fields: [nodeId], references: [id])
+  nodeId               String?
+
+  // Booked configuration (source of truth: the Stripe subscription)
+  storageUnits         Int             @default(1) // x 100 GB
+  extraMembers         Int             @default(0)
+  /// Monthly AI credit in CHF (hard spending limit of the assistant), 0 = none
+  aiCreditChf          Int             @default(0)
+  billingInterval      BillingInterval @default(MONTH)
+
+  // Billing
+  stripeCustomerId     String?         @unique
+  stripeSubscriptionId String?         @unique
+  subscriptionStatus   String?         // Stripe status: active, past_due, canceled, ...
+  currentPeriodEnd     DateTime?
+  /// When a suspended tenant's data is deleted for good (grace period)
+  deleteAfter          DateTime?
+
+  members              Member[]
+  services             ServiceInstance[]
+  secrets              Secret[]
+  volumeKey            VolumeKey?
+  jobs                 Job[]
+  createdAt            DateTime        @default(now())
+  updatedAt            DateTime        @updatedAt
+}
+
+model User {
+  id           String   @id @default(cuid())
+  authentikSub String   @unique // OIDC "sub" from Authentik
+  email        String   @unique
+  name         String?
+  locale       String?
+  isStaff      Boolean  @default(false) // access to the admin console
+  memberships  Member[]
+  createdAt    DateTime @default(now())
+}
+
+model Member {
+  id        String     @id @default(cuid())
+  tenant    Tenant     @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  tenantId  String
+  user      User       @relation(fields: [userId], references: [id], onDelete: Cascade)
+  userId    String
+  role      MemberRole @default(MEMBER)
+  createdAt DateTime   @default(now())
+
+  @@unique([tenantId, userId])
+}
+
+model ServiceInstance {
+  id           String      @id @default(cuid())
+  tenant       Tenant      @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  tenantId     String
+  kind         ServiceKind
+  /// Booked in the subscription. Unbooked services are stopped, data kept.
+  enabled      Boolean     @default(true)
+  version      String?     // upstream image tag currently deployed
+  healthy      Boolean     @default(false)
+  lastHealthAt DateTime?
+
+  @@unique([tenantId, kind])
+}
+
+/// Tenant secrets (DB passwords, OIDC client secrets, API tokens),
+/// AES-256-GCM encrypted with SECRETS_ENCRYPTION_KEY.
+model Secret {
+  id         String   @id @default(cuid())
+  tenant     Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  tenantId   String
+  key        String
+  ciphertext String
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  @@unique([tenantId, key])
+}
+
+/// Data-encryption key of the tenant's encrypted volume, wrapped
+/// (AES-256-GCM) with the key-encryption key. Never stored on a node.
+model VolumeKey {
+  id         String   @id @default(cuid())
+  tenant     Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  tenantId   String   @unique
+  wrappedKey String
+  kekVersion Int      @default(1)
+  createdAt  DateTime @default(now())
+}
+
+model Job {
+  id         String    @id @default(cuid())
+  tenant     Tenant    @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  tenantId   String
+  kind       JobKind
+  status     JobStatus @default(QUEUED)
+  step       String?   // last completed step, shown on the welcome page
+  error      String?
+  log        String    @default("")
+  createdAt  DateTime  @default(now())
+  finishedAt DateTime?
+}
+
+/// Append-only record of security-relevant actions (key access, staff access,
+/// deletions). Staff access to customer data is always logged here.
+model AuditLog {
+  id        String   @id @default(cuid())
+  actor     String   // "system", "stripe", or a user id
+  action    String   // e.g. "volume.unlock", "tenant.delete", "staff.break_glass"
+  tenantId  String?
+  details   Json?
+  createdAt DateTime @default(now())
+
+  @@index([tenantId, createdAt])
+}
+
+/// Processed Stripe webhook events, so retries are handled exactly once.
+model StripeEvent {
+  id        String   @id // Stripe event id
+  type      String
+  createdAt DateTime @default(now())
+}

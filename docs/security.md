@@ -1,0 +1,83 @@
+# Security model
+
+Customer data is personal: photos, documents, location history. This document
+states what we protect, how, and what is technically **not** possible. The
+public security page (`/[locale]/security`) must never promise more than this.
+
+## Threat model
+
+| Threat | Protected? | How |
+|---|---|---|
+| Stolen / decommissioned disks, hosting-provider staff with disk access | Yes | Per-tenant LUKS2 volume (AES-XTS-512); key never on the node's disk |
+| Backup provider reads backups | Yes (planned, phase 7) | restic, encrypted on the node with a per-tenant key |
+| Another customer reads my data | Yes | Separate stack, private networks, separate DBs, separate OIDC apps restricted to the tenant group |
+| Network eavesdropping | Yes | TLS everywhere; OIDC over HTTPS only |
+| Our staff reading data in routine operations | Organisational + audit | No standing access; break-glass requires two people, is written to `AuditLog`, customer is informed |
+| Root on a running node reading mounted data | **No** | The services (search, face recognition, OCR) must process data in clear while running. Only confidential computing (AMD SEV-SNP) could narrow this — possible future premium tier |
+| Compromised control plane | Partially | Holds wrapped keys + KEK: can unlock volumes. Protect it most (see below) |
+
+We therefore never claim "zero knowledge" or "we cannot read your data".
+
+## Encryption at rest
+
+- **Volume per tenant**: `/srv/pc/volumes/<slug>.luks`, mounted at
+  `/srv/pc/tenants/<slug>`. All containers' data (databases, photos,
+  documents) live on it via `compose.volumes.yml`. The file is sized to the
+  booked storage, so it doubles as the storage quota.
+- **Keys**: 512 random bits per tenant (`VolumeKey`), stored only wrapped
+  (AES-256-GCM, tenant id as AAD) with `VOLUME_KEK`. The provisioner unwraps
+  in memory and passes the key to `pc-cryptd` on **stdin**; the helper keeps it
+  in `/dev/shm` of a short-lived container and deletes it. PBKDF2 is used
+  because the key is full-entropy (no password stretching needed) – this keeps
+  unlock cheap.
+- **Cost**: AES-NI makes dm-crypt overhead small (low single-digit % CPU for
+  typical I/O). No per-file encryption, no impact on search/ML features.
+- **Crypto-shredding**: deleting a tenant destroys the LUKS header *and* the
+  wrapped key. Leftover copies or backups of the volume become unreadable.
+- **Locking**: suspending a tenant closes the volume. After a node reboot all
+  volumes are closed until the provisioner re-opens them.
+- **Tenant secrets** (DB passwords, OIDC client secrets): `Secret` table,
+  AES-256-GCM with `SECRETS_ENCRYPTION_KEY`, bound to tenant + name.
+
+## Keys we must protect
+
+| Key | Where | Production requirement |
+|---|---|---|
+| `VOLUME_KEK` | control plane env | Move to an HSM / Vault transit engine (only `wrap/unwrap` in `packages/core/src/crypto.ts` changes). Rotation = re-wrap all `VolumeKey` rows (`kekVersion`) |
+| `SECRETS_ENCRYPTION_KEY` | control plane env | Same |
+| Authentik API token | control plane env | Dedicated service account with only the needed permissions (not the bootstrap token) |
+| Stripe secret key, webhook secret | control plane env | Restricted key; webhook signature verified on every call |
+
+Never store these on data-plane nodes.
+
+## Identity
+
+- One IdP (Authentik) for the portal and every service; services have no
+  local passwords (Immich password login off, Paperless regular login off,
+  Dawarich e-mail login off, AirTrail password form hidden).
+- Each service app is bound to the tenant's Authentik group only.
+- Google login uses matching mode `email_deny`: it never attaches to an
+  existing account with the same e-mail (prevents account takeover).
+- Production: SMTP configured ⇒ e-mail verification is required for
+  self-registration. Staff accounts: enforce WebAuthn/TOTP.
+
+## Access by staff (policy)
+
+1. No routine SSH access to data-plane nodes; changes go through the provisioner.
+2. Break-glass (e.g. a support case the customer asked for): two people,
+   time-limited, logged as `staff.break_glass` in `AuditLog` with reason,
+   customer notified.
+3. `AuditLog` is append-only for the application; replicate it off-host.
+
+## Open items before launch
+
+- Backups (restic, per-tenant key, off-site in CH) and restore drills.
+- KEK in HSM/Vault; Authentik service-account token; Stripe restricted key.
+- Rate limiting on signup/login; CSP for the portal; security headers (HSTS).
+- Monitoring and alerting (volume fill level ≥ 90 %, failed jobs).
+- Legal texts (Impressum, privacy policy per revDSG incl. Stripe/Google/LLM
+  sub-processors, terms), reviewed by counsel.
+- Swiss cross / "Swiss" claims: the Swiss coat of arms and cross are protected
+  (Wappenschutzgesetz); indications of Swiss origin for services require the
+  company's seat and actual administration in Switzerland. The site currently
+  uses only a text "CH" badge.

@@ -1,0 +1,30 @@
+# Shared, stateless services on a data-plane node, used by every tenant stack.
+# Tenants never share a network with each other: the provisioner connects
+# these containers to each tenant's private "pc-t-<slug>-shared" network.
+name: pc-node
+
+services:
+  immich-ml:
+    container_name: pc-node-immich-ml
+    image: ghcr.io/immich-app/immich-machine-learning:${IMMICH_VERSION}
+    volumes:
+      - immich-model-cache:/cache
+    restart: unless-stopped
+
+  tika:
+    container_name: pc-node-tika
+    image: ${TIKA_IMAGE}
+    restart: unless-stopped
+
+  gotenberg:
+    container_name: pc-node-gotenberg
+    image: ${GOTENBERG_IMAGE}
+    # Used by Paperless to convert .eml files; never load remote content.
+    command:
+      - gotenberg
+      - --chromium-disable-javascript=true
+      - --chromium-allow-list=file:///tmp/.*
+    restart: unless-stopped
+
+volumes:
+  immich-model-cache:

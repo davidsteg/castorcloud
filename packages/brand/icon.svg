@@ -1,0 +1,18 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" role="img" aria-label="castorcloud.ch">
+  <!-- Square app icon / favicon: the castorcloud.ch mark on a white tile
+       (strokes thickened so it still reads at 16 px). -->
+  <rect width="64" height="64" rx="14" fill="#fff"/>
+  <rect x=".5" y=".5" width="63" height="63" rx="13.5" fill="none" stroke="#dde5ec"/>
+  <svg x="3" y="8" width="58" height="48" viewBox="55 380 417 290">
+    <defs>
+      <clipPath id="i-lattice"><ellipse cx="116" cy="584" rx="46" ry="30" transform="rotate(35 116 584)"/></clipPath>
+    </defs>
+    <path d="M152 524c0-40 34-62 74-52 14-44 50-72 88-72 46 0 78 26 88 70 36 8 54 38 54 66 0 38-30 62-72 62h-4" fill="none" stroke="#d52b1e" stroke-width="40"/>
+    <path d="M98 536c-24 0-37 16-35 36 3 28 28 55 66 72 22 10 50 14 82 15h14v-8c-14-10-22-26-32-43-18-32-42-60-72-70-8-2-15-2-23-2z" fill="#243447"/>
+    <g clip-path="url(#i-lattice)" stroke="#fff" stroke-width="9" fill="none">
+      <path d="M0 420l300 300M0 448l300 300M0 476l300 300M0 504l300 300M0 532l300 300M0 560l300 300M0 588l300 300M0 620l300-300M0 648l300-300M0 676l300-300M0 704l300-300M0 732l300-300M0 760l300-300M0 788l300-300"/>
+    </g>
+    <path d="M232 659c-28-16-36-50-28-78 10-36 42-56 72-66 20-7 30-20 42-28 0-9 12-11 16-5 16-4 36-2 51 8l26 11c3 10 2 20-2 30l-11 1c-22 1-35 18-36 43v66c14 0 25 6 26 18z" fill="#243447" stroke="#fff" stroke-width="12" stroke-linejoin="round" paint-order="stroke"/>
+    <circle cx="354" cy="501" r="10" fill="#fff"/>
+  </svg>
+</svg>

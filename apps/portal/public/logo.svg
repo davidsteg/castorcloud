@@ -1,0 +1,35 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="55 380 417 290" role="img" aria-label="castorcloud.ch">
+  <!-- castorcloud.ch mark, redrawn as vectors from source/logo-reference.webp:
+       a beaver in profile inside a cloud outline, with its cross-hatched tail.
+       Colours match the UI tokens: cloud Swiss red #d52b1e, beaver navy #243447. -->
+  <defs>
+    <!-- lattice area, inset so a navy rim stays around it -->
+    <clipPath id="cc-lattice">
+      <ellipse cx="120" cy="584" rx="56" ry="36" transform="rotate(35 120 584)"/>
+    </clipPath>
+  </defs>
+
+  <!-- cloud outline -->
+  <path d="M152 524c0-40 34-62 74-52 14-44 50-72 88-72 46 0 78 26 88 70 36 8 54 38 54 66 0 38-30 62-72 62h-4"
+        fill="none" stroke="#d52b1e" stroke-width="32"/>
+
+  <!-- tail: teardrop running into the ground line, same navy as the body -->
+  <path d="M98 536c-24 0-37 16-35 36 3 28 28 55 66 72 22 10 50 14 82 15h14v-8c-14-10-22-26-32-43-18-32-42-60-72-70-8-2-15-2-23-2z"
+        fill="#243447"/>
+  <g clip-path="url(#cc-lattice)" stroke="#fff" stroke-width="4" fill="none">
+    <path d="M0 424l300 300M0 451l300 300M0 478l300 300M0 505l300 300M0 532l300 300M0 559l300 300M0 586l300 300"/>
+    <path d="M0 622l300-300M0 649l300-300M0 676l300-300M0 703l300-300M0 730l300-300M0 757l300-300M0 784l300-300"/>
+  </g>
+
+  <!-- body; the white outline separates it from cloud and tail -->
+  <path d="M232 659c-28-16-36-50-28-78 10-36 42-56 72-66 20-7 30-20 42-28 0-9 12-11 16-5 16-4 36-2 51 8l26 11c3 10 2 20-2 30l-11 1c-22 1-35 18-36 43v66c14 0 25 6 26 18z"
+        fill="#243447" stroke="#fff" stroke-width="9" stroke-linejoin="round" paint-order="stroke"/>
+
+  <!-- haunch line -->
+  <path d="M259 659c-3-40 22-68 59-70 29-2 46 16 48 36" fill="none" stroke="#fff" stroke-width="9" stroke-linecap="round"/>
+
+  <!-- eye and incisor -->
+  <circle cx="354" cy="501" r="7" fill="#fff"/>
+  <path d="M397 531h12v14a3 3 0 0 1-3 3h-6a3 3 0 0 1-3-3z" fill="#243447"/>
+  <path d="M403 533v13" stroke="#fff" stroke-width="2.5"/>
+</svg>

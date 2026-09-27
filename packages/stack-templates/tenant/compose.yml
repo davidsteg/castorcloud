@@ -1,0 +1,258 @@
+# One customer's stack. Rendered per tenant with an env file produced by the
+# provisioner (see apps/provisioner): project name "pc-t-<slug>".
+#
+# Networking:
+#   internal  - all tenant containers (private to this tenant)
+#   shared    - pc-t-<slug>-shared; the node's shared immich-ml/tika/gotenberg
+#               containers are attached to it by the provisioner
+#   pc-edge   - only the skin proxy, so Traefik can reach it
+#
+# Trust: ${CA_DIR}/ca-bundle.pem replaces/extends each runtime's CA store
+# (dev: public roots + the local dev CA; production: public roots).
+#
+# Every browser request goes Traefik -> skin -> service. The skin injects the
+# brand CSS and iframe bridge and allows framing by the tenant portal.
+#
+# Profiles: only booked services run (--profile photos --profile docs ...).
+# Storage: the provisioner adds compose.volumes.yml, which binds every named
+# volume below into the tenant's encrypted LUKS volume (/srv/pc/tenants/<slug>).
+
+x-auth-host: &auth-host
+  # Lets services reach the OIDC issuer by its public name. In dev this is the
+  # Docker host (Traefik on :80); in production it is real DNS.
+  - "${AUTH_HOST}:${AUTH_HOST_IP}"
+
+services:
+  skin:
+    image: ${NGINX_IMAGE}
+    environment:
+      PORTAL_ORIGIN: ${PORTAL_ORIGIN}
+    volumes:
+      - ./skin/default.conf.template:/etc/nginx/templates/default.conf.template:ro
+      - ${BRAND_DIR}:/usr/share/nginx/brand:ro
+    labels:
+      - traefik.enable=true
+      - traefik.docker.network=pc-edge
+      - traefik.http.routers.pc-t-${SLUG}.rule=Host(`photos-${SLUG}.${BASE_DOMAIN}`) || Host(`docs-${SLUG}.${BASE_DOMAIN}`) || Host(`places-${SLUG}.${BASE_DOMAIN}`) || Host(`flights-${SLUG}.${BASE_DOMAIN}`)
+      - traefik.http.routers.pc-t-${SLUG}.entrypoints=websecure
+      - traefik.http.services.pc-t-${SLUG}.loadbalancer.server.port=80
+    depends_on:
+      immich-server: { condition: service_started, required: false }
+      paperless: { condition: service_started, required: false }
+      dawarich: { condition: service_started, required: false }
+      airtrail: { condition: service_started, required: false }
+    networks: [internal, pc-edge]
+    restart: unless-stopped
+
+  # ---------------------------------------------------------------- data
+  immich-db:
+    image: ${IMMICH_POSTGRES_IMAGE}
+    profiles: [photos]
+    environment:
+      POSTGRES_USER: immich
+      POSTGRES_PASSWORD: ${IMMICH_DB_PASSWORD}
+      POSTGRES_DB: immich
+      POSTGRES_INITDB_ARGS: --data-checksums
+    volumes:
+      - immich-db:/var/lib/postgresql/data
+    shm_size: 128mb
+    networks: [internal]
+    restart: unless-stopped
+
+  db:
+    image: ${POSTGIS_IMAGE}
+    environment:
+      POSTGRES_PASSWORD: ${DB_ROOT_PASSWORD}
+      PAPERLESS_DB_PASSWORD: ${PAPERLESS_DB_PASSWORD}
+      DAWARICH_DB_PASSWORD: ${DAWARICH_DB_PASSWORD}
+      AIRTRAIL_DB_PASSWORD: ${AIRTRAIL_DB_PASSWORD}
+    volumes:
+      - db:/var/lib/postgresql/data
+      - ./db-init/init.sh:/docker-entrypoint-initdb.d/20-tenant.sh:ro
+    shm_size: 256mb
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      interval: 5s
+      retries: 20
+    networks: [internal]
+    restart: unless-stopped
+
+  # Valkey databases: 0 Immich, 1 Paperless, 2 Dawarich
+  redis:
+    image: ${VALKEY_IMAGE}
+    volumes:
+      - redis:/data
+    healthcheck:
+      test: ["CMD-SHELL", "valkey-cli ping | grep -q PONG"]
+      interval: 5s
+      retries: 20
+    networks: [internal]
+    restart: unless-stopped
+
+  # -------------------------------------------------------------- photos
+  immich-server:
+    image: ghcr.io/immich-app/immich-server:${IMMICH_VERSION}
+    profiles: [photos]
+    environment:
+      DB_HOSTNAME: immich-db
+      DB_USERNAME: immich
+      DB_PASSWORD: ${IMMICH_DB_PASSWORD}
+      DB_DATABASE_NAME: immich
+      REDIS_HOSTNAME: redis
+      REDIS_DBINDEX: "0"
+      IMMICH_CONFIG_FILE: /config/immich.json
+      TZ: ${TZ}
+      NODE_EXTRA_CA_CERTS: /etc/pc-ca/ca-bundle.pem
+    volumes:
+      - photos:/data
+      - ${CA_DIR}:/etc/pc-ca:ro
+      - ${TENANT_DIR}/immich.json:/config/immich.json:ro
+    extra_hosts: *auth-host
+    depends_on: [immich-db, redis]
+    networks: [internal, shared]
+    restart: unless-stopped
+
+  # ----------------------------------------------------------- documents
+  paperless:
+    image: ghcr.io/paperless-ngx/paperless-ngx:${PAPERLESS_VERSION}
+    profiles: [docs]
+    environment:
+      PAPERLESS_URL: ${SCHEME}://docs-${SLUG}.${BASE_DOMAIN}
+      PAPERLESS_SECRET_KEY: ${PAPERLESS_SECRET_KEY}
+      PAPERLESS_TIME_ZONE: ${TZ}
+      PAPERLESS_DBENGINE: postgresql
+      PAPERLESS_DBHOST: db
+      PAPERLESS_DBNAME: paperless
+      PAPERLESS_DBUSER: paperless
+      PAPERLESS_DBPASS: ${PAPERLESS_DB_PASSWORD}
+      PAPERLESS_REDIS: redis://redis:6379/1
+      PAPERLESS_TIKA_ENABLED: "1"
+      PAPERLESS_TIKA_ENDPOINT: http://pc-node-tika:9998
+      PAPERLESS_TIKA_GOTENBERG_ENDPOINT: http://pc-node-gotenberg:3000
+      # Service account for the provisioner, dashboard and assistant.
+      PAPERLESS_ADMIN_USER: pc-service
+      PAPERLESS_ADMIN_PASSWORD: ${PAPERLESS_SERVICE_PASSWORD}
+      PAPERLESS_APP_TITLE: ${BRAND_NAME}
+      # SSO only; customers never see a Paperless login form.
+      PAPERLESS_APPS: allauth.socialaccount.providers.openid_connect
+      PAPERLESS_SOCIALACCOUNT_PROVIDERS: ${PAPERLESS_SOCIALACCOUNT_PROVIDERS}
+      PAPERLESS_SOCIAL_AUTO_SIGNUP: "true"
+      PAPERLESS_DISABLE_REGULAR_LOGIN: "true"
+      PAPERLESS_REDIRECT_LOGIN_TO_SSO: "true"
+      PAPERLESS_SOCIAL_ACCOUNT_SYNC_GROUPS: "true"
+      PAPERLESS_SOCIAL_ACCOUNT_SYNC_SUPERUSER_GROUP: ${OWNERS_GROUP}
+      PAPERLESS_LOGOUT_REDIRECT_URL: ${PORTAL_ORIGIN}
+      REQUESTS_CA_BUNDLE: /etc/pc-ca/ca-bundle.pem
+      SSL_CERT_FILE: /etc/pc-ca/ca-bundle.pem
+    volumes:
+      - ${CA_DIR}:/etc/pc-ca:ro
+      - docs-data:/usr/src/paperless/data
+      - docs-media:/usr/src/paperless/media
+      - docs-consume:/usr/src/paperless/consume
+    extra_hosts: *auth-host
+    depends_on:
+      db: { condition: service_healthy }
+      redis: { condition: service_healthy }
+    networks: [internal, shared]
+    restart: unless-stopped
+
+  # -------------------------------------------------------------- places
+  dawarich: &dawarich
+    image: freikin/dawarich:${DAWARICH_VERSION}
+    profiles: [places]
+    entrypoint: web-entrypoint.sh
+    command: ["bin/rails", "server", "-p", "3000", "-b", "::"]
+    environment: &dawarich-env
+      RAILS_ENV: production
+      SELF_HOSTED: "true"
+      REDIS_URL: redis://redis:6379/2
+      DATABASE_HOST: db
+      DATABASE_PORT: "5432"
+      DATABASE_USERNAME: dawarich
+      DATABASE_PASSWORD: ${DAWARICH_DB_PASSWORD}
+      DATABASE_NAME: dawarich
+      APPLICATION_HOSTS: places-${SLUG}.${BASE_DOMAIN}
+      APPLICATION_PROTOCOL: ${SCHEME}
+      TIME_ZONE: ${TZ}
+      SECRET_KEY_BASE: ${DAWARICH_SECRET_KEY_BASE}
+      RAILS_LOG_TO_STDOUT: "true"
+      STORE_GEODATA: "true"
+      WEB_CONCURRENCY: "1"
+      OIDC_CLIENT_ID: ${PLACES_OIDC_CLIENT_ID}
+      OIDC_CLIENT_SECRET: ${PLACES_OIDC_CLIENT_SECRET}
+      OIDC_ISSUER: ${SCHEME}://${AUTH_HOST}/application/o/${SLUG}-places/
+      OIDC_REDIRECT_URI: ${SCHEME}://places-${SLUG}.${BASE_DOMAIN}/users/auth/openid_connect/callback
+      OIDC_PROVIDER_NAME: ${BRAND_NAME}
+      OIDC_AUTO_REGISTER: "true"
+      ALLOW_EMAIL_PASSWORD_REGISTRATION: "false"
+      ALLOW_EMAIL_PASSWORD_LOGIN: "false"
+      SSL_CERT_FILE: /etc/pc-ca/ca-bundle.pem
+    volumes:
+      - ${CA_DIR}:/etc/pc-ca:ro
+      - places-public:/var/app/public
+      - places-watched:/var/app/tmp/imports/watched
+      - places-storage:/var/app/storage
+    extra_hosts: *auth-host
+    depends_on:
+      db: { condition: service_healthy }
+      redis: { condition: service_healthy }
+    networks: [internal]
+    restart: unless-stopped
+
+  dawarich-sidekiq:
+    <<: *dawarich
+    entrypoint: sidekiq-entrypoint.sh
+    command: ["sidekiq"]
+    environment:
+      <<: *dawarich-env
+      BACKGROUND_PROCESSING_CONCURRENCY: "2"
+    depends_on: [dawarich]
+
+  # ------------------------------------------------------------- flights
+  airtrail:
+    image: johly/airtrail:${AIRTRAIL_VERSION}
+    profiles: [flights]
+    environment:
+      ORIGIN: ${SCHEME}://flights-${SLUG}.${BASE_DOMAIN}
+      ADDRESS_HEADER: X-Forwarded-For
+      DB_URL: postgres://airtrail:${AIRTRAIL_DB_PASSWORD}@db:5432/airtrail
+      UPLOAD_LOCATION: /app/uploads
+      OAUTH_ENABLED: "true"
+      OAUTH_ISSUER_URL: ${SCHEME}://${AUTH_HOST}/application/o/${SLUG}-flights/
+      OAUTH_CLIENT_ID: ${FLIGHTS_OIDC_CLIENT_ID}
+      OAUTH_CLIENT_SECRET: ${FLIGHTS_OIDC_CLIENT_SECRET}
+      OAUTH_SCOPE: openid profile email
+      OAUTH_AUTO_REGISTER: "true"
+      OAUTH_AUTO_LOGIN: "true"
+      OAUTH_HIDE_PASSWORD_FORM: "true"
+      OAUTH_BUTTON_TEXT: Continue
+      OAUTH_ALLOW_INSECURE_HTTP: ${OAUTH_ALLOW_INSECURE_HTTP}
+      NODE_EXTRA_CA_CERTS: /etc/pc-ca/ca-bundle.pem
+    volumes:
+      - ${CA_DIR}:/etc/pc-ca:ro
+      - flights-uploads:/app/uploads
+    extra_hosts: *auth-host
+    depends_on:
+      db: { condition: service_healthy }
+    networks: [internal]
+    restart: unless-stopped
+
+volumes:
+  immich-db:
+  db:
+  redis:
+  photos:
+  docs-data:
+  docs-media:
+  docs-consume:
+  places-public:
+  places-watched:
+  places-storage:
+  flights-uploads:
+
+networks:
+  internal:
+  shared:
+    name: pc-t-${SLUG}-shared
+  pc-edge:
+    external: true

@@ -1,0 +1,4 @@
+# Keep LF everywhere: shell scripts and configs are mounted into Linux containers.
+* text=auto eol=lf
+*.png binary
+*.webp binary

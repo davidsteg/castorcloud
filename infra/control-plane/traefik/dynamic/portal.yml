@@ -1,0 +1,18 @@
+# Dev routing to the Next.js portal running on the host (npm run dev).
+# app.<domain> = signup/marketing/admin, <slug>.<domain> = tenant shell.
+# Service hosts (photos-<slug>.<domain>, ...) have explicit Host() routers with
+# higher priority, so they never reach the portal.
+# In production the portal runs as a container with Docker labels instead.
+http:
+  routers:
+    portal:
+      rule: 'HostRegexp(`^[a-z0-9-]+\.{{ env "BASE_DOMAIN" }}$`)'
+      entryPoints: [websecure]
+      service: portal
+      # Below Docker-label routers such as auth.<domain>.
+      priority: 1
+  services:
+    portal:
+      loadBalancer:
+        servers:
+          - url: "http://host.docker.internal:3000"
