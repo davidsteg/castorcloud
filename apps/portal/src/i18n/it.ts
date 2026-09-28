@@ -450,6 +450,8 @@ const it: Dictionary = {
     open: "Apri",
     billing: "Fatture e abbonamento",
     logout: "Esci",
+    logoutAll: "Esci da tutti i dispositivi",
+    logoutAllHint: "Esce anche dagli altri browser e scollega le app per smartphone e Telegram. Dovrai collegarle di nuovo.",
     status: { PENDING: "In attesa di pagamento", PROVISIONING: "In preparazione", ACTIVE: "Attivo", SUSPENDED: "Sospeso", DELETING: "In eliminazione", DELETED: "Eliminato", FAILED: "Problema di preparazione" },
   },
   chat: {

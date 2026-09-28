@@ -6,7 +6,7 @@ import { signIn } from "@/auth";
 import { fill, getDictionary, type Locale } from "@/i18n";
 import { APP_LABEL, BASE_DOMAIN, PUBLIC_SCHEME } from "@/lib/config";
 import { currentUser, memberTenant, ownedTenant } from "@/lib/session";
-import { signOutEverywhere } from "@/lib/signout";
+import { signOutAllDevices, signOutBrowser } from "@/lib/signout";
 import { itemKeyFromLookup, stripe } from "@/lib/stripe";
 import { SiteHeader } from "@/components/site/SiteHeader";
 import { StorageMeter } from "@/components/StorageMeter";
@@ -131,8 +131,12 @@ export default async function AccountPage({ params }: { params: Promise<{ locale
             </div>
           ))}
           <Link className="button secondary block" href={`/${locale}/pricing`}>{t.account.create}</Link>
-          <form action={signOutEverywhere}>
+          <form action={signOutBrowser}>
             <button className="button secondary block" type="submit">{t.account.logout}</button>
+          </form>
+          <form action={signOutAllDevices}>
+            <button className="button secondary block" type="submit">{t.account.logoutAll}</button>
+            <p className="small-print" style={{ marginTop: 8 }}>{t.account.logoutAllHint}</p>
           </form>
         </div>
       </main>

@@ -6,7 +6,7 @@ import { BASE_DOMAIN, PUBLIC_SCHEME } from "@/lib/config";
 // hops through /api/logout on each of those hosts (?hops=app,muster,...), and
 // the last hop ends the Authentik session. Its logout flow (portal-logout in
 // authentik/blueprints/10-portal.yaml) then returns to the site.
-// Started by signOutEverywhere() (lib/signout.ts).
+// Started by signOutBrowser() and signOutAllDevices() (lib/signout.ts).
 
 const LABEL_RE = /^[a-z0-9-]{1,63}$/;
 const SESSION_COOKIE_RE = /^(__Secure-)?authjs\.session-token(\.\d+)?$/;

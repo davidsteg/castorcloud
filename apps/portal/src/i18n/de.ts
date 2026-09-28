@@ -451,6 +451,8 @@ const de: Dictionary = {
     open: "Öffnen",
     billing: "Rechnungen & Abo",
     logout: "Abmelden",
+    logoutAll: "Auf allen Geräten abmelden",
+    logoutAllHint: "Meldet auch Ihre anderen Browser ab und trennt die Handy-Apps und Telegram. Sie müssen sie danach neu verbinden.",
     status: { PENDING: "Wartet auf Zahlung", PROVISIONING: "Wird eingerichtet", ACTIVE: "Aktiv", SUSPENDED: "Pausiert", DELETING: "Wird gelöscht", DELETED: "Gelöscht", FAILED: "Problem bei der Einrichtung" },
   },
   chat: {

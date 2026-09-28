@@ -103,6 +103,29 @@ export class Authentik {
     await this.request("POST", `/core/groups/${groupPk}/add_user/`, { pk: userPk });
   }
 
+  /** Members of a group; `uid` is the OIDC "sub" (providers use hashed_user_id). */
+  async groupUsers(groupPk: string): Promise<{ pk: number; email: string; uid: string }[]> {
+    const group = await this.request<{ users_obj: { pk: number; email: string; uid: string }[] }>(
+      "GET", `/core/groups/${groupPk}/?include_users=true`,
+    );
+    return group.users_obj ?? [];
+  }
+
+  async removeUserFromGroup(groupPk: string, userPk: number) {
+    await this.request("POST", `/core/groups/${groupPk}/remove_user/`, { pk: userPk });
+  }
+
+  /** Signs the user out of Authentik in every browser and drops their refresh tokens. */
+  async endUserSessions(userPk: number) {
+    const user = await this.request<{ username: string }>("GET", `/core/users/${userPk}/`);
+    const sessions = await this.request<Page<{ uuid: string }>>(
+      "GET", `/core/authenticated_sessions/?${new URLSearchParams({ user__username: user.username, page_size: "1000" })}`,
+    );
+    for (const s of sessions.results) await this.request("DELETE", `/core/authenticated_sessions/${s.uuid}/`);
+    const tokens = await this.request<Page<{ id: number }>>("GET", `/oauth2/refresh_tokens/?user=${userPk}&page_size=1000`);
+    for (const t of tokens.results) await this.request("DELETE", `/oauth2/refresh_tokens/${t.id}/`);
+  }
+
   async deleteGroup(name: string) {
     const group = await this.findOne<Pk>("/core/groups/", { name });
     if (group) await this.request("DELETE", `/core/groups/${group.pk}/`);

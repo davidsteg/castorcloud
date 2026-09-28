@@ -19,8 +19,18 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
     }),
   ],
   callbacks: {
-    jwt({ token, profile }) {
-      if (profile?.sub) token.sub = profile.sub;
+    async jwt({ token, profile }) {
+      if (profile?.sub) {
+        token.sub = profile.sub;
+        token.authAt = Date.now();
+        return token;
+      }
+      // "Log out on all devices" (lib/signout.ts) ends sessions signed in before it.
+      if (token.sub) {
+        const user = await prisma.user.findUnique({ where: { authentikSub: token.sub }, select: { sessionsRevokedAt: true } });
+        const authAt = typeof token.authAt === "number" ? token.authAt : 0;
+        if (user?.sessionsRevokedAt && authAt < user.sessionsRevokedAt.getTime()) return null;
+      }
       return token;
     },
     session({ session, token }) {

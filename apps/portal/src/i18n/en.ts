@@ -450,6 +450,8 @@ const en = {
     open: "Open",
     billing: "Invoices & subscription",
     logout: "Log out",
+    logoutAll: "Log out on all devices",
+    logoutAllHint: "Also signs out your other browsers and disconnects the phone apps and Telegram. You'll need to connect them again.",
     status: { PENDING: "Waiting for payment", PROVISIONING: "Being set up", ACTIVE: "Active", SUSPENDED: "Suspended", DELETING: "Being deleted", DELETED: "Deleted", FAILED: "Setup problem" },
   },
   chat: {

@@ -2,7 +2,7 @@ import { BRAND_NAME, SERVICES } from "@/lib/config";
 import { requireTenantMember } from "@/lib/tenant";
 import { ServiceWorker } from "@/components/ServiceWorker";
 import { ShellNav, type ShellNavItem } from "@/components/ShellNav";
-import { signOutEverywhere } from "@/lib/signout";
+import { signOutBrowser } from "@/lib/signout";
 
 export default async function TenantLayout({
   children,
@@ -26,7 +26,7 @@ export default async function TenantLayout({
   return (
     <div className="shell">
       <ServiceWorker />
-      <ShellNav brand={BRAND_NAME} tenantName={tenant.displayName} email={session.user?.email ?? ""} items={items} signOut={{ label: t.account.logout, action: signOutEverywhere }} />
+      <ShellNav brand={BRAND_NAME} tenantName={tenant.displayName} email={session.user?.email ?? ""} items={items} signOut={{ label: t.account.logout, action: signOutBrowser }} />
       <main className="shell-main">
         {tenant.status === "ACTIVE" ? children : <div className="page"><p className="notice">{tenant.status}</p></div>}
       </main>
