@@ -11,7 +11,9 @@ export type BridgeEvent =
 /** shell -> iframe */
 export type ShellCommand =
   | { type: "pc:theme"; mode: "light" | "dark" }
-  | { type: "pc:go"; path: string };
+  | { type: "pc:go"; path: string }
+  /** answered with pc:ready; tells the shell the frame shows the service */
+  | { type: "pc:ping" };
 
 export function isBridgeEvent(data: unknown): data is BridgeEvent {
   return (

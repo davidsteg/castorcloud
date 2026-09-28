@@ -228,6 +228,9 @@ const fr: Dictionary = {
     connect: "Après la connexion, votre cloud vous montre pas à pas comment connecter les applications.",
   },
   setup: {
+    frameExpiredTitle: "Veuillez vous reconnecter",
+    frameExpiredBody: "Cette application n’a pas pu s’ouvrir. Votre session a probablement expiré.",
+    signInAgain: "Se reconnecter",
     nav: "Configurer les applications",
     home: "Vue d’ensemble",
     welcome: "Bienvenue dans votre cloud",
@@ -447,6 +450,8 @@ const fr: Dictionary = {
     open: "Ouvrir",
     billing: "Factures et abonnement",
     logout: "Se déconnecter",
+    logoutAll: "Se déconnecter sur tous les appareils",
+    logoutAllHint: "Déconnecte aussi vos autres navigateurs, les applications mobiles et Telegram. Vous devrez les reconnecter.",
     status: { PENDING: "En attente de paiement", PROVISIONING: "En cours de création", ACTIVE: "Actif", SUSPENDED: "Suspendu", DELETING: "En cours de suppression", DELETED: "Supprimé", FAILED: "Problème de création" },
   },
   chat: {
