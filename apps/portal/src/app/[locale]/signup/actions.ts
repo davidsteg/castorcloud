@@ -2,18 +2,20 @@
 
 import { redirect } from "next/navigation";
 import { prisma, type ServiceKind } from "@pc/db";
-import { audit, enqueueTenantJob } from "@pc/core";
+import { audit, normalizeEmail } from "@pc/core";
 import { quote } from "@pc/pricing";
 import { auth } from "@/auth";
-import { APP_LABEL, BASE_DOMAIN, PUBLIC_SCHEME } from "@/lib/config";
+import { isLocale } from "@/i18n";
+import { applicationReceived } from "@/lib/applications";
+import { checkoutUrl } from "@/lib/checkout";
+import { BETA } from "@/lib/config";
+import { subscribe } from "@/lib/newsletter";
 import { configFromQuery } from "@/lib/plan";
 import { isValidSlug } from "@/lib/slug";
-import { STRIPE_LOCALES, lineItemsFor, stripe } from "@/lib/stripe";
-import type { Locale } from "@/i18n";
 
-export type SignupState = { error?: "invalid" | "taken" | "accept" | "payment" } | undefined;
+export type SignupState = { error?: "invalid" | "taken" | "accept" | "payment" | "tooMany" } | undefined;
 
-const appUrl = (path: string) => `${PUBLIC_SCHEME}://${APP_LABEL}.${BASE_DOMAIN}${path}`;
+const NOTE_MAX = 500;
 
 export async function isSlugAvailable(slug: string) {
   return isValidSlug(slug) && !(await prisma.tenant.findUnique({ where: { slug }, select: { id: true } }));
@@ -25,14 +27,21 @@ export async function createCloud(_prev: SignupState, form: FormData): Promise<S
   if (!sub) return { error: "invalid" };
   const user = await prisma.user.findUniqueOrThrow({ where: { authentikSub: sub } });
 
-  const locale = String(form.get("locale")) as Locale;
+  const rawLocale = String(form.get("locale"));
+  const locale = isLocale(rawLocale) ? rawLocale : "de";
   const name = String(form.get("name") ?? "").trim().slice(0, 60);
   const slug = String(form.get("slug") ?? "").trim().toLowerCase();
   if (!name || !isValidSlug(slug)) return { error: "invalid" };
-  if (form.get("accept") !== "on") return { error: "accept" };
+  if (form.get("accept") !== "on" || (BETA && form.get("beta") !== "on")) return { error: "accept" };
+  const note = BETA ? String(form.get("note") ?? "").trim().slice(0, NOTE_MAX) || null : null;
 
   const q = quote(configFromQuery(Object.fromEntries(new URLSearchParams(String(form.get("config"))))));
   if (!q.config.services.length) return { error: "invalid" };
+
+  // One open application per person during the beta.
+  if (BETA && (await prisma.tenant.count({ where: { status: "APPLIED", members: { some: { userId: user.id } } } })) > 0) {
+    return { error: "tooMany" };
+  }
 
   let tenantId: string;
   try {
@@ -41,6 +50,9 @@ export async function createCloud(_prev: SignupState, form: FormData): Promise<S
         slug,
         displayName: name,
         locale,
+        status: BETA ? "APPLIED" : "PENDING",
+        applicationNote: note,
+        appliedAt: BETA ? new Date() : null,
         storageUnits: q.config.storageUnits,
         extraMembers: q.config.extraMembers,
         aiCreditChf: q.config.aiCreditChf,
@@ -55,37 +67,18 @@ export async function createCloud(_prev: SignupState, form: FormData): Promise<S
   } catch {
     return { error: "taken" }; // unique slug
   }
-  await audit(user.id, "tenant.create", tenantId, { slug, config: q.config });
+  await audit(user.id, BETA ? "tenant.apply" : "tenant.create", tenantId, { slug, config: q.config });
 
-  const s = stripe();
-  if (!s) {
-    if (process.env.DEV_SKIP_PAYMENT !== "true") return { error: "payment" };
-    // Development without Stripe keys: provision right away.
-    await prisma.tenant.update({ where: { id: tenantId }, data: { status: "PROVISIONING" } });
-    await enqueueTenantJob(tenantId, "PROVISION");
-    redirect(`/${locale}/welcome/${tenantId}`);
+  // Opt-in only; the address still has to be confirmed (double opt-in).
+  const email = normalizeEmail(user.email);
+  if (form.get("newsletter") === "on" && email) await subscribe(email, locale, "signup");
+
+  if (BETA) {
+    await applicationReceived(user, { displayName: name, slug, locale });
+    redirect(`/${locale}/account`);
   }
 
-  const customer = await s.customers.create({
-    email: user.email,
-    name: user.name ?? name,
-    preferred_locales: [locale],
-    metadata: { tenantId, userId: user.id },
-  });
-  await prisma.tenant.update({ where: { id: tenantId }, data: { stripeCustomerId: customer.id } });
-
-  const checkout = await s.checkout.sessions.create({
-    mode: "subscription",
-    customer: customer.id,
-    line_items: await lineItemsFor(s, q.lines, q.config.interval),
-    locale: STRIPE_LOCALES[locale],
-    allow_promotion_codes: true,
-    billing_address_collection: "required",
-    client_reference_id: tenantId,
-    metadata: { tenantId },
-    subscription_data: { metadata: { tenantId } },
-    success_url: appUrl(`/${locale}/welcome/${tenantId}`),
-    cancel_url: appUrl(`/${locale}/signup?${form.get("config")}`),
-  });
-  redirect(checkout.url!);
+  const url = await checkoutUrl(tenantId, user, locale, `/${locale}/signup?${form.get("config")}`);
+  if (!url) return { error: "payment" };
+  redirect(url);
 }

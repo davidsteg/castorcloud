@@ -23,3 +23,9 @@ export async function ownedTenant(tenantId: string) {
   if (!user) return null;
   return prisma.tenant.findFirst({ where: { id: tenantId, members: { some: { userId: user.id, role: "OWNER" } } } });
 }
+
+/** The signed-in user if they are staff (admin console), else null. */
+export async function staffUser() {
+  const user = await currentUser();
+  return user?.isStaff ? user : null;
+}

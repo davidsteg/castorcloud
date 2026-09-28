@@ -6,7 +6,7 @@ import { BASE_DOMAIN_PUBLIC } from "@/lib/public-config";
 import { SLUG_RE, suggestSlug } from "@/lib/slug";
 import { createCloud, isSlugAvailable, type SignupState } from "./actions";
 
-export function SignupForm({ locale, t, config, devMode }: { locale: Locale; t: Dictionary; config: string; devMode: boolean }) {
+export function SignupForm({ locale, t, config, devMode, beta }: { locale: Locale; t: Dictionary; config: string; devMode: boolean; beta: boolean }) {
   const [state, action, pending] = useActionState<SignupState, FormData>(createCloud, undefined);
   const [name, setName] = useState("");
   const [slug, setSlug] = useState("");
@@ -45,13 +45,30 @@ export function SignupForm({ locale, t, config, devMode }: { locale: Locale; t: 
         </div>
         {slugError ? <span className="error">{slugError}</span> : <span className="hint">{s.addressHint}</span>}
       </div>
+      {beta && (
+        <div className="field">
+          <label htmlFor="note">{t.apply.note}</label>
+          <textarea id="note" name="note" className="input" rows={3} maxLength={500} placeholder={t.apply.notePlaceholder} />
+        </div>
+      )}
       <label className="check">
         <input type="checkbox" name="accept" required />
         <span>{s.accept}</span>
       </label>
+      {beta && (
+        <label className="check">
+          <input type="checkbox" name="beta" required />
+          <span>{t.beta.accept}</span>
+        </label>
+      )}
+      <label className="check">
+        <input type="checkbox" name="newsletter" />
+        <span>{t.newsletter.signupOptIn}</span>
+      </label>
       {state?.error === "payment" && <p className="notice">Stripe is not configured (STRIPE_SECRET_KEY).</p>}
+      {state?.error === "tooMany" && <p className="notice">{t.apply.tooMany}</p>}
       <button className="button block" type="submit" disabled={pending || !!slugError || available === false}>
-        {devMode ? s.payDev : s.pay}
+        {beta ? t.apply.submit : devMode ? s.payDev : s.pay}
       </button>
     </form>
   );

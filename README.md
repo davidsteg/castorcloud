@@ -8,6 +8,7 @@ encrypted stack; one portal embeds all services behind one login.
 - Architecture & roadmap: [docs/architecture.md](docs/architecture.md)
 - Security model (what we protect, and what we can't): [docs/security.md](docs/security.md)
 - Assistant design (Hermes, memory, LLM, credit limit): [docs/assistant.md](docs/assistant.md)
+- Beta applications and newsletter: [docs/beta.md](docs/beta.md)
 
 ## How a customer gets a cloud
 
@@ -16,6 +17,8 @@ encrypted stack; one portal embeds all services behind one login.
    (VAT, Stripe fees, 10 % open-source donation, infrastructure, operations).
 2. **Sign in / register** through Authentik – e-mail or "Continue with Google".
 3. **Signup** – name + address (`<slug>.<domain>`), then **Stripe Checkout**.
+   During the beta the signup is an **application**: staff approve it in the
+   admin console first, then the owner pays from "My clouds" (docs/beta.md).
 4. **Stripe webhook** → `PROVISION` job → **worker**:
    Authentik groups + one OIDC app per booked service → **encrypted LUKS
    volume** (key wrapped in the control plane, handed over on stdin) →

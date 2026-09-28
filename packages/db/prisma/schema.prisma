@@ -12,7 +12,8 @@ datasource db {
 }
 
 enum TenantStatus {
-  PENDING       // signed up, waiting for payment
+  APPLIED       // beta: application submitted, waiting for review by staff
+  PENDING       // approved (or no review needed), waiting for payment
   PROVISIONING  // paid, stack being created
   ACTIVE
   SUSPENDED     // stack stopped (unpaid / cancelled), data kept during grace period
@@ -103,6 +104,13 @@ model Tenant {
   displayName          String
   locale               String          @default("de")
   status               TenantStatus    @default(PENDING)
+
+  // Beta application (docs/beta.md). The note is cleared once reviewed.
+  applicationNote      String?
+  appliedAt            DateTime?
+  reviewedAt           DateTime?
+  /// User id of the staff member who approved the application
+  reviewedBy           String?
   node                 Node?           @relation(fields: [nodeId], references: [id])
   nodeId               String?
 
@@ -326,4 +334,30 @@ model Alert {
   resolvedAt  DateTime?
 
   @@index([resolvedAt])
+}
+
+enum NewsletterStatus {
+  PENDING      // subscribed, confirmation e-mail sent (double opt-in)
+  CONFIRMED
+  UNSUBSCRIBED
+}
+
+/// Newsletter subscribers (docs/beta.md). Only confirmed addresses may be
+/// mailed. The unsubscribe link carries an HMAC of the id, so no token for it
+/// is stored here.
+model NewsletterSubscriber {
+  id               String           @id @default(cuid())
+  email            String           @unique
+  locale           String           @default("de")
+  status           NewsletterStatus @default(PENDING)
+  /// SHA-256 of the pending confirmation token; cleared once confirmed
+  confirmTokenHash String?          @unique
+  confirmSentAt    DateTime?
+  /// Where the subscription came from: "form", "signup" or "account"
+  source           String
+  /// When the address was confirmed: the record of consent
+  confirmedAt      DateTime?
+  unsubscribedAt   DateTime?
+  createdAt        DateTime         @default(now())
+  updatedAt        DateTime         @updatedAt
 }
