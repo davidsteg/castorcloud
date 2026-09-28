@@ -125,6 +125,10 @@ jobs:
       # Verify with: cosign verify --key cosign.pub --insecure-ignore-tlog <image>@<digest>
       - uses: sigstore/cosign-installer@6f9f17788090df1f26f669e9d70d6ae9567deba6 # v4.1.2
         if: env.COSIGN_KEY_SET == 'true'
+        with:
+          # v2 writes the classic <digest>.sig signatures that
+          # apps/provisioner/src/verify-image.ts checks.
+          cosign-release: v2.6.1
 
       - name: Sign
         if: env.COSIGN_KEY_SET == 'true'

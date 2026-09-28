@@ -13,7 +13,8 @@ export function clampLimit(limit: number | undefined, fallback = 10) {
 /** Plain text, whitespace collapsed, cut at a word boundary. */
 export function excerpt(text: string | null | undefined, max = EXCERPT_CHARS): string | undefined {
   if (!text) return undefined;
-  const plain = text.replace(/<[^>]*>/g, "").replace(/\s+/g, " ").trim();
+  // Tags go, then any stray angle bracket, so no markup survives in any form.
+  const plain = text.replace(/<[^>]*>/g, "").replace(/[<>]/g, "").replace(/\s+/g, " ").trim();
   if (plain.length <= max) return plain || undefined;
   const cut = plain.slice(0, max);
   const space = cut.lastIndexOf(" ");

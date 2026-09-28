@@ -20,6 +20,7 @@ test("a token only identifies its own member", () => {
 
 test("excerpts are short plain text", () => {
   assert.equal(excerpt("<span class='match'>Hotel</span>   Lisboa\n invoice"), "Hotel Lisboa invoice");
+  assert.equal(excerpt("<scr<b>ipt>alert(1)</script>"), "iptalert(1)");
   const long = excerpt("word ".repeat(200), 50)!;
   assert.ok(long.length <= 51 && long.endsWith("…"));
   assert.equal(excerpt(""), undefined);

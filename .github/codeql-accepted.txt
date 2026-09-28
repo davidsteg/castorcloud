@@ -1,0 +1,7 @@
+# CodeQL findings accepted after review (Security workflow). One per line:
+#   <rule id> <file>
+# Each entry covers that rule in that file only; say why above it.
+
+# The monitor opens a TLS connection only to read the certificate's expiry
+# and trust status (socket.authorized); it sends nothing over it.
+js/disabling-certificate-validation apps/provisioner/src/monitor.ts

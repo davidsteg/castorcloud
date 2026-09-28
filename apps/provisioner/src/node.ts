@@ -10,6 +10,7 @@ import type { TenantStorage } from "./storage.ts";
 import { TenantVolume } from "./volume.ts";
 import { ZfsDataset, type HostExec } from "./zfs.ts";
 import { nodeLayout, parseEdge, type RemoteKind } from "./layout.ts";
+import { installImage } from "./images.ts";
 
 export interface NodeExec {
   readonly name: string;
@@ -153,8 +154,8 @@ export class LocalNode implements NodeExec {
       "run", "--rm", "--privileged", "--pid=host", "alpine:3.22", "nsenter", "-t", "1", "-m", "--", "sh", "-c",
       "mkdir -p /srv/pc/volumes /srv/pc/tenants && (findmnt -no PROPAGATION /srv/pc | grep -q shared || (mount --bind /srv/pc /srv/pc && mount --make-rshared /srv/pc))",
     ]);
-    this.docker(["build", "-q", "-t", CRYPTD_IMAGE, path.join(this.root, "infra/node/cryptd")]);
-    buildAssistantTools(this, this.root);
+    installImage(this, "cryptd", CRYPTD_IMAGE, [path.join(this.root, "infra/node/cryptd")]);
+    installAssistantTools(this, this.root);
   }
 }
 
@@ -162,9 +163,9 @@ export const CRYPTD_IMAGE = "pc-cryptd:1";
 /** Same tag as ASSISTANT_TOOLS_IMAGE in packages/stack-templates/versions.env. */
 export const ASSISTANT_TOOLS_IMAGE = "pc-assistant-tools:1";
 
-/** The assistant's tools server is built from this repo on every node. */
-function buildAssistantTools(node: NodeExec, root: string) {
-  node.docker(["build", "-q", "-t", ASSISTANT_TOOLS_IMAGE, "-f", path.join(root, "agent/tools/Dockerfile"), root]);
+/** The assistant's tools server, on every node (pulled and verified, or built; see images.ts). */
+function installAssistantTools(node: NodeExec, root: string) {
+  installImage(node, "assistant-tools", ASSISTANT_TOOLS_IMAGE, ["-f", path.join(root, "agent/tools/Dockerfile"), root]);
 }
 
 // Words sent over SSH: castor-ssh splits on spaces and allows only these.
@@ -309,6 +310,6 @@ export class SshNode implements NodeExec, HostExec {
       "-f", path.join(this.root, "infra/node/edge.yml"),
       "up", "-d", "--remove-orphans",
     ], { env: { EDGE_PORT: String(this.edgePort) } });
-    buildAssistantTools(this, this.root);
+    installAssistantTools(this, this.root);
   }
 }

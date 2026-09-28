@@ -49,8 +49,9 @@ bundle; everything else is read from the environment at run time.
 
 ### Signing
 
-Images are signed with cosign when the repository secret
-`COSIGN_PRIVATE_KEY` is set. A key pair is used instead of keyless signing
+Images are signed with cosign (v2, key-based) when the repository secret
+`COSIGN_PRIVATE_KEY` is set. Nodes only take signed images (below), so set
+it before using `CASTOR_IMAGE_TAG`. A key pair is used instead of keyless signing
 because keyless writes this private repo's name to the public Rekor log.
 
 ```sh
@@ -64,7 +65,48 @@ cosign verify --key cosign.pub --insecure-ignore-tlog \
 
 Keep `cosign.key` offline; commit only `cosign.pub` if nodes should verify.
 
+### Private packages
+
+The packages inherit this private repository's access, so only accounts
+with access to the repo can pull. Check once after the first publish:
+GitHub > Your profile > Packages > each `castorcloud*` package > Package
+settings: visibility **Private**, and under "Manage Actions access" only
+`davidsteg/castorcloud`, with the Write role.
+
+### How nodes get the images
+
+In production the provisioner no longer builds cryptd and assistant-tools
+on the nodes. For each node it:
+
+1. resolves `castorcloud-<name>:$CASTOR_IMAGE_TAG` to a digest and checks
+   the cosign signature against `CASTOR_COSIGN_PUBKEY`
+   (`apps/provisioner/src/verify-image.ts`). The signature must come from that
+   key and name exactly that repository and digest, or nothing is pulled;
+2. has the node pull that digest (never the tag) and tags it locally
+   (`pc-cryptd:1`, `pc-assistant-tools:1`).
+
+The check runs on the control plane, so nodes need neither cosign nor
+stored credentials: the docker CLI passes the pull token to the node's
+engine for that one pull (`apps/provisioner/src/images.ts`).
+
+Pull token: GitHub > Settings > Developer settings > Personal access tokens
+> **Tokens (classic)** > Generate, with only the `read:packages` scope and an
+expiry date (fine-grained tokens can't read GHCR yet). Put it in the
+control plane's `.env`:
+
+```sh
+CASTOR_IMAGE_TAG=<commit SHA of a green main build>
+CASTOR_COSIGN_PUBKEY=/run/secrets/cosign.pub   # cosign.pub from "Signing"
+GHCR_PULL_USER=davidsteg
+GHCR_PULL_TOKEN=ghp_...                        # read:packages only
+```
+
+With `CASTOR_IMAGE_TAG` unset, nodes build the images from the checkout, as
+in development. Setting it without `CASTOR_COSIGN_PUBKEY` is an error, so
+production never runs an unsigned image.
+
 ## Accepted findings
 
 `.trivyignore` lists CVEs accepted for now, each with a reason and an
-expiry date after which the scan fails again.
+expiry date after which the scan fails again. `.github/codeql-accepted.txt`
+does the same for CodeQL findings reviewed as intended, per rule and file.
