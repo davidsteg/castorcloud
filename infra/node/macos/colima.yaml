@@ -19,8 +19,8 @@ mounts:
     writable: true
 network:
   address: true
-  # The VM gets its own address on the LAN (DHCP), so the edge Traefik's
-  # ports 80/443 are reachable directly: forward them on the router to it.
+  # The VM gets its own address on the LAN (DHCP), where the control plane's
+  # Traefik reaches the node's edge proxy on port 80. Give it a fixed lease.
   mode: bridged
   interface: en0
   dns: []

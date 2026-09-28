@@ -22,6 +22,7 @@ export class Nodes {
           target: `${row.sshUser}@${row.sshHost}`,
           pool: row.zfsPool,
           authHostIp: row.authHostIp ?? undefined,
+          edgeHost: row.edgeHost ?? undefined,
         });
       }
       // Once per worker process: brings templates, brand assets and the edge

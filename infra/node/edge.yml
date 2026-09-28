@@ -1,11 +1,11 @@
-# Edge proxy of a Mac mini node: public HTTPS for the tenant stacks on this
-# node (photos-<slug>, docs-<slug>, ...). Started by the provisioner over
-# ssh:// (SshNode.prepare); the portal and Authentik stay on the control plane.
+# Edge proxy of a Mac mini node. Started by the provisioner over ssh://
+# (SshNode.prepare). The tenant stacks' skin proxies register via Docker labels.
 #
-# TLS: one wildcard certificate *.BASE_DOMAIN per node via ACME DNS-01.
-# The DNS provider's credentials come from .env.edge on the control plane
-# (see infra/node/macos/README.md); compose sends them as container env,
-# nothing is copied to the node's disk except Traefik's acme.json.
+# Customers never reach it directly: *.domain points at the control plane,
+# whose Traefik terminates TLS and forwards each tenant's service hosts to
+# the tenant's node (tenant-<slug>.yml, written by the provisioner). So this
+# proxy speaks plain HTTP on the LAN. Its entrypoint keeps the name
+# "websecure" because the tenant template's router labels use that name.
 name: pc-edge
 
 services:
@@ -15,30 +15,15 @@ services:
       - --providers.docker=true
       - --providers.docker.exposedbydefault=false
       - --providers.docker.network=pc-edge
-      - --entrypoints.web.address=:80
-      - --entrypoints.web.http.redirections.entrypoint.to=websecure
-      - --entrypoints.web.http.redirections.entrypoint.scheme=https
-      - --entrypoints.websecure.address=:443
-      - --entrypoints.websecure.http.tls.certresolver=le
-      - --entrypoints.websecure.http.tls.domains[0].main=${BASE_DOMAIN}
-      - --entrypoints.websecure.http.tls.domains[0].sans=*.${BASE_DOMAIN}
-      - --certificatesresolvers.le.acme.email=${ACME_EMAIL}
-      - --certificatesresolvers.le.acme.storage=/acme/acme.json
-      - --certificatesresolvers.le.acme.dnschallenge.provider=${ACME_DNS_PROVIDER}
-    env_file:
-      - path: ../../.env.edge
-        required: false
+      - --entrypoints.websecure.address=:80
+      # The client address comes from the control plane's X-Forwarded-For.
+      - --entrypoints.websecure.forwardedHeaders.trustedIPs=${CONTROL_PLANE_IPS:-10.0.0.0/8,172.16.0.0/12,192.168.0.0/16}
     ports:
       - "80:80"
-      - "443:443"
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock:ro
-      - acme:/acme
     networks: [pc-edge]
     restart: unless-stopped
-
-volumes:
-  acme:
 
 networks:
   pc-edge:

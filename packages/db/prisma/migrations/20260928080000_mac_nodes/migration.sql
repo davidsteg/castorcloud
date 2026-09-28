@@ -3,6 +3,7 @@ CREATE TYPE "NodeKind" AS ENUM ('LOCAL', 'MAC');
 
 -- AlterTable
 ALTER TABLE "Node" ADD COLUMN     "authHostIp" TEXT,
+ADD COLUMN     "edgeHost" TEXT,
 ADD COLUMN     "kind" "NodeKind" NOT NULL DEFAULT 'MAC',
 ADD COLUMN     "lastError" TEXT,
 ADD COLUMN     "lastSeenAt" TIMESTAMP(3),

@@ -70,6 +70,9 @@ model Node {
   zfsPool     String?
   /// What tenant containers resolve auth.<domain> to (extra_hosts); null = the platform default
   authHostIp  String?
+  /// The Colima VM's LAN address: the control plane's Traefik forwards the
+  /// node's tenant hosts to its edge proxy there (port 80)
+  edgeHost    String?
   capacity    Int       // max tenant stacks on this node
   /// false = draining: keeps its tenants, gets no new ones
   enabled     Boolean   @default(true)

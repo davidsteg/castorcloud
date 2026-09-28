@@ -5,10 +5,12 @@ Docker host; the control plane drives it over SSH. There's no cluster: a
 tenant's data lives on one Mac, so its containers run there.
 
 ```
- control plane (provisioner)                    Mac mini
+ customer ── https://photos-<slug>.domain ──► control plane Traefik (TLS, *.domain)
+                                                 │ tenant-<slug>.yml: forward to the tenant's node
+ control plane (provisioner)                    Mac mini          ▼  http, LAN
  ───────────────────────────                    ─────────────────────────────────────────
  docker compose ── ssh:// (castor-ssh) ───────► Colima VM: Docker engine
-                                                 ├ pc-edge: Traefik, *.domain via DNS-01
+                                                 ├ pc-edge: Traefik on :80
                                                  ├ pc-node: immich-ml, tika, gotenberg
                                                  └ pc-t-<slug>: the tenant's stack
  castor-zfs ────── ssh (castor-ssh, sudo) ────► macOS: OpenZFS pool "castor"
@@ -48,14 +50,15 @@ tenant destroys the dataset and the key (crypto-shredding).
    It creates the `castor` user, the pool, the SSH gate, and Colima as a boot
    service. Colima's first start may ask for your password once (bridged
    networking).
-5. **Router**: give the Colima VM a fixed DHCP lease and forward 80/443 to it.
+5. **Router**: give the Colima VM a fixed DHCP lease. Nothing is forwarded to
+   the Mac from the internet.
 
 ## Register it
 
 On the control plane (`~/.ssh/config` needs the key for the Mac):
 
 ```sh
-npm run node -w @pc/provisioner -- add mini-1 castor@10.0.0.21 --auth-host-ip <control-plane-ip>
+npm run node -w @pc/provisioner -- add mini-1 castor@10.0.0.21 --edge 10.0.0.31 --auth-host-ip <control-plane-ip>
 npm run node -w @pc/provisioner -- list
 ```
 
@@ -64,14 +67,19 @@ bundle to the Mac, and starts the edge proxy. New tenants are placed on the
 node with the most free booked space (`apps/provisioner/src/placement.ts`).
 `drain <name>` stops new placements.
 
-The edge proxy needs the DNS provider's API credentials for the wildcard
-certificate, in `.env.edge` at the repo root on the control plane:
+## Routing and DNS
 
-```sh
-ACME_EMAIL=ops@example.ch
-ACME_DNS_PROVIDER=cloudflare     # any lego provider name
-CF_DNS_API_TOKEN=…               # that provider's variables
-```
+DNS stays static: `castorcloud.ch` and `*.castorcloud.ch` point at the control
+plane, which holds the one wildcard certificate. For each tenant on a Mac, the
+provisioner writes `infra/control-plane/traefik/dynamic/tenant-<slug>.yml`
+(or `$TRAEFIK_DYNAMIC_DIR`). That file routes the tenant's service hosts
+(`photos-<slug>`, `docs-<slug>`, …) to its node's edge proxy. A new tenant
+needs no DNS change, and moving a tenant only rewrites its route.
+
+Between the control plane and the Macs this is plain HTTP, so they should share
+a LAN. If the control plane runs elsewhere, put a WireGuard tunnel between
+them and use the tunnel addresses for `--edge`. All uploads pass through the
+control plane, so it needs the bandwidth for them.
 
 ## Not verified yet on real hardware
 
@@ -79,5 +87,5 @@ This was written without a Mac mini to test on. Check these first:
 
 - Postgres data directories on virtiofs: chown to the container user, and fsync behaviour.
 - Datasets mounted after Colima started show up inside the VM (nested mounts under the shared `/Volumes/castor`).
-- Colima bridged networking started from the LaunchDaemon, without a login session.
+- Colima bridged networking started from the LaunchDaemon, without a login session, and the control plane reaching the VM's port 80.
 - OpenZFS on OS X reads the dataset key from stdin for `zfs create` and `zfs load-key` (keyformat=hex).

@@ -6,9 +6,10 @@ import { audit, newWrappedVolumeKey, openSecret, sealSecret } from "@pc/core";
 import { fitsStorage, storageQuotaMb } from "@pc/pricing";
 import type { Authentik } from "./authentik.ts";
 import type { NodeExec } from "./node.ts";
+import { removeTenantRoute, writeTenantRoute } from "./routes.ts";
 import type { TenantStorage } from "./storage.ts";
 import {
-  ALL_VOLUMES, SERVICES, STACK_SERVICES, ensureSecrets, immichConfig, names, redirectUris,
+  ALL_VOLUMES, SERVICES, STACK_SERVICES, edgeRoute, ensureSecrets, immichConfig, names, redirectUris,
   tenantEnv, volumesOverride, type Platform, type ServiceKey,
 } from "./tenant.ts";
 
@@ -133,6 +134,10 @@ export class Lifecycle {
       }
     }
 
+    // Mac nodes: the control plane forwards the tenant's service hosts to the node.
+    if (node.edgeUrl) writeTenantRoute(tenant.slug, edgeRoute(tenant.slug, this.p, node.edgeUrl));
+    else removeTenantRoute(tenant.slug);
+
     for (const s of enabled) await this.waitHealthy(n.serviceOrigin(s) + SERVICES[s].healthPath, s);
     if (enabled.includes("photos")) await this.immichServiceAccount(tenant.slug, secrets);
 
@@ -181,6 +186,7 @@ export class Lifecycle {
       this.storage(node, tenant)?.destroy();
       node.removeConfig(tenant.slug);
     }
+    removeTenantRoute(tenant.slug);
     if (tenant.volumeKey) {
       // Without the key, any copy of the volume (and its backups) is unreadable.
       await prisma.volumeKey.delete({ where: { tenantId: tenant.id } });

@@ -37,6 +37,11 @@ export interface NodeExec {
   };
   /** Overrides the platform's AUTH_HOST_IP for stacks on this node. */
   readonly authHostIp?: string;
+  /**
+   * Where the control plane's Traefik reaches the node's edge proxy. Unset for
+   * the local node, whose stacks sit on the control plane Traefik's network.
+   */
+  readonly edgeUrl?: string;
   storage(tenantId: string, slug: string, wrappedKey: string): TenantStorage;
 }
 
@@ -150,6 +155,8 @@ export type SshNodeConfig = {
   target: string;
   pool: string;
   authHostIp?: string;
+  /** The Colima VM's address on the LAN, where the edge proxy listens on :80 */
+  edgeHost?: string;
 };
 
 /**
@@ -162,6 +169,7 @@ export class SshNode implements NodeExec, HostExec {
   readonly name: string;
   readonly paths: NodeExec["paths"];
   readonly authHostIp?: string;
+  readonly edgeUrl?: string;
   private readonly target: string;
   private readonly pool: string;
   private readonly config: LocalConfig;
@@ -174,6 +182,8 @@ export class SshNode implements NodeExec, HostExec {
     this.target = cfg.target;
     this.pool = cfg.pool;
     this.authHostIp = cfg.authHostIp;
+    if (cfg.edgeHost !== undefined && !/^[A-Za-z0-9.:-]+$/.test(cfg.edgeHost)) throw new Error(`invalid edge host: ${cfg.edgeHost}`);
+    this.edgeUrl = cfg.edgeHost ? `http://${cfg.edgeHost}` : undefined;
     this.paths = {
       templates: path.join(root, "packages/stack-templates"),
       nodeTemplates: `${MAC_NODE_ROOT}/files/templates`,

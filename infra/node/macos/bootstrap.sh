@@ -104,7 +104,6 @@ vm_ip=$(sudo -u "$USER_NAME" env HOME="$home" /opt/homebrew/bin/colima ls -j 2>/
 
 cat <<DONE
 
-Node ready. On the control plane:
-  npm run node -w @pc/provisioner -- add <name> $USER_NAME@$(ipconfig getifaddr en0 || hostname) --auth-host-ip <control-plane-ip>
-Forward ports 80 and 443 on the router to the Docker VM: ${vm_ip:-see 'colima ls'}
+Node ready. Give the Docker VM (${vm_ip:-see 'colima ls'}) a fixed DHCP lease, then on the control plane:
+  npm run node -w @pc/provisioner -- add <name> $USER_NAME@$(ipconfig getifaddr en0 || hostname) --edge ${vm_ip:-<vm-ip>} --auth-host-ip <control-plane-ip>
 DONE
