@@ -16,3 +16,10 @@ export async function memberTenant(tenantId: string) {
   if (!user) return null;
   return prisma.tenant.findFirst({ where: { id: tenantId, members: { some: { userId: user.id } } } });
 }
+
+/** The tenant, if the signed-in user is its owner. */
+export async function ownedTenant(tenantId: string) {
+  const user = await currentUser();
+  if (!user) return null;
+  return prisma.tenant.findFirst({ where: { id: tenantId, members: { some: { userId: user.id, role: "OWNER" } } } });
+}

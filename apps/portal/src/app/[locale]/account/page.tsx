@@ -1,12 +1,14 @@
 import Link from "next/link";
 import { redirect } from "next/navigation";
 import { prisma } from "@pc/db";
+import { MAX_STORAGE_UNITS, fitsStorage, formatStorage, minStorageUnits, storageQuotaMb } from "@pc/pricing";
 import { signIn, signOut } from "@/auth";
-import { getDictionary, type Locale } from "@/i18n";
+import { fill, getDictionary, type Locale } from "@/i18n";
 import { APP_LABEL, BASE_DOMAIN, PUBLIC_SCHEME } from "@/lib/config";
-import { currentUser, memberTenant } from "@/lib/session";
-import { stripe } from "@/lib/stripe";
+import { currentUser, memberTenant, ownedTenant } from "@/lib/session";
+import { itemKeyFromLookup, stripe } from "@/lib/stripe";
 import { SiteHeader } from "@/components/site/SiteHeader";
+import { StorageMeter } from "@/components/StorageMeter";
 
 export default async function AccountPage({ params }: { params: Promise<{ locale: Locale }> }) {
   const { locale } = await params;
@@ -34,6 +36,7 @@ export default async function AccountPage({ params }: { params: Promise<{ locale
 
   const tenants = await prisma.tenant.findMany({
     where: { members: { some: { userId: user.id } }, status: { not: "DELETED" } },
+    include: { members: { where: { userId: user.id }, select: { role: true } } },
     orderBy: { createdAt: "asc" },
   });
 
@@ -48,6 +51,25 @@ export default async function AccountPage({ params }: { params: Promise<{ locale
       return_url: `${PUBLIC_SCHEME}://${APP_LABEL}.${BASE_DOMAIN}/${locale}/account`,
     });
     redirect(portal.url);
+  }
+
+  // Storage changes go through here rather than the Stripe portal, so a
+  // downgrade is checked against what is stored. The subscription webhook then
+  // updates the tenant and the provisioner resizes the volume.
+  async function changeStorage(form: FormData) {
+    "use server";
+    const tenant = await ownedTenant(String(form.get("tenantId")));
+    const units = Math.round(Number(form.get("storageUnits")));
+    const s = stripe();
+    if (!tenant?.stripeSubscriptionId || !s) return;
+    if (!Number.isFinite(units) || units < 1 || units > MAX_STORAGE_UNITS || units === tenant.storageUnits) return;
+    if (tenant.storageUsedMb !== null && !fitsStorage(tenant.storageUsedMb, units)) return;
+
+    const sub = await s.subscriptions.retrieve(tenant.stripeSubscriptionId);
+    const item = sub.items.data.find((i) => itemKeyFromLookup(i.price.lookup_key) === "storage");
+    if (!item) return;
+    await s.subscriptionItems.update(item.id, { quantity: units, proration_behavior: "create_prorations" });
+    redirect(`/${locale}/account`);
   }
 
   async function logout() {
@@ -83,6 +105,33 @@ export default async function AccountPage({ params }: { params: Promise<{ locale
                   </form>
                 )}
               </div>
+              {tenant.status === "ACTIVE" && (
+                <div style={{ marginTop: 20 }}>
+                  <StorageMeter
+                    tenant={tenant}
+                    t={t}
+                    action={
+                      tenant.stripeSubscriptionId && tenant.members[0]?.role === "OWNER" ? (
+                        <form action={changeStorage} className="storage-change">
+                          <input type="hidden" name="tenantId" value={tenant.id} />
+                          <label htmlFor={`storage-${tenant.id}`}>{t.storage.change}</label>
+                          <select className="input" id={`storage-${tenant.id}`} name="storageUnits" defaultValue={tenant.storageUnits}>
+                            {storageOptions(tenant.storageUsedMb).map((u) => (
+                              <option key={u} value={u}>{formatStorage(storageQuotaMb(u))}</option>
+                            ))}
+                          </select>
+                          <button className="button secondary small" type="submit">{t.storage.changeSubmit}</button>
+                          {tenant.storageUsedMb !== null && (
+                            <span className="small-print">
+                              {fill(t.storage.changeHint, { min: formatStorage(storageQuotaMb(minStorageUnits(tenant.storageUsedMb))) })}
+                            </span>
+                          )}
+                        </form>
+                      ) : null
+                    }
+                  />
+                </div>
+              )}
             </div>
           ))}
           <Link className="button secondary block" href={`/${locale}/pricing`}>{t.account.create}</Link>
@@ -93,4 +142,10 @@ export default async function AccountPage({ params }: { params: Promise<{ locale
       </main>
     </>
   );
+}
+
+/** Bookable sizes: from the smallest that holds the current data up to the maximum. */
+function storageOptions(usedMb: number | null) {
+  const min = usedMb === null ? 1 : minStorageUnits(usedMb);
+  return Array.from({ length: MAX_STORAGE_UNITS - min + 1 }, (_, i) => min + i);
 }

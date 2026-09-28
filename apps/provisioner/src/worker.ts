@@ -100,13 +100,26 @@ worker.on("failed", async (job, err) => {
 });
 
 // ------------------------------------------------------------ maintenance
-// Hourly: delete tenants whose grace period after cancellation has ended.
+// Hourly: delete tenants whose grace period after cancellation has ended,
+// and measure every active tenant's storage usage for the portal.
 const maintenance = new Queue("maintenance", { connection });
 await maintenance.upsertJobScheduler("sweep-deletions", { every: 60 * 60 * 1000 }, { name: "sweep-deletions" });
+await maintenance.upsertJobScheduler("measure-storage", { every: 60 * 60 * 1000 }, { name: "measure-storage" });
 
 new Worker(
   "maintenance",
-  async () => {
+  async (job) => {
+    if (job.name === "measure-storage") {
+      const active = await prisma.tenant.findMany({ where: { status: "ACTIVE" }, select: { id: true } });
+      for (const t of active) {
+        try {
+          await lifecycle.measure(t.id);
+        } catch (err) {
+          console.error(`[measure ${t.id}] ${(err as Error).message}`);
+        }
+      }
+      return;
+    }
     const due = await prisma.tenant.findMany({
       where: { status: "SUSPENDED", deleteAfter: { lt: new Date() } },
       select: { id: true },

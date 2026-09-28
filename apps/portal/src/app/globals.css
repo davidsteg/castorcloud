@@ -394,6 +394,15 @@ p { margin: 0; }
 .cards { display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: 16px; }
 .card { background: var(--pc-surface); border: 1px solid var(--pc-border); border-radius: var(--pc-radius); padding: 20px; }
 
+/* Storage meter */
+.storage-head { display: flex; justify-content: space-between; gap: 12px; flex-wrap: wrap; font-size: 15px; margin-bottom: 8px; }
+.storage-bar { display: flex; height: 10px; border-radius: 999px; overflow: hidden; background: var(--pc-surface-2); }
+.storage-bar span { min-width: 2px; }
+.storage-legend { list-style: none; padding: 0; margin: 10px 0 0; display: flex; flex-wrap: wrap; gap: 6px 16px; font-size: 13px; }
+.storage-legend i { display: inline-block; width: 9px; height: 9px; border-radius: 50%; margin-right: 6px; }
+.storage-change { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; margin-top: 14px; }
+.storage-change .input { width: auto; }
+
 /* ---------------------------------------------------------- responsive */
 @media (max-width: 960px) {
   .hero .container, .pricing, .assistant-grid, .topic, .tool { grid-template-columns: 1fr; }
