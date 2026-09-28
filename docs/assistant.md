@@ -116,7 +116,9 @@ with mocked API responses.
   the build sandbox); run `npm run e2e` with Photos booked.
 - **Swiss provider** (`litellm/swiss.yaml`): set the real model name and the
   per-token prices, otherwise spend (and the budget) is not counted.
-- **Gateway reachability**: the gateway listens on the node's `127.0.0.1:4000`;
-  the control plane reaches it through an SSH tunnel or a private network.
+- **Gateway reachability**: control plane and nodes share a LAN; set
+  `LLM_GATEWAY_BIND` on each node to its LAN address (default `127.0.0.1`).
+  With several nodes the gateway URL must follow the tenant's node (after the
+  Mac mini nodes PR lands); today `LLM_GATEWAY_URL` is one address.
 - Portal chat end to end with SSO on a provisioned tenant (the routes were
   exercised piecewise, not through a real login).

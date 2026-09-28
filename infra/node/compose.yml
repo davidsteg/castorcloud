@@ -43,10 +43,11 @@ services:
       LITELLM_LOG: ERROR
     volumes:
       - ./litellm/${AI_PROVIDER:-openrouter}.yaml:/etc/litellm/config.yaml:ro
-    # Admin API for the provisioner and the portal's usage meter. Production:
-    # reach it through the SSH tunnel to the node, never publicly.
+    # Admin API for the provisioner, the portal's usage meter and the Telegram
+    # bot. The control plane reaches it over the LAN: set LLM_GATEWAY_BIND to
+    # the node's LAN address (never a public one). Admin calls need the master key.
     ports:
-      - "127.0.0.1:4000:4000"
+      - "${LLM_GATEWAY_BIND:-127.0.0.1}:4000:4000"
     depends_on: [llm-db]
     restart: unless-stopped
 
