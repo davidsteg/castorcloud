@@ -23,11 +23,14 @@
 # Backup snapshots and bookmarks are named cb-<UTC time>.
 set -eu
 PATH=/usr/local/zfs/bin:/usr/sbin:/usr/bin:/sbin:/bin
-POOL=${CASTOR_POOL:-castor}
-# Tenant datasets: <pool>/castor/t/<slug> (older macOS nodes: <pool>/t/<slug>).
-if [ -n "${CASTOR_TENANTS:-}" ]; then PARENT=$CASTOR_TENANTS
-elif zfs list -H -o name "$POOL/castor/t" >/dev/null 2>&1; then PARENT=$POOL/castor/t
-else PARENT=$POOL/t; fi
+# The node's castor.conf (root-owned, next to the scripts, shared with
+# castor-zfs) names the pool and where tenant datasets live: TrueNAS
+# <pool>/castor/t, macOS castor/t. sudo clears the environment, so it's read
+# from there, not from the caller.
+here=$(cd "$(dirname "$0")" && pwd)
+if [ -f "$here/castor.conf" ]; then . "$here/castor.conf"; fi
+POOL=${POOL:-castor}
+PARENT=${DATASET_ROOT:-$POOL/t}
 MPROP=ch.castorcloud:mountpoint
 
 cmd=${1:?command}

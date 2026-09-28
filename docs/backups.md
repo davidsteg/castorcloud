@@ -1,7 +1,7 @@
 # Backups
 
 Every tenant's data lives in one encrypted ZFS dataset on its node
-(`<pool>/castor/t/<slug>`, its own key). Backups copy that dataset, still
+(`<pool>/castor/t/<slug>` on TrueNAS, `castor/t/<slug>` on a Mac; its own key). Backups copy that dataset, still
 encrypted, to a separate **backup box**: a second machine with its own ZFS pool
 (a second TrueNAS, later off-site in Switzerland). The box never holds a
 tenant key, so it can't read what it stores.
@@ -131,7 +131,8 @@ deletion is gone: 30 days after deletion at most.
 
 1. The backup box: [infra/backup/README.md](../infra/backup/README.md).
 2. Nodes: `castor-snap` next to `castor-zfs`, allowed by the node's SSH gate
-   (the macOS bootstrap installs it).
+   (the macOS bootstrap installs it). It reads the pool and dataset root from
+   the node's `castor.conf`, like `castor-zfs`.
 3. `.env` on the control plane: `BACKUP_TARGET=castor-backup@<box>`,
    `BACKUP_DB_PUBLIC_KEY=…`, optionally `BACKUP_INTERVAL_HOURS` (default 6)
    and `BACKUP_PG_CONTAINER`. The provisioner's SSH key must be in
