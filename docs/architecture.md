@@ -38,6 +38,8 @@ Decisions taken (from Q&A):
                     └──────────────────────────────────────────────────────────┘
 ```
 
+**Data-plane nodes are Mac minis** (see `infra/node/macos/README.md`): each one is an independent Docker host (Colima) driven over SSH, with tenant data on per-tenant encrypted ZFS datasets (OpenZFS on macOS) whose size is the storage quota. There is no cluster: a tenant is placed on one node at provisioning (`apps/provisioner/src/placement.ts`) and its data stays there. `*.domain` points at the control plane, whose Traefik terminates TLS and forwards each tenant's service hosts to that tenant's node (a generated `tenant-<slug>.yml` route), so DNS never changes per tenant. Each node runs a small edge Traefik for its stacks; the portal and Authentik stay on the control plane. The local Docker host (LUKS volumes via `pc-cryptd`) remains for development (`LOCAL_NODE=off` disables it).
+
 ### Domains (critical for seamless iframes + mobile apps)
 All under one registrable domain (e.g. `brand.cloud`) so embeds are **same-site** (no third-party-cookie problems):
 - `brand.cloud` – marketing, signup

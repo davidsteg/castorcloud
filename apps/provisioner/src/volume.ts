@@ -4,18 +4,24 @@
 import { unwrapVolumeKey } from "@pc/core";
 import { storageQuotaMb } from "@pc/pricing";
 import { CRYPTD_IMAGE, type NodeExec } from "./node.ts";
+import { parseStatus, parseUsage, type StorageStatus, type TenantStorage } from "./storage.ts";
 
-export type VolumeStatus =
-  | { state: "missing" | "closed" }
-  | { state: "open"; usedMb: number; sizeMb: number; volumeMb: number };
+/** @deprecated use StorageStatus */
+export type VolumeStatus = StorageStatus;
 
-export class TenantVolume {
+export class TenantVolume implements TenantStorage {
+  /** ext4 can't shrink while mounted. */
+  readonly offlineShrink = true;
+  readonly dataDir: string;
+
   constructor(
     private readonly node: NodeExec,
     private readonly tenantId: string,
     private readonly slug: string,
     private readonly wrappedKey: string,
-  ) {}
+  ) {
+    this.dataDir = `/srv/pc/tenants/${slug}/data`;
+  }
 
   private run(args: string[], withKey: boolean) {
     const input = withKey ? unwrapVolumeKey(this.tenantId, this.wrappedKey) : undefined;
@@ -30,7 +36,7 @@ export class TenantVolume {
 
   /** Creates the volume if needed, opens it and creates the data directories. */
   ensureOpen(storageUnits: number, dirs: string[]) {
-    return this.run(["create", this.slug, String(storageQuotaMb(storageUnits)), ...dirs], true);
+    return this.run(["create", this.slug, String(storageQuotaMb(storageUnits)), ...dirs.map((d) => `data/${d}`)], true);
   }
 
   grow(storageUnits: number) {
@@ -51,21 +57,11 @@ export class TenantVolume {
     return this.run(["destroy", this.slug], false);
   }
 
-  status(): VolumeStatus {
-    const out = this.run(["status", this.slug], false).split(/\s+/);
-    if (out[0] === "open") {
-      return { state: "open", usedMb: Number(out[1]), sizeMb: Number(out[2]), volumeMb: Number(out[3]) };
-    }
-    return { state: out[0] === "closed" ? "closed" : "missing" };
+  status(): StorageStatus {
+    return parseStatus(this.run(["status", this.slug], false));
   }
 
-  /** Used MB per data directory (compose volume name), empty when closed. */
   usage(): Record<string, number> {
-    const out: Record<string, number> = {};
-    for (const line of this.run(["usage", this.slug], false).split("\n")) {
-      const [dir, mb] = line.trim().split(/\s+/);
-      if (dir && mb && /^\d+$/.test(mb)) out[dir] = Number(mb);
-    }
-    return out;
+    return parseUsage(this.run(["usage", this.slug], false));
   }
 }

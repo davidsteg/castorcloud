@@ -1,26 +1,28 @@
 // Tenant lifecycle. Every operation is idempotent: a retried or repeated job
 // converges the stack to what the database says the customer has booked.
-import { rmSync } from "node:fs";
 import path from "node:path";
 import { prisma, type Tenant } from "@pc/db";
 import { audit, newWrappedVolumeKey, openSecret, sealSecret } from "@pc/core";
 import { fitsStorage, storageQuotaMb } from "@pc/pricing";
 import type { Authentik } from "./authentik.ts";
 import type { NodeExec } from "./node.ts";
+import { removeTenantRoute, writeTenantRoute } from "./routes.ts";
+import type { TenantStorage } from "./storage.ts";
 import {
-  ALL_VOLUMES, SERVICES, STACK_SERVICES, ensureSecrets, immichConfig, names, redirectUris,
+  ALL_VOLUMES, SERVICES, STACK_SERVICES, edgeRoute, ensureSecrets, immichConfig, names, redirectUris,
   tenantEnv, volumesOverride, type Platform, type ServiceKey,
 } from "./tenant.ts";
-import { TenantVolume } from "./volume.ts";
 
 export type Step = "identity" | "storage" | "services" | "ready";
 export type Reporter = (step: Step, message: string) => Promise<void>;
+/** The node a tenant's stack runs on (placement happens before apply). */
+export type NodeResolver = (nodeId: string | null) => Promise<NodeExec>;
 
 const SHARED_CONTAINERS = ["pc-node-immich-ml", "pc-node-tika", "pc-node-gotenberg"];
 
 export class Lifecycle {
   constructor(
-    private readonly node: NodeExec,
+    private readonly nodeFor: NodeResolver,
     private readonly ak: Authentik,
     private readonly p: Platform,
     private readonly versions: Record<string, string>,
@@ -38,12 +40,18 @@ export class Lifecycle {
     return STACK_SERVICES.filter((s) => tenant.services.some((i) => i.enabled && i.kind === s.toUpperCase()));
   }
 
-  private compose(tenant: Tenant, args: string[], profiles: ServiceKey[]) {
+  private storage(node: NodeExec, tenant: { id: string; slug: string; volumeKey: { wrappedKey: string } | null }) {
+    return tenant.volumeKey ? node.storage(tenant.id, tenant.slug, tenant.volumeKey.wrappedKey) : null;
+  }
+
+  private compose(node: NodeExec, tenant: Tenant, args: string[], profiles: ServiceKey[]) {
     const n = names(tenant.slug, this.p);
-    const dir = this.node.configDir(tenant.slug);
-    return this.node.docker([
+    const dir = node.configDir(tenant.slug);
+    return node.docker([
       "compose", "-p", n.project,
-      "-f", path.join(this.node.paths.templates, "tenant/compose.yml"),
+      "-f", path.join(node.paths.templates, "tenant/compose.yml"),
+      // Relative bind mounts (skin config, db init) resolve on the node.
+      "--project-directory", `${node.paths.nodeTemplates}/tenant`,
       "-f", `${dir}/compose.volumes.yml`,
       "--env-file", `${dir}/tenant.env`,
       ...profiles.flatMap((s) => ["--profile", s]),
@@ -54,6 +62,7 @@ export class Lifecycle {
   /** Provision, update and resume: make the stack match the booking. */
   async apply(tenantId: string, report: Reporter) {
     let tenant = await this.load(tenantId);
+    const node = await this.nodeFor(tenant.nodeId);
     const n = names(tenant.slug, this.p);
     const enabled = this.enabled(tenant);
 
@@ -88,43 +97,46 @@ export class Lifecycle {
     }
 
     // ------------------------------------------------------------- storage
-    await report("storage", "encrypted volume");
+    await report("storage", `encrypted storage on ${node.name}`);
     if (!tenant.volumeKey) {
       await prisma.volumeKey.create({ data: { tenantId: tenant.id, wrappedKey: newWrappedVolumeKey(tenant.id) } });
       await audit("system", "volume.key_created", tenant.id);
       tenant = await this.load(tenantId);
     }
-    const volume = new TenantVolume(this.node, tenant.id, tenant.slug, tenant.volumeKey!.wrappedKey);
-    volume.ensureOpen(tenant.storageUnits, ALL_VOLUMES.map((v) => `data/${v}`));
-    await audit("system", "volume.unlock", tenant.id, { reason: "apply" });
-    await this.resize(tenant, volume, report);
+    const volume = this.storage(node, tenant)!;
+    volume.ensureOpen(tenant.storageUnits, ALL_VOLUMES);
+    await audit("system", "volume.unlock", tenant.id, { reason: "apply", node: node.name });
+    await this.resize(node, tenant, volume, report);
 
     // ------------------------------------------------------------ services
     await report("services", "starting containers");
-    const configDir = this.node.configDir(tenant.slug);
-    this.node.writeConfig(tenant.slug, "immich.json", JSON.stringify(immichConfig(tenant.slug, this.p, secrets), null, 2));
-    this.node.writeConfig(tenant.slug, "compose.volumes.yml", volumesOverride(`${this.node.mountRoot}/${tenant.slug}`));
-    this.node.writeConfig(
+    node.writeNodeFile(tenant.slug, "immich.json", JSON.stringify(immichConfig(tenant.slug, this.p, secrets), null, 2));
+    node.writeConfig(tenant.slug, "compose.volumes.yml", volumesOverride(volume.dataDir));
+    node.writeConfig(
       tenant.slug,
       "tenant.env",
       tenantEnv({
-        slug: tenant.slug, p: this.p, secrets, versions: this.versions,
-        configDir, brandDir: this.node.paths.brand, caDir: this.node.paths.ca,
+        slug: tenant.slug, p: { ...this.p, authHostIp: node.authHostIp ?? this.p.authHostIp }, secrets, versions: this.versions,
+        configDir: node.nodeConfigDir(tenant.slug), brandDir: node.paths.brand, caDir: node.paths.ca,
       }),
     );
 
-    this.node.docker(["compose", "-f", path.join(this.node.paths.templates, "../../infra/node/compose.yml"), "--env-file", this.versionsFile, "up", "-d"]);
-    this.compose(tenant, ["up", "-d", "--remove-orphans"], enabled);
+    node.docker(["compose", "-f", path.join(node.paths.templates, "../../infra/node/compose.yml"), "--env-file", this.versionsFile, "up", "-d"]);
+    this.compose(node, tenant, ["up", "-d", "--remove-orphans"], enabled);
     for (const c of SHARED_CONTAINERS) {
-      this.node.docker(["network", "connect", `${n.project}-shared`, c], { allowFail: true });
+      node.docker(["network", "connect", `${n.project}-shared`, c], { allowFail: true });
     }
     // Unbooked services: stop and remove their containers; data stays on the volume.
     for (const s of STACK_SERVICES.filter((x) => !enabled.includes(x))) {
       for (const c of SERVICES[s].containers) {
-        const ids = this.node.docker(["ps", "-aq", "--filter", `label=com.docker.compose.project=${n.project}`, "--filter", `label=com.docker.compose.service=${c}`]).trim();
-        if (ids) this.node.docker(["rm", "-f", ...ids.split(/\s+/)]);
+        const ids = node.docker(["ps", "-aq", "--filter", `label=com.docker.compose.project=${n.project}`, "--filter", `label=com.docker.compose.service=${c}`]).trim();
+        if (ids) node.docker(["rm", "-f", ...ids.split(/\s+/)]);
       }
     }
+
+    // Mac nodes: the control plane forwards the tenant's service hosts to the node.
+    if (node.edgeUrl) writeTenantRoute(tenant.slug, edgeRoute(tenant.slug, this.p, node.edgeUrl));
+    else removeTenantRoute(tenant.slug);
 
     for (const s of enabled) await this.waitHealthy(n.serviceOrigin(s) + SERVICES[s].healthPath, s);
     if (enabled.includes("photos")) await this.immichServiceAccount(tenant.slug, secrets);
@@ -144,10 +156,14 @@ export class Lifecycle {
 
   async suspend(tenantId: string) {
     const tenant = await this.load(tenantId);
-    this.compose(tenant, ["stop"], STACK_SERVICES);
-    if (tenant.volumeKey) {
-      new TenantVolume(this.node, tenant.id, tenant.slug, tenant.volumeKey.wrappedKey).close();
-      await audit("system", "volume.lock", tenant.id, { reason: "suspend" });
+    if (tenant.nodeId) {
+      const node = await this.nodeFor(tenant.nodeId);
+      this.compose(node, tenant, ["stop"], STACK_SERVICES);
+      const volume = this.storage(node, tenant);
+      if (volume) {
+        volume.close();
+        await audit("system", "volume.lock", tenant.id, { reason: "suspend" });
+      }
     }
     await prisma.tenant.update({ where: { id: tenant.id }, data: { status: "SUSPENDED" } });
   }
@@ -158,14 +174,20 @@ export class Lifecycle {
     const n = names(tenant.slug, this.p);
     await prisma.tenant.update({ where: { id: tenant.id }, data: { status: "DELETING" } });
 
-    // Detach the node's shared services, or the tenant network can't be removed.
-    for (const c of SHARED_CONTAINERS) {
-      this.node.docker(["network", "disconnect", "-f", `${n.project}-shared`, c], { allowFail: true });
+    // A tenant that failed before placement has nothing on any node.
+    const node = tenant.nodeId ? await this.nodeFor(tenant.nodeId) : null;
+    if (node) {
+      // Detach the node's shared services, or the tenant network can't be removed.
+      for (const c of SHARED_CONTAINERS) {
+        node.docker(["network", "disconnect", "-f", `${n.project}-shared`, c], { allowFail: true });
+      }
+      this.compose(node, tenant, ["down", "--volumes", "--remove-orphans"], STACK_SERVICES);
+      node.docker(["network", "rm", `${n.project}-shared`], { allowFail: true });
+      this.storage(node, tenant)?.destroy();
+      node.removeConfig(tenant.slug);
     }
-    this.compose(tenant, ["down", "--volumes", "--remove-orphans"], STACK_SERVICES);
-    this.node.docker(["network", "rm", `${n.project}-shared`], { allowFail: true });
+    removeTenantRoute(tenant.slug);
     if (tenant.volumeKey) {
-      new TenantVolume(this.node, tenant.id, tenant.slug, tenant.volumeKey.wrappedKey).destroy();
       // Without the key, any copy of the volume (and its backups) is unreadable.
       await prisma.volumeKey.delete({ where: { tenantId: tenant.id } });
     }
@@ -173,7 +195,6 @@ export class Lifecycle {
     await this.ak.deleteGroup(n.ownersGroup);
     await this.ak.deleteGroup(n.membersGroup);
     await prisma.secret.deleteMany({ where: { tenantId: tenant.id } });
-    rmSync(this.node.configDir(tenant.slug), { recursive: true, force: true });
 
     await prisma.tenant.update({ where: { id: tenant.id }, data: { status: "DELETED" } });
     await audit("system", "tenant.deleted", tenant.id, { slug: tenant.slug, cryptoShredded: true });
@@ -185,8 +206,8 @@ export class Lifecycle {
    */
   async measure(tenantId: string) {
     const tenant = await this.load(tenantId);
-    if (!tenant.volumeKey) return;
-    const volume = new TenantVolume(this.node, tenant.id, tenant.slug, tenant.volumeKey.wrappedKey);
+    const volume = this.storage(await this.nodeFor(tenant.nodeId), tenant);
+    if (!volume) return;
     const status = volume.status();
     if (status.state !== "open") return;
     await prisma.tenant.update({
@@ -203,12 +224,13 @@ export class Lifecycle {
   // ------------------------------------------------------------- helpers
 
   /**
-   * Sizes the volume to the booking. Growing is online. Shrinking stops the
-   * stack for a moment (ext4 can't shrink while mounted) and only happens when
-   * the data fits with headroom; otherwise the volume keeps its size until the
-   * customer frees up space or books more, and the portal says so.
+   * Sizes the volume to the booking. Growing is online. Shrinking only happens
+   * when the data fits with headroom; otherwise the volume keeps its size until
+   * the customer frees up space or books more, and the portal says so. LUKS
+   * volumes stop the stack for a moment (ext4 can't shrink while mounted);
+   * ZFS quotas shrink online.
    */
-  private async resize(tenant: Tenant, volume: TenantVolume, report: Reporter) {
+  private async resize(node: NodeExec, tenant: Tenant, volume: TenantStorage, report: Reporter) {
     const status = volume.status();
     const targetMb = storageQuotaMb(tenant.storageUnits);
     if (status.state !== "open" || status.volumeMb <= targetMb) {
@@ -221,7 +243,7 @@ export class Lifecycle {
       return;
     }
     await report("storage", "shrinking volume");
-    this.compose(tenant, ["stop"], STACK_SERVICES);
+    if (volume.offlineShrink) this.compose(node, tenant, ["stop"], STACK_SERVICES);
     volume.shrink(tenant.storageUnits);
     await audit("system", "volume.shrunk", tenant.id, { fromMb: status.volumeMb, toMb: targetMb });
   }
