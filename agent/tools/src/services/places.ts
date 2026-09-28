@@ -3,7 +3,7 @@
 import { z } from "zod";
 import { pool } from "../db.ts";
 import { TtlCache, getJson } from "../http.ts";
-import { ToolError, clampLimit, compact, isoDate, roundCoord } from "../limits.ts";
+import { ToolError, clampLimit, compact, isoDate, localDay, localTime, roundCoord } from "../limits.ts";
 import type { Member } from "../members.ts";
 import { READ_ONLY, answer, type ServiceModule } from "../service.ts";
 
@@ -51,7 +51,7 @@ export function stretches(points: Point[], max = 25) {
   for (const p of [...points].sort((a, b) => a.timestamp - b.timestamp)) {
     const place = [p.city, p.country_name ?? p.country].filter(Boolean).join(", ");
     if (!place) continue;
-    const at = new Date(p.timestamp * 1000).toISOString().slice(0, 16);
+    const at = localTime(p.timestamp);
     const last = out.at(-1);
     if (last?.place === place) last.to = at;
     else out.push({ place, from: at, to: at });
@@ -101,9 +101,9 @@ export const places: ServiceModule = {
             visits: visits
               .filter((v) => v.status !== "declined")
               .slice(0, 25)
-              .map((v) => compact({ name: v.name, from: v.started_at?.slice(0, 16), to: v.ended_at?.slice(0, 16) })),
+              .map((v) => compact({ name: v.name, from: localTime(v.started_at), to: localTime(v.ended_at) })),
             ...(points.length === 0 ? { note: "no location data recorded in this period" } : {}),
-            link: `${portalOrigin}/places/map?start_at=${from.slice(0, 10)}&end_at=${to.slice(0, 10)}`,
+            link: `${portalOrigin}/places/map?start_at=${localDay(from)}&end_at=${localDay(to)}`,
           };
         }),
     );
@@ -126,11 +126,11 @@ export const places: ServiceModule = {
             items: items.map((v) =>
               compact({
                 name: v.name,
-                from: v.started_at?.slice(0, 16),
-                to: v.ended_at?.slice(0, 16),
+                from: localTime(v.started_at),
+                to: localTime(v.ended_at),
                 minutes: v.duration,
-                lat: roundCoord(Number(v.place?.latitude)),
-                lon: roundCoord(Number(v.place?.longitude)),
+                lat: roundCoord(v.place?.latitude),
+                lon: roundCoord(v.place?.longitude),
               }),
             ),
           };

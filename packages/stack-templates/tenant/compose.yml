@@ -280,6 +280,7 @@ services:
     image: ${ASSISTANT_TOOLS_IMAGE}
     profiles: [assistant]
     environment:
+      TZ: ${TZ}
       MEMBERS_FILE: /config/members.json
       PORTAL_ORIGIN: ${PORTAL_ORIGIN}
       # Empty for services that are not booked; their tools are then absent.

@@ -15,7 +15,15 @@ export async function getJson<T>(
   try {
     res = await fetch(url, {
       method: opts.method ?? "GET",
-      headers: { Accept: "application/json", ...(opts.body ? { "Content-Type": "application/json" } : {}), ...opts.headers },
+      headers: {
+        Accept: "application/json",
+        // The services sit behind TLS-terminating proxies and redirect plain
+        // HTTP to https (Dawarich: force_ssl); this is what the skin proxy sends.
+        "X-Forwarded-Proto": "https",
+        ...(opts.body ? { "Content-Type": "application/json" } : {}),
+        ...opts.headers,
+      },
+      redirect: "error",
       body: opts.body ? JSON.stringify(opts.body) : undefined,
       signal: AbortSignal.timeout(20_000),
     });

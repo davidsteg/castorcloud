@@ -2,14 +2,14 @@
 // host the provisioner runs on (development, single-server setups). A remote
 // node implements the same interface over SSH (docker compose on the node).
 import { execFileSync } from "node:child_process";
-import { mkdirSync, writeFileSync } from "node:fs";
+import { chmodSync, mkdirSync, writeFileSync } from "node:fs";
 import path from "node:path";
 
 export interface NodeExec {
   /** Runs docker with args; `input` is passed on stdin (used for keys). */
   docker(args: string[], opts?: { input?: Buffer; allowFail?: boolean }): string;
-  /** Writes a tenant config file; returns the path as seen by docker compose. */
-  writeConfig(slug: string, file: string, content: string): string;
+  /** Writes a tenant config file (owner-only unless `mode` says otherwise); returns its path. */
+  writeConfig(slug: string, file: string, content: string, mode?: number): string;
   configDir(slug: string): string;
   /** One-time node preparation (idempotent). */
   prepare(): void;
@@ -53,10 +53,11 @@ export class LocalNode implements NodeExec {
     return posix(path.join(this.root, ".tenants", slug));
   }
 
-  writeConfig(slug: string, file: string, content: string) {
+  writeConfig(slug: string, file: string, content: string, mode = 0o600) {
     const target = path.join(this.configDir(slug), file);
     mkdirSync(path.dirname(target), { recursive: true });
-    writeFileSync(target, content, { mode: 0o600 });
+    writeFileSync(target, content, { mode });
+    chmodSync(target, mode); // writeFileSync keeps the mode of an existing file
     return posix(target);
   }
 

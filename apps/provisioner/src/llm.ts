@@ -40,11 +40,11 @@ export class LlmGateway {
   }
 
   /** Creates or updates the tenant key: budget per month, only the assistant model. */
-  async ensureTenantKey(opts: { key: string; slug: string; tenantId: string; maxBudgetUsd: number; warnAt: number }) {
+  async ensureTenantKey(opts: { key: string; slug: string; tenantId: string; maxBudgetUsd: number }) {
     const settings = {
-      key_alias: `tenant-${opts.slug}`,
+      // Aliases must be unique; tenant ids never repeat, slugs may after a deletion.
+      key_alias: `tenant-${opts.slug}-${opts.tenantId}`,
       max_budget: opts.maxBudgetUsd,
-      soft_budget: Math.round(opts.maxBudgetUsd * opts.warnAt * 100) / 100,
       budget_duration: "1mo",
       models: ["assistant"],
       metadata: { tenant_id: opts.tenantId },
@@ -54,7 +54,7 @@ export class LlmGateway {
       await this.request("POST", "/key/generate", { key: opts.key, ...settings });
       return;
     }
-    // budget_duration is left as is, so the monthly reset date doesn't move.
+    // budget_duration is left as is, so the monthly reset (1st of the month) doesn't move.
     const { budget_duration: _keep, ...update } = settings;
     await this.request("POST", "/key/update", { key: opts.key, ...update });
     if (existing.blocked) await this.request("POST", "/key/unblock", { key: opts.key });

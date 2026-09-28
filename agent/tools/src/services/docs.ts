@@ -4,7 +4,7 @@
 // one of their groups, or unowned; superusers see everything).
 import { z } from "zod";
 import { TtlCache, getJson } from "../http.ts";
-import { DOCUMENT_CHARS, ToolError, clampLimit, compact, excerpt, isoDate } from "../limits.ts";
+import { DOCUMENT_CHARS, ToolError, clampLimit, compact, excerpt, isoDate, localDay } from "../limits.ts";
 import type { Member } from "../members.ts";
 import { READ_ONLY, answer, type ServiceModule } from "../service.ts";
 
@@ -110,8 +110,9 @@ export const docs: ServiceModule = {
             full_perms: true,
             fields: FIELDS,
             page_size: 50, // filtered for this member below
-            created__date__gte: isoDate(args.from)?.slice(0, 10),
-            created__date__lte: isoDate(args.to, true)?.slice(0, 10),
+            // Paperless filters by calendar day.
+            created__date__gte: args.from && localDay(isoDate(args.from)!),
+            created__date__lte: args.to && localDay(isoDate(args.to, true)!),
           });
           const visible = page.results.filter((d) => canView(d, user)).slice(0, limit);
           return { count: visible.length, items: await describe(visible, portalOrigin) };

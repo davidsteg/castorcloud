@@ -71,6 +71,11 @@ function baseConfig(mcp: string[]) {
     "memory:",
     "  memory_enabled: true",
     "  user_profile_enabled: true",
+    // A handful of small tools: give the model their schemas directly instead
+    // of a search step (fewer round trips, less spend).
+    "tools:",
+    "  tool_search:",
+    "    enabled: off",
   ];
   if (mcp.length) {
     lines.push("mcp_servers:");

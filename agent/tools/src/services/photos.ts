@@ -4,7 +4,7 @@
 import { z } from "zod";
 import { KEY_NAME, newApiKey, pool, sha256 } from "../db.ts";
 import { TtlCache, getJson } from "../http.ts";
-import { ToolError, clampLimit, compact, excerpt, isoDate } from "../limits.ts";
+import { ToolError, clampLimit, compact, excerpt, isoDate, localTime } from "../limits.ts";
 import type { Member } from "../members.ts";
 import { READ_ONLY, answer, type ServiceModule } from "../service.ts";
 
@@ -63,7 +63,8 @@ async function immich<T>(member: Member, path: string, opts: { method?: "GET" | 
 export function summarizeAsset(a: Asset, portalOrigin: string) {
   const e = a.exifInfo ?? {};
   return compact({
-    taken: (a.localDateTime ?? a.fileCreatedAt)?.slice(0, 16),
+    // localDateTime is the wall-clock time where the photo was taken.
+    taken: a.localDateTime?.slice(0, 16) ?? (a.fileCreatedAt ? localTime(a.fileCreatedAt) : undefined),
     type: a.type === "VIDEO" ? "video" : undefined,
     place: [e.city, e.country].filter(Boolean).join(", ") || undefined,
     caption: excerpt(e.description, 160),

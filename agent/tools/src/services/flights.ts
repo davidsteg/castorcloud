@@ -3,7 +3,7 @@
 import { z } from "zod";
 import { KEY_NAME, newApiKey, pool, sha256 } from "../db.ts";
 import { TtlCache, getJson } from "../http.ts";
-import { ToolError, clampLimit, compact, isoDate } from "../limits.ts";
+import { ToolError, clampLimit, compact, isoDate, localDay, localTime } from "../limits.ts";
 import type { Member } from "../members.ts";
 import { READ_ONLY, answer, type ServiceModule } from "../service.ts";
 
@@ -69,7 +69,7 @@ export function summarizeFlight(f: Flight) {
     flight: f.flightNumber ?? undefined,
     airline: f.airline?.name,
     aircraft: f.aircraft?.name,
-    departure: f.departure?.slice(0, 16),
+    departure: f.departure ? localTime(f.departure) : undefined,
     minutes: f.duration ? Math.round(f.duration / 60) : undefined,
     seat: f.passengers?.[0]?.seat ?? undefined,
     class: f.passengers?.[0]?.seatClass ?? undefined,
@@ -122,8 +122,9 @@ export const flights: ServiceModule = {
             cursor = page.page.nextCursor;
           }
           const matched = filterFlights(all, {
-            from: isoDate(args.from)?.slice(0, 10),
-            to: isoDate(args.to, true)?.slice(0, 10),
+            // Flight dates are calendar days.
+            from: args.from && localDay(isoDate(args.from)!),
+            to: args.to && localDay(isoDate(args.to, true)!),
             airport: args.airport,
           }).sort((a, b) => b.date.localeCompare(a.date));
           const items = matched.slice(0, clampLimit(args.limit));
@@ -141,10 +142,12 @@ export const flights: ServiceModule = {
       },
       () =>
         answer(async () => {
+          type Ref = { name: string; iata?: string | null; icao?: string | null; count?: number };
           type Stats = {
             flights: number; distanceKm: number; durationSeconds: number; airports: number;
-            topAirline?: unknown; topAirport?: unknown; topRoute?: unknown;
+            topAirline?: Ref | null; topAirport?: Ref | null; topRoute?: { from: Ref; to: Ref; count?: number } | null;
           };
+          const code = (r: Ref) => r.iata ?? r.icao ?? r.name;
           const { data } = await airtrail<{ data: Stats }>(member, "/api/v1/stats", { scope: "mine" });
           if (!data) throw new ToolError("no statistics yet");
           return compact({
@@ -152,9 +155,9 @@ export const flights: ServiceModule = {
             distanceKm: data.distanceKm,
             hoursInAir: Math.round(data.durationSeconds / 360) / 10,
             airports: data.airports,
-            topAirline: data.topAirline,
-            topAirport: data.topAirport,
-            topRoute: data.topRoute,
+            topAirline: data.topAirline?.name,
+            topAirport: data.topAirport && `${data.topAirport.name} (${code(data.topAirport)})`,
+            topRoute: data.topRoute && `${code(data.topRoute.from)} – ${code(data.topRoute.to)} (${data.topRoute.count}×)`,
           });
         }),
     );

@@ -4,7 +4,7 @@ import { rmSync } from "node:fs";
 import path from "node:path";
 import { prisma, type Tenant } from "@pc/db";
 import { audit, newWrappedVolumeKey, openSecret, sealSecret } from "@pc/core";
-import { AI_BUDGET_WARN_AT, aiBudgetUsd } from "@pc/pricing";
+import { aiBudgetUsd } from "@pc/pricing";
 import {
   assistantFiles, isMemberSecret, memberKeyName, memberToolsTokenName, newAssistantSecret, type AssistantMember,
 } from "./assistant.ts";
@@ -256,7 +256,6 @@ export class Lifecycle {
       slug: tenant.slug,
       tenantId: tenant.id,
       maxBudgetUsd: aiBudgetUsd(tenant.aiCreditChf, usdPerChf),
-      warnAt: AI_BUDGET_WARN_AT,
     });
 
     const members: { member: AssistantMember; apiKey: string; toolsToken: string }[] = [];
@@ -287,7 +286,10 @@ export class Lifecycle {
       members,
     });
     rmSync(path.join(this.node.configDir(tenant.slug), "assistant/hermes/profiles"), { recursive: true, force: true });
-    for (const [file, content] of Object.entries(files)) this.node.writeConfig(tenant.slug, `assistant/${file}`, content);
+    for (const [file, content] of Object.entries(files)) {
+      // The tools container runs unprivileged; members.json holds only token hashes.
+      this.node.writeConfig(tenant.slug, `assistant/${file}`, content, file === "members.json" ? 0o644 : 0o600);
+    }
   }
 
   private async memberSecret(tenantId: string, key: string) {
