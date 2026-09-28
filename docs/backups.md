@@ -131,7 +131,7 @@ deletion is gone: 30 days after deletion at most.
 
 1. The backup box: [infra/backup/README.md](../infra/backup/README.md).
 2. Nodes: `castor-snap` next to `castor-zfs`, allowed by the node's SSH gate
-   (the macOS bootstrap installs it). It reads the pool and dataset root from
+   (`infra/node/bin/castor-snap`; the TrueNAS setup and macOS bootstrap install it). It reads the pool and dataset root from
    the node's `castor.conf`, like `castor-zfs`.
 3. `.env` on the control plane: `BACKUP_TARGET=castor-backup@<box>`,
    `BACKUP_DB_PUBLIC_KEY=…`, optionally `BACKUP_INTERVAL_HOURS` (default 6)

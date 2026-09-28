@@ -1,5 +1,5 @@
-// Per-tenant encrypted ZFS datasets on macOS nodes, via the castor-zfs helper
-// (infra/node/macos/castor-zfs) over SSH. The dataset key is derived from the
+// Per-tenant encrypted ZFS datasets on TrueNAS and macOS nodes, via the
+// castor-zfs helper (infra/node/bin/castor-zfs) over SSH. The dataset key is derived from the
 // tenant's volume key here, in memory, and handed over on stdin.
 import { hkdfSync } from "node:crypto";
 import { unwrapVolumeKey } from "@pc/core";
@@ -32,14 +32,15 @@ export class ZfsDataset implements TenantStorage {
   private readonly slug: string;
   private readonly wrappedKey: string;
 
-  constructor(node: HostExec, tenantId: string, slug: string, wrappedKey: string, pool: string) {
+  /** mountRoot: where castor-zfs mounts tenant datasets (see nodeLayout). */
+  constructor(node: HostExec, tenantId: string, slug: string, wrappedKey: string, mountRoot: string) {
     this.node = node;
     this.tenantId = tenantId;
     this.slug = slug;
     this.wrappedKey = wrappedKey;
-    // castor-zfs mounts castor/t/<slug> here; Colima mounts /Volumes/<pool>
-    // into its VM at the same path, so Docker sees the same directories.
-    this.dataDir = `/Volumes/${pool}/t/${slug}/data`;
+    // Docker sees the same path: natively on TrueNAS, and on macOS because
+    // Colima mounts the pool into its VM at the same place.
+    this.dataDir = `${mountRoot}/${slug}/data`;
   }
 
   private run(args: string[], withKey: boolean) {

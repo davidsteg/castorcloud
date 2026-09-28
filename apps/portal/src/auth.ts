@@ -3,9 +3,14 @@ import Authentik from "next-auth/providers/authentik";
 import { prisma } from "@pc/db";
 import { BASE_DOMAIN, PUBLIC_SCHEME } from "@/lib/config";
 
+const SESSION_MAX_AGE_S = 30 * 24 * 60 * 60;
+
 export const { handlers, auth, signIn, signOut } = NextAuth({
   // The portal is served on app.<domain> and every <slug>.<domain>.
   trustHost: true,
+  // Same as Authentik's session_duration (authentik/blueprints/30-sessions.yaml),
+  // so embedded services can still sign in silently while the portal is signed in.
+  session: { maxAge: SESSION_MAX_AGE_S },
   providers: [
     Authentik({
       clientId: process.env.PORTAL_OIDC_CLIENT_ID,
@@ -14,8 +19,18 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
     }),
   ],
   callbacks: {
-    jwt({ token, profile }) {
-      if (profile?.sub) token.sub = profile.sub;
+    async jwt({ token, profile }) {
+      if (profile?.sub) {
+        token.sub = profile.sub;
+        token.authAt = Date.now();
+        return token;
+      }
+      // "Log out on all devices" (lib/signout.ts) ends sessions signed in before it.
+      if (token.sub) {
+        const user = await prisma.user.findUnique({ where: { authentikSub: token.sub }, select: { sessionsRevokedAt: true } });
+        const authAt = typeof token.authAt === "number" ? token.authAt : 0;
+        if (user?.sessionsRevokedAt && authAt < user.sessionsRevokedAt.getTime()) return null;
+      }
       return token;
     },
     session({ session, token }) {

@@ -61,7 +61,8 @@ mdutil -i off "/Volumes/$POOL" >/dev/null 2>&1 || true   # no Spotlight on tenan
 
 step "castor-zfs and the SSH gate"
 mkdir -p "$BIN"
-install -o root -g wheel -m 755 "$HERE/castor-zfs" "$HERE/castor-ssh" "$HERE/../castor-snap" "$BIN/"
+install -o root -g wheel -m 755 "$HERE/../bin/castor-zfs" "$HERE/../bin/castor-ssh" "$BIN/"
+[ ! -f "$HERE/../bin/castor-snap" ] || install -o root -g wheel -m 755 "$HERE/../bin/castor-snap" "$BIN/"
 printf '%s ALL=(root) NOPASSWD: %s/castor-zfs, %s/castor-snap\n' "$USER_NAME" "$BIN" "$BIN" > /etc/sudoers.d/castor
 chmod 440 /etc/sudoers.d/castor
 visudo -cf /etc/sudoers.d/castor >/dev/null
@@ -105,5 +106,5 @@ vm_ip=$(sudo -u "$USER_NAME" env HOME="$home" /opt/homebrew/bin/colima ls -j 2>/
 cat <<DONE
 
 Node ready. Give the Docker VM (${vm_ip:-see 'colima ls'}) a fixed DHCP lease, then on the control plane:
-  npm run node -w @pc/provisioner -- add <name> $USER_NAME@$(ipconfig getifaddr en0 || hostname) --edge ${vm_ip:-<vm-ip>} --auth-host-ip <control-plane-ip>
+  npm run node -w @pc/provisioner -- add <name> $USER_NAME@$(ipconfig getifaddr en0 || hostname) --kind mac --pool $POOL --edge ${vm_ip:-<vm-ip>} --auth-host-ip <control-plane-ip>
 DONE

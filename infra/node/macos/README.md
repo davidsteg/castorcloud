@@ -23,7 +23,7 @@ tenant's data lives on one Mac, so its containers run there.
 |---|---|---|
 | Storage | [OpenZFS on OS X](https://openzfsonosx.org) | Per-tenant native encryption, instant quotas (grow and shrink), snapshots and `zfs send` for backups. |
 | Docker | [Colima](https://github.com/abiosoft/colima) (Apple Virtualization, virtiofs) | Free and scriptable. It runs headless from a LaunchDaemon and can give the VM its own LAN address. Docker Desktop and OrbStack can't be run unattended like that. Any Docker on macOS runs in a Linux VM; Colima's is small and invisible. |
-| Access | SSH forced command (`castor-ssh`) | The provisioner's key can run exactly: Docker's `dial-stdio`, `castor-zfs`, and writing tenant config files. |
+| Access | SSH forced command (`../bin/castor-ssh`, shared with TrueNAS nodes) | The provisioner's key can run exactly: Docker's `dial-stdio`, `castor-zfs`, and writing tenant config files. |
 
 Keys: each dataset's key is derived from the tenant's volume key, which is
 wrapped in the control-plane database. The key never touches the Mac's disk.
@@ -58,7 +58,7 @@ tenant destroys the dataset and the key (crypto-shredding).
 On the control plane (`~/.ssh/config` needs the key for the Mac):
 
 ```sh
-npm run node -w @pc/provisioner -- add mini-1 castor@10.0.0.21 --edge 10.0.0.31 --auth-host-ip <control-plane-ip>
+npm run node -w @pc/provisioner -- add mini-1 castor@10.0.0.21 --kind mac --pool castor --edge 10.0.0.31 --auth-host-ip <control-plane-ip>
 npm run node -w @pc/provisioner -- list
 ```
 

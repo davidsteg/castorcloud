@@ -41,7 +41,9 @@
   window.addEventListener("message", function (event) {
     if (event.origin !== shellOrigin || !event.data) return;
     var msg = event.data;
-    if (msg.type === "pc:theme") {
+    if (msg.type === "pc:ping") {
+      post("pc:ready");
+    } else if (msg.type === "pc:theme") {
       document.documentElement.setAttribute("data-pc-theme", msg.mode);
     } else if (msg.type === "pc:go" && typeof msg.path === "string" && msg.path.charAt(0) === "/") {
       location.assign(msg.path);

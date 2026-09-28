@@ -10,6 +10,7 @@
     "node": "tsx src/node-admin.ts",
     "backup": "tsx src/backup-admin.ts",
     "telegram": "cross-env NODE_EXTRA_CA_CERTS=../../.dev-certs/ca.crt tsx src/telegram.ts",
+    "monitor": "cross-env NODE_EXTRA_CA_CERTS=../../.dev-certs/ca.crt tsx src/monitor.ts",
     "test": "node --test --experimental-strip-types src/*.test.ts",
     "typecheck": "tsc --noEmit"
   },
@@ -18,10 +19,12 @@
     "@pc/db": "^0.0.0",
     "@pc/pricing": "^0.0.0",
     "bullmq": "^5.81.5",
-    "dotenv": "^17.2.0"
+    "dotenv": "^17.2.0",
+    "nodemailer": "^10.0.12"
   },
   "devDependencies": {
     "@types/node": "^24.0.0",
+    "@types/nodemailer": "^8.0.2",
     "cross-env": "^10.1.0",
     "tsx": "^4.20.0",
     "typescript": "^5.8.0"

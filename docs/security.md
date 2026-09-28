@@ -69,6 +69,22 @@ Never store these on data-plane nodes.
 - Production: SMTP configured ⇒ e-mail verification is required for
   self-registration. Staff accounts: enforce WebAuthn/TOTP.
 
+### Ending access
+
+The apps keep their own sessions and keys after the SSO login, so ending
+access has to reach into each app (`apps/provisioner/src/access.ts`, queued
+as `AccessRevocation` rows and run by the `REVOKE_ACCESS` job, or by the next
+start of a suspended tenant):
+
+| Event | Portal + Authentik | Apps |
+|---|---|---|
+| Log out | this browser, every portal host | browser sessions end; phone apps stay connected |
+| Log out on all devices | every browser (`User.sessionsRevokedAt`), every Authentik session, Telegram links | also phone app sessions and API keys (the assistant's key stays) |
+| Member removed | out of the tenant's Authentik groups (next apply) | everything, including the assistant's key |
+
+Embedded apps sign in again silently wherever the portal is still signed in.
+Deleting a tenant destroys the data and keys, so it needs no revocation.
+
 ## Access by staff (policy)
 
 1. No routine SSH access to data-plane nodes; changes go through the provisioner.

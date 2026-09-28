@@ -86,6 +86,9 @@ async function run(job: BullJob<TenantJobData>) {
       await nodes.place(tenantId); // no-op once placed
       await lifecycle.apply(tenantId, report);
       break;
+    case "REVOKE_ACCESS":
+      await lifecycle.revokeAccess(tenantId, report);
+      break;
     case "SUSPEND":
       await lifecycle.suspend(tenantId);
       await log("suspended");
