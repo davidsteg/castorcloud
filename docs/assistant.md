@@ -116,9 +116,10 @@ with mocked API responses.
   the build sandbox); run `npm run e2e` with Photos booked.
 - **Swiss provider** (`litellm/swiss.yaml`): set the real model name and the
   per-token prices, otherwise spend (and the budget) is not counted.
-- **Gateway reachability**: control plane and nodes share a LAN; set
-  `LLM_GATEWAY_BIND` on each node to its LAN address (default `127.0.0.1`).
-  With several nodes the gateway URL must follow the tenant's node (after the
-  Mac mini nodes PR lands); today `LLM_GATEWAY_URL` is one address.
+- **Gateway reachability**: control plane and nodes share a LAN. On a Mac
+  node the provisioner publishes the gateway on the Colima VM's LAN address
+  (the node's `edgeHost`), so set `LLM_GATEWAY_URL=http://<edgeHost>:4000`.
+  `LLM_GATEWAY_URL` is one address, so the assistant works on one node only
+  until the gateway URL follows the tenant's node.
 - Portal chat end to end with SSO on a provisioned tenant (the routes were
   exercised piecewise, not through a real login).

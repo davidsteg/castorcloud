@@ -1,0 +1,30 @@
+# Edge proxy of a Mac mini node. Started by the provisioner over ssh://
+# (SshNode.prepare). The tenant stacks' skin proxies register via Docker labels.
+#
+# Customers never reach it directly: *.domain points at the control plane,
+# whose Traefik terminates TLS and forwards each tenant's service hosts to
+# the tenant's node (tenant-<slug>.yml, written by the provisioner). So this
+# proxy speaks plain HTTP on the LAN. Its entrypoint keeps the name
+# "websecure" because the tenant template's router labels use that name.
+name: pc-edge
+
+services:
+  traefik:
+    image: traefik:v3.6
+    command:
+      - --providers.docker=true
+      - --providers.docker.exposedbydefault=false
+      - --providers.docker.network=pc-edge
+      - --entrypoints.websecure.address=:80
+      # The client address comes from the control plane's X-Forwarded-For.
+      - --entrypoints.websecure.forwardedHeaders.trustedIPs=${CONTROL_PLANE_IPS:-10.0.0.0/8,172.16.0.0/12,192.168.0.0/16}
+    ports:
+      - "80:80"
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+    networks: [pc-edge]
+    restart: unless-stopped
+
+networks:
+  pc-edge:
+    external: true

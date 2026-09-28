@@ -38,6 +38,8 @@ Decisions taken (from Q&A):
                     └──────────────────────────────────────────────────────────┘
 ```
 
+**Data-plane nodes are Mac minis** (see `infra/node/macos/README.md`): each one is an independent Docker host (Colima) driven over SSH, with tenant data on per-tenant encrypted ZFS datasets (OpenZFS on macOS) whose size is the storage quota. There is no cluster: a tenant is placed on one node at provisioning (`apps/provisioner/src/placement.ts`) and its data stays there. `*.domain` points at the control plane, whose Traefik terminates TLS and forwards each tenant's service hosts to that tenant's node (a generated `tenant-<slug>.yml` route), so DNS never changes per tenant. Each node runs a small edge Traefik for its stacks; the portal and Authentik stay on the control plane. The local Docker host (LUKS volumes via `pc-cryptd`) remains for development (`LOCAL_NODE=off` disables it).
+
 ### Domains (critical for seamless iframes + mobile apps)
 All under one registrable domain (e.g. `brand.cloud`) so embeds are **same-site** (no third-party-cookie problems):
 - `brand.cloud` – marketing, signup
@@ -75,6 +77,12 @@ Also: `suspend`, `resume`, `update` (rolling image bump), `export`, `delete` (GD
 - Per-customer agent container in the stack, using **Nous Research Hermes Agent** with an external LLM API.
 - Tools via **MCP servers** we write (read-mostly): `immich` (search photos by text/place/date/person), `paperless` (full-text search, fetch doc/OCR text, tags), `dawarich` (where was I on X, trips, visits), `airtrail` (flights, stats). Cross-source questions: "When did I fly to Lisbon and show me photos + the hotel invoice."
 - Chat UI inside the portal shell (streaming). Clear data-processing consent since data goes to an external LLM; redact/limit what's sent (only tool results, not bulk data).
+
+### Storage quotas
+- The booked storage (units of 100 GB, `packages/pricing/src/storage.ts`) **is** the size of the tenant's LUKS volume, so a full volume is a full quota: no per-app quota settings to keep in sync.
+- Hourly the provisioner records usage per tenant (total from `df`, per service from `du` over the data directories) for the portal's storage meter, which warns at 80% and 95%.
+- Upgrades grow the volume online. Downgrades shrink it offline (stack stopped for a few minutes: `e2fsck`, `resize2fs`, LUKS resize) and only when the data fits with 10% to spare; otherwise the volume keeps its size, the job is audited (`volume.shrink_held`) and the portal asks the customer to delete files or book more.
+- Customers change storage on the account page, which only offers sizes that fit their data. The Stripe billing portal can still lower the quantity; the provisioner guard above covers that case.
 
 ---
 

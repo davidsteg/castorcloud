@@ -10,3 +10,6 @@ dist/
 # Rendered tenant configs and secrets (dev)
 .tenants/
 .dev-certs/
+
+# Per-tenant routes to Mac nodes, written by the provisioner
+infra/control-plane/traefik/dynamic/tenant-*.yml
