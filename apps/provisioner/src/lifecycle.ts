@@ -7,6 +7,7 @@ import { aiBudgetUsd, fitsStorage, storageQuotaMb } from "@pc/pricing";
 import {
   assistantFiles, isMemberSecret, memberKeyName, memberToolsTokenName, newAssistantSecret, type AssistantMember,
 } from "./assistant.ts";
+import { accessCommands, execArgs, strongest } from "./access.ts";
 import type { Authentik } from "./authentik.ts";
 import type { LlmGateway } from "./llm.ts";
 import type { NodeExec } from "./node.ts";
@@ -62,7 +63,7 @@ export class Lifecycle {
     return tenant.services.some((i) => i.enabled && i.kind === "ASSISTANT");
   }
 
-  private compose(node: NodeExec, tenant: Tenant, args: string[], profiles: string[]) {
+  private compose(node: NodeExec, tenant: Tenant, args: string[], profiles: string[], input?: string) {
     const n = names(tenant.slug, this.p);
     const dir = node.configDir(tenant.slug);
     return node.docker([
@@ -74,7 +75,7 @@ export class Lifecycle {
       "--env-file", `${dir}/tenant.env`,
       ...profiles.flatMap((s) => ["--profile", s]),
       ...args,
-    ]);
+    ], input === undefined ? {} : { input: Buffer.from(input) });
   }
 
   /** Provision, update and resume: make the stack match the booking. */
@@ -97,6 +98,7 @@ export class Lifecycle {
       await this.ak.addUserToGroup(membersPk, userPk);
       if (m.role === "OWNER") await this.ak.addUserToGroup(ownersPk, userPk);
     }
+    await this.removeFormerMembers(tenant, membersPk, ownersPk);
 
     const secrets = await this.secrets(tenant.id);
     const defaults = await this.ak.providerDefaults();
@@ -195,10 +197,27 @@ export class Lifecycle {
       });
     }
 
+    // Sign-outs and removals that waited for the apps to run.
+    await this.processRevocations(node, tenant, enabled);
+
     // --------------------------------------------------------------- ready
     await prisma.tenant.update({ where: { id: tenant.id }, data: { status: "ACTIVE" } });
     await this.measure(tenant.id);
     await report("ready", "active");
+  }
+
+  /**
+   * REVOKE_ACCESS job: ends access in the apps now if they run. Otherwise the
+   * requests stay queued and the next apply (resume) carries them out.
+   */
+  async revokeAccess(tenantId: string, report: Reporter) {
+    const tenant = await this.load(tenantId);
+    if (tenant.status !== "ACTIVE" || !tenant.nodeId) {
+      await report("identity", `apps not running (${tenant.status}); revocations wait for the next start`);
+      return;
+    }
+    await this.processRevocations(await this.nodeFor(tenant.nodeId), tenant, this.enabled(tenant));
+    await report("ready", "access revoked");
   }
 
   async suspend(tenantId: string) {
@@ -275,6 +294,52 @@ export class Lifecycle {
   }
 
   // ------------------------------------------------------------- helpers
+
+  /**
+   * People in the tenant's Authentik groups who are no longer (owner) members:
+   * out of the group first, so they can't sign in to the apps again, then
+   * everything they still hold in the apps is revoked (processRevocations).
+   */
+  private async removeFormerMembers(tenant: Awaited<ReturnType<Lifecycle["load"]>>, membersPk: string, ownersPk: string) {
+    const subs = new Set(tenant.members.map((m) => m.user.authentikSub));
+    const ownerSubs = new Set(tenant.members.filter((m) => m.role === "OWNER").map((m) => m.user.authentikSub));
+    for (const u of await this.ak.groupUsers(ownersPk)) {
+      if (!ownerSubs.has(u.uid)) await this.ak.removeUserFromGroup(ownersPk, u.pk);
+    }
+    for (const u of await this.ak.groupUsers(membersPk)) {
+      if (subs.has(u.uid)) continue;
+      await prisma.accessRevocation.create({ data: { tenantId: tenant.id, email: u.email, sub: u.uid, scope: "REMOVED" } });
+      await this.ak.removeUserFromGroup(membersPk, u.pk);
+      await audit("system", "member.removed_from_apps", tenant.id, { sub: u.uid });
+    }
+  }
+
+  /**
+   * Carries out the tenant's pending AccessRevocations in the booked apps
+   * (commands in access.ts). "Sign out everywhere" (DEVICES) also ends the
+   * person's Authentik sessions; a removed member may still use Authentik for
+   * another cloud, and leaving the group already locks them out of this one.
+   * Requests are deleted once done.
+   */
+  private async processRevocations(node: NodeExec, tenant: Tenant, enabled: ServiceKey[]) {
+    const pending = await prisma.accessRevocation.findMany({ where: { tenantId: tenant.id }, orderBy: { createdAt: "asc" } });
+    const people = new Map<string, typeof pending>();
+    for (const r of pending) people.set(r.sub, [...(people.get(r.sub) ?? []), r]);
+
+    for (const [sub, requests] of people) {
+      const scope = strongest(requests.map((r) => r.scope));
+      const who = { email: requests.at(-1)!.email, sub, before: requests.at(-1)!.createdAt };
+      for (const cmd of accessCommands(enabled, who, scope)) {
+        this.compose(node, tenant, execArgs(cmd), enabled, cmd.input ?? "");
+      }
+      if (requests.some((r) => r.scope === "DEVICES")) {
+        const userPk = await this.ak.findUserPkByEmail(who.email);
+        if (userPk) await this.ak.endUserSessions(userPk);
+      }
+      await prisma.accessRevocation.deleteMany({ where: { id: { in: requests.map((r) => r.id) } } });
+      await audit("system", "access.revoked", tenant.id, { sub, scope, apps: enabled });
+    }
+  }
 
   /**
    * Sizes the volume to the booking. Growing is online. Shrinking only happens
