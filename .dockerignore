@@ -1,0 +1,6 @@
+**/node_modules
+**/.next
+.git
+.tenants
+.dev-certs
+.env

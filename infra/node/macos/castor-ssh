@@ -4,9 +4,10 @@
 #
 #   docker system dial-stdio      the Docker CLI's ssh:// transport (Colima's engine)
 #   castor-zfs <args...>          tenant datasets, via sudo (see castor-zfs)
-#   castor-put <path>             stdin -> $ROOT/<path> (tenant config files, mode 600)
-#   castor-rm tenants/<slug>      removes a tenant's config directory
-#   castor-untar <templates|brand|ca>   replaces $ROOT/files/<name> with a tar from stdin
+#   castor-put <path> [644]       stdin -> $ROOT/<path> (tenant config files, mode 600;
+#                                 644 for files unprivileged containers read)
+#   castor-rm tenants/<slug>[/<dir>]  removes a tenant's config directory (or part of it)
+#   castor-untar <templates|node|brand|ca>   replaces $ROOT/files/<name> with a tar from stdin
 #   castor-info                   prints "info <macos-version> <memory-mb> <cpus>"
 set -euf  # -f: no globbing of the command words
 ROOT=/Users/Shared/castor
@@ -38,6 +39,7 @@ case "${1:-}" in
     umask 077
     mkdir -p "$(dirname "$ROOT/$2")"
     cat > "$ROOT/$2.tmp"
+    case "${3:-}" in "") ;; 644) chmod 644 "$ROOT/$2.tmp";; *) echo "castor-ssh: bad mode" >&2; exit 2;; esac
     mv "$ROOT/$2.tmp" "$ROOT/$2"
     ;;
   castor-rm)
@@ -45,7 +47,7 @@ case "${1:-}" in
     rm -rf "${ROOT:?}/$2"
     ;;
   castor-untar)
-    case "${2:-}" in templates|brand|ca) ;; *) echo "castor-ssh: bad name" >&2; exit 2;; esac
+    case "${2:-}" in templates|node|brand|ca) ;; *) echo "castor-ssh: bad name" >&2; exit 2;; esac
     mkdir -p "$ROOT/files"
     rm -rf "$ROOT/files/$2.new"
     mkdir "$ROOT/files/$2.new"

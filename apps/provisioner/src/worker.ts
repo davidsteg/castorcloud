@@ -14,6 +14,7 @@ const { prisma } = await import("@pc/db");
 const { TENANT_QUEUE, audit, enqueueTenantJob, redisConnection } = await import("@pc/core");
 const { Authentik } = await import("./authentik.ts");
 const { Lifecycle } = await import("./lifecycle.ts");
+const { LlmGateway } = await import("./llm.ts");
 const { Nodes } = await import("./nodes.ts");
 const { parseEnvFile } = await import("./tenant.ts");
 type TenantJobData = import("@pc/core").TenantJobData;
@@ -28,7 +29,14 @@ const platform = {
   authHostIp: process.env.AUTH_HOST_IP ?? "host-gateway",
 };
 const ak = new Authentik(`${platform.scheme}://auth.${platform.baseDomain}`, process.env.AUTHENTIK_BOOTSTRAP_TOKEN ?? "");
-const lifecycle = new Lifecycle((id) => nodes.forTenant(id), ak, platform, parseEnvFile(readFileSync(versionsFile, "utf8")), versionsFile);
+// Assistant: the node's LLM gateway. Without a master key tenants can't book it.
+const assistant = process.env.LITELLM_MASTER_KEY
+  ? {
+      gateway: new LlmGateway(process.env.LLM_GATEWAY_URL ?? "http://localhost:4000", process.env.LITELLM_MASTER_KEY),
+      usdPerChf: Number(process.env.AI_USD_PER_CHF ?? "1.1"),
+    }
+  : undefined;
+const lifecycle = new Lifecycle((id) => nodes.forTenant(id), ak, platform, parseEnvFile(readFileSync(versionsFile, "utf8")), versionsFile, assistant);
 const connection = redisConnection();
 
 // Self-registration flow: verified e-mail when SMTP is configured.

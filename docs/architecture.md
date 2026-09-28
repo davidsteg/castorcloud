@@ -73,7 +73,7 @@ All under one registrable domain (e.g. `brand.cloud`) so embeds are **same-site*
 6. Tenant `status=active` → email + portal redirect.
 Also: `suspend`, `resume`, `update` (rolling image bump), `export`, `delete` (GDPR) jobs. Idempotent steps, state machine per tenant.
 
-### Hermes agent (phase 2, designed now)
+### Hermes agent (phase 5, built – see [assistant.md](assistant.md))
 - Per-customer agent container in the stack, using **Nous Research Hermes Agent** with an external LLM API.
 - Tools via **MCP servers** we write (read-mostly): `immich` (search photos by text/place/date/person), `paperless` (full-text search, fetch doc/OCR text, tags), `dawarich` (where was I on X, trips, visits), `airtrail` (flights, stats). Cross-source questions: "When did I fly to Lisbon and show me photos + the hotel invoice."
 - Chat UI inside the portal shell (streaming). Clear data-processing consent since data goes to an external LLM; redact/limit what's sent (only tool results, not bulk data).
@@ -96,7 +96,7 @@ packages/stack-templates/ compose + env templates per service, pinned versions
 packages/sdk/           typed clients for Immich/Paperless/Dawarich/AirTrail APIs (dashboard + agent)
 infra/control-plane/    docker-compose: traefik, authentik, postgres, redis, portal, provisioner
 infra/node/             node bootstrap (docker, traefik, skin proxy, shared ML/tika/gotenberg)
-agent/                  (phase 2) hermes container + mcp servers
+agent/tools/            read-only MCP servers for the assistant (Hermes runs from its upstream image)
 ```
 
 ## Phases
@@ -104,7 +104,7 @@ agent/                  (phase 2) hermes container + mcp servers
 2. **Single stack by hand** – one working customer compose (all 4 services, OIDC, shared ML/tika), skin proxy + CSS; prove SSO-in-iframe works.
 3. **Provisioner** – automate phase 2 end to end (create/suspend/delete).
 4. **Portal shell** – nav, iframes + bridge, dashboard widgets, onboarding/QR, admin console. ← **MVP done**
-5. Hermes agent + MCP tools. 6. Stripe plans/quotas. 7. restic backups, monitoring (Prometheus/Grafana/Uptime Kuma), update pipeline.
+5. Hermes agent + MCP tools, LLM gateway, web chat, Telegram. ← **built** 6. Stripe plans/quotas. 7. restic backups, monitoring (Prometheus/Grafana/Uptime Kuma), update pipeline.
 
 ## Risks / notes
 - **Licenses**: Immich/Dawarich AGPL-3, Paperless GPL-3, AirTrail GPL-3 – offering them as SaaS is allowed, but any modified source must be published; keep license/attribution reachable (e.g. "About" page). Don't use their trademarks in the brand.

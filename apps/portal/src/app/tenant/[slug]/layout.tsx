@@ -1,5 +1,6 @@
 import { BRAND_NAME, SERVICES } from "@/lib/config";
 import { requireTenantMember } from "@/lib/tenant";
+import { ServiceWorker } from "@/components/ServiceWorker";
 import { ShellNav, type ShellNavItem } from "@/components/ShellNav";
 
 export default async function TenantLayout({
@@ -17,11 +18,13 @@ export default async function TenantLayout({
     ...Object.entries(SERVICES)
       .filter(([key]) => enabledServices.includes(key))
       .map(([key, s]) => ({ href: `/${key}`, label: t.services.items[key as keyof typeof SERVICES].name, icon: s.icon })),
+    ...(enabledServices.includes("assistant") ? [{ href: "/assistant", label: t.chat.title, icon: "✦" }] : []),
     { href: "/apps", label: t.setup.nav, icon: "▯" },
   ];
 
   return (
     <div className="shell">
+      <ServiceWorker />
       <ShellNav brand={BRAND_NAME} tenantName={tenant.displayName} email={session.user?.email ?? ""} items={items} />
       <main className="shell-main">
         {tenant.status === "ACTIVE" ? children : <div className="page"><p className="notice">{tenant.status}</p></div>}

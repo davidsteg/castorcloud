@@ -4,7 +4,7 @@
 //   SshNode   - a Mac mini: Docker (Colima) driven over ssh://, tenant data
 //               on encrypted ZFS datasets via castor-zfs (infra/node/macos).
 import { execFileSync } from "node:child_process";
-import { existsSync, mkdirSync, rmSync, writeFileSync } from "node:fs";
+import { chmodSync, existsSync, mkdirSync, rmSync, writeFileSync } from "node:fs";
 import path from "node:path";
 import type { TenantStorage } from "./storage.ts";
 import { TenantVolume } from "./volume.ts";
@@ -13,15 +13,17 @@ import { ZfsDataset, type HostExec } from "./zfs.ts";
 export interface NodeExec {
   readonly name: string;
   /** Runs docker with args; `input` is passed on stdin (used for keys). */
-  docker(args: string[], opts?: { input?: Buffer; allowFail?: boolean }): string;
+  docker(args: string[], opts?: DockerOpts): string;
   /**
    * Tenant files read by the docker CLI (env file, compose override) live on
    * the control plane; files the containers bind-mount live on the node.
    */
   configDir(slug: string): string;
   writeConfig(slug: string, file: string, content: string): string;
-  /** Writes a file tenant containers mount; returns its path on the node. */
-  writeNodeFile(slug: string, file: string, content: string): string;
+  /** Writes a file tenant containers mount (owner-only unless `mode` is 0o644); returns its path on the node. */
+  writeNodeFile(slug: string, file: string, content: string, mode?: 0o600 | 0o644): string;
+  /** Removes a directory below the tenant's node files (writeNodeFile). */
+  removeNodeFiles(slug: string, dir: string): void;
   /** TENANT_DIR in the stack: where writeNodeFile puts files. */
   nodeConfigDir(slug: string): string;
   removeConfig(slug: string): void;
@@ -32,6 +34,9 @@ export interface NodeExec {
     templates: string;
     /** The same templates on the node: relative bind mounts resolve here. */
     nodeTemplates: string;
+    /** infra/node (shared services, LLM gateway config) on the control plane and on the node. */
+    infra: string;
+    nodeInfra: string;
     brand: string;
     ca: string;
   };
@@ -42,8 +47,12 @@ export interface NodeExec {
    * the local node, whose stacks sit on the control plane Traefik's network.
    */
   readonly edgeUrl?: string;
+  /** LLM_GATEWAY_BIND for the node's shared services: where the gateway's admin API listens. */
+  readonly gatewayBind?: string;
   storage(tenantId: string, slug: string, wrappedKey: string): TenantStorage;
 }
+
+type DockerOpts = { input?: Buffer; allowFail?: boolean; env?: NodeJS.ProcessEnv };
 
 const posix = (p: string) => p.replace(/\\/g, "/");
 
@@ -72,16 +81,16 @@ class LocalConfig {
     return posix(path.join(this.root, ".tenants", slug));
   }
 
-  write(slug: string, file: string, content: string) {
-    const dir = this.dir(slug);
-    mkdirSync(dir, { recursive: true });
-    const target = path.join(dir, file);
-    writeFileSync(target, content, { mode: 0o600 });
+  write(slug: string, file: string, content: string, mode = 0o600) {
+    const target = path.join(this.dir(slug), file);
+    mkdirSync(path.dirname(target), { recursive: true });
+    writeFileSync(target, content, { mode });
+    chmodSync(target, mode); // writeFileSync keeps the mode of an existing file
     return posix(target);
   }
 
-  remove(slug: string) {
-    rmSync(this.dir(slug), { recursive: true, force: true });
+  remove(slug: string, dir = "") {
+    rmSync(path.join(this.dir(slug), dir), { recursive: true, force: true });
   }
 }
 
@@ -96,12 +105,14 @@ export class LocalNode implements NodeExec {
     this.paths = {
       templates,
       nodeTemplates: posix(templates),
+      infra: path.join(root, "infra/node"),
+      nodeInfra: posix(path.join(root, "infra/node")),
       brand: posix(path.join(root, "packages/brand")),
       ca: posix(path.join(root, ".dev-certs")),
     };
   }
 
-  docker(args: string[], opts: { input?: Buffer; allowFail?: boolean } = {}) {
+  docker(args: string[], opts: DockerOpts = {}) {
     return run("docker", args, opts);
   }
 
@@ -113,8 +124,12 @@ export class LocalNode implements NodeExec {
     return this.config.write(slug, file, content);
   }
 
-  writeNodeFile(slug: string, file: string, content: string) {
-    return this.config.write(slug, file, content);
+  writeNodeFile(slug: string, file: string, content: string, mode: 0o600 | 0o644 = 0o600) {
+    return this.config.write(slug, file, content, mode);
+  }
+
+  removeNodeFiles(slug: string, dir: string) {
+    this.config.remove(slug, dir);
   }
 
   nodeConfigDir(slug: string) {
@@ -138,10 +153,18 @@ export class LocalNode implements NodeExec {
       "mkdir -p /srv/pc/volumes /srv/pc/tenants && (findmnt -no PROPAGATION /srv/pc | grep -q shared || (mount --bind /srv/pc /srv/pc && mount --make-rshared /srv/pc))",
     ]);
     this.docker(["build", "-q", "-t", CRYPTD_IMAGE, path.join(this.root, "infra/node/cryptd")]);
+    buildAssistantTools(this, this.root);
   }
 }
 
 export const CRYPTD_IMAGE = "pc-cryptd:1";
+/** Same tag as ASSISTANT_TOOLS_IMAGE in packages/stack-templates/versions.env. */
+export const ASSISTANT_TOOLS_IMAGE = "pc-assistant-tools:1";
+
+/** The assistant's tools server is built from this repo on every node. */
+function buildAssistantTools(node: NodeExec, root: string) {
+  node.docker(["build", "-q", "-t", ASSISTANT_TOOLS_IMAGE, "-f", path.join(root, "agent/tools/Dockerfile"), root]);
+}
 
 /** Where castor-ssh keeps files on a macOS node (mounted into Colima's VM). */
 export const MAC_NODE_ROOT = "/Users/Shared/castor";
@@ -170,6 +193,7 @@ export class SshNode implements NodeExec, HostExec {
   readonly paths: NodeExec["paths"];
   readonly authHostIp?: string;
   readonly edgeUrl?: string;
+  readonly gatewayBind?: string;
   private readonly target: string;
   private readonly pool: string;
   private readonly config: LocalConfig;
@@ -184,16 +208,20 @@ export class SshNode implements NodeExec, HostExec {
     this.authHostIp = cfg.authHostIp;
     if (cfg.edgeHost !== undefined && !/^[A-Za-z0-9.:-]+$/.test(cfg.edgeHost)) throw new Error(`invalid edge host: ${cfg.edgeHost}`);
     this.edgeUrl = cfg.edgeHost ? `http://${cfg.edgeHost}` : undefined;
+    // The gateway's admin API listens on the VM's LAN address, next to the edge proxy.
+    this.gatewayBind = cfg.edgeHost;
     this.paths = {
       templates: path.join(root, "packages/stack-templates"),
       nodeTemplates: `${MAC_NODE_ROOT}/files/templates`,
+      infra: path.join(root, "infra/node"),
+      nodeInfra: `${MAC_NODE_ROOT}/files/node`,
       brand: `${MAC_NODE_ROOT}/files/brand`,
       ca: `${MAC_NODE_ROOT}/files/ca`,
     };
   }
 
-  docker(args: string[], opts: { input?: Buffer; allowFail?: boolean } = {}) {
-    return run("docker", args, { ...opts, env: { DOCKER_HOST: `ssh://${this.target}`, DOCKER_CONTEXT: "" } });
+  docker(args: string[], opts: DockerOpts = {}) {
+    return run("docker", args, { ...opts, env: { ...opts.env, DOCKER_HOST: `ssh://${this.target}`, DOCKER_CONTEXT: "" } });
   }
 
   host(args: string[], opts: { input?: Buffer; allowFail?: boolean } = {}) {
@@ -210,9 +238,13 @@ export class SshNode implements NodeExec, HostExec {
     return this.config.write(slug, file, content);
   }
 
-  writeNodeFile(slug: string, file: string, content: string) {
-    this.host(["castor-put", `tenants/${slug}/${file}`], { input: Buffer.from(content) });
+  writeNodeFile(slug: string, file: string, content: string, mode: 0o600 | 0o644 = 0o600) {
+    this.host(["castor-put", `tenants/${slug}/${file}`, ...(mode === 0o644 ? ["644"] : [])], { input: Buffer.from(content) });
     return `${this.nodeConfigDir(slug)}/${file}`;
+  }
+
+  removeNodeFiles(slug: string, dir: string) {
+    this.host(["castor-rm", `tenants/${slug}/${dir}`]);
   }
 
   nodeConfigDir(slug: string) {
@@ -251,12 +283,14 @@ export class SshNode implements NodeExec, HostExec {
    */
   prepare() {
     const caDir = process.env.CA_DIR ?? path.join(this.root, ".dev-certs");
-    const sync = (name: "templates" | "brand" | "ca", dir: string, files = ["."]) => {
+    const sync = (name: "templates" | "node" | "brand" | "ca", dir: string, files = ["."]) => {
       if (!existsSync(dir)) throw new Error(`${dir} missing`);
       const tar = execFileSync("tar", ["-C", dir, "-cf", "-", ...files], { maxBuffer: 256 * 1024 * 1024 });
       this.host(["castor-untar", name], { input: tar });
     };
     sync("templates", this.paths.templates);
+    // Relative bind mounts of the shared services (the LLM gateway's config).
+    sync("node", this.paths.infra, ["compose.yml", "litellm"]);
     // What the skin proxy serves under /_brand/ (not the design sources).
     sync("brand", path.join(this.root, "packages/brand"), ["tokens.css", "theme.css", "bridge.js", "logo.svg", "icon.svg", "services"]);
     sync("ca", caDir, ["ca-bundle.pem"]);
@@ -268,5 +302,6 @@ export class SshNode implements NodeExec, HostExec {
       "-f", path.join(this.root, "infra/node/edge.yml"),
       "up", "-d", "--remove-orphans",
     ]);
+    buildAssistantTools(this, this.root);
   }
 }

@@ -1,0 +1,43 @@
+# LLM gateway config for AI_PROVIDER=openrouter (the default).
+#
+# Every tenant assistant talks to the single model alias "assistant" with its
+# own virtual key; the key carries the tenant's monthly budget (managed by the
+# provisioner). The provider settings below are the privacy promises from
+# docs/assistant.md, enforced on every request:
+#   - data_collection: deny  -> only providers that do not train on or store prompts
+#   - zdr: true              -> only zero-data-retention endpoints
+#   - ignore                 -> no providers headquartered in China
+model_list:
+  - model_name: assistant
+    litellm_params:
+      model: os.environ/AI_MODEL # e.g. openrouter/anthropic/claude-sonnet-4.5
+      api_key: os.environ/LLM_API_KEY
+      extra_body:
+        provider:
+          data_collection: deny
+          zdr: true
+          ignore:
+            # Review when OpenRouter adds providers: https://openrouter.ai/providers
+            - deepseek
+            - moonshotai
+            - alibaba
+            - baidu
+            - z-ai
+            - minimax
+            - siliconflow
+            - stepfun
+            - tencent
+            - bytedance
+            - xiaomi
+            - meituan
+
+litellm_settings:
+  drop_params: true
+  # Never write prompts or answers to logs or callbacks.
+  turn_off_message_logging: true
+  telemetry: false
+
+general_settings:
+  master_key: os.environ/LITELLM_MASTER_KEY
+  database_url: os.environ/LITELLM_DATABASE_URL
+  store_prompts_in_spend_logs: false
