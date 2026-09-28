@@ -1,5 +1,5 @@
 // The node registry: turns Node rows into drivers, places new tenants, and
-// health-checks Mac nodes.
+// health-checks remote (TrueNAS and Mac) nodes.
 import { prisma, type Node } from "@pc/db";
 import { audit, enqueueTenantJob } from "@pc/core";
 import { LocalNode, SshNode, type NodeExec } from "./node.ts";
@@ -19,6 +19,7 @@ export class Nodes {
         if (!row.zfsPool) throw new Error(`node ${row.name} has no ZFS pool`);
         d = new SshNode(this.root, {
           name: row.name,
+          kind: row.kind,
           target: `${row.sshUser}@${row.sshHost}`,
           pool: row.zfsPool,
           authHostIp: row.authHostIp ?? undefined,
@@ -53,11 +54,12 @@ export class Nodes {
     return res.node;
   }
 
-  /** Measures a Mac node and records the result (lastSeenAt only on success). */
+  /** Measures a remote node and records the result (lastSeenAt only on success). */
   async probe(row: Node) {
+    if (row.kind === "LOCAL") throw new Error("the local node isn't probed");
     try {
       const facts = new SshNode(this.root, {
-        name: row.name, target: `${row.sshUser}@${row.sshHost}`, pool: row.zfsPool ?? "castor",
+        name: row.name, kind: row.kind, target: `${row.sshUser}@${row.sshHost}`, pool: row.zfsPool ?? "castor",
       }).probe();
       return await prisma.node.update({
         where: { id: row.id },
@@ -73,14 +75,14 @@ export class Nodes {
   }
 
   /**
-   * Every few minutes: probe Mac nodes, and reopen tenants whose storage is
-   * locked although they are active (the Mac restarted: ZFS keys are never
+   * Every few minutes: probe remote nodes, and reopen tenants whose storage is
+   * locked although they are active (the node restarted: ZFS keys are never
    * stored on the node, so datasets come back locked and the stack can't
    * start until the provisioner unlocks it).
    */
   async watch() {
-    const macs = await prisma.node.findMany({ where: { kind: "MAC" } });
-    for (const row of macs) {
+    const remote = await prisma.node.findMany({ where: { kind: { in: ["MAC", "TRUENAS"] } } });
+    for (const row of remote) {
       try {
         await this.probe(row);
       } catch (err) {

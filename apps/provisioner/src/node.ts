@@ -9,6 +9,7 @@ import path from "node:path";
 import type { TenantStorage } from "./storage.ts";
 import { TenantVolume } from "./volume.ts";
 import { ZfsDataset, type HostExec } from "./zfs.ts";
+import { nodeLayout, parseEdge, type RemoteKind } from "./layout.ts";
 
 export interface NodeExec {
   readonly name: string;
@@ -166,27 +167,31 @@ function buildAssistantTools(node: NodeExec, root: string) {
   node.docker(["build", "-q", "-t", ASSISTANT_TOOLS_IMAGE, "-f", path.join(root, "agent/tools/Dockerfile"), root]);
 }
 
-/** Where castor-ssh keeps files on a macOS node (mounted into Colima's VM). */
-export const MAC_NODE_ROOT = "/Users/Shared/castor";
-
 // Words sent over SSH: castor-ssh splits on spaces and allows only these.
 const SSH_WORD = /^[A-Za-z0-9._/=-]+$/;
 
 export type SshNodeConfig = {
   name: string;
+  kind: RemoteKind;
   /** user@host, as in the provisioner's ~/.ssh/config */
   target: string;
   pool: string;
   authHostIp?: string;
-  /** The Colima VM's address on the LAN, where the edge proxy listens on :80 */
+  /**
+   * host[:port] on the LAN where the node's edge proxy listens: the Colima
+   * VM's address on a Mac (port 80), the NAS's address on TrueNAS (port 8480,
+   * since the TrueNAS UI has 80 and 443).
+   */
   edgeHost?: string;
 };
 
 /**
- * A Mac mini running OpenZFS on macOS and Docker in Colima. Every call goes
- * over SSH to the castor-ssh gate: the Docker CLI's ssh:// transport for
- * docker/compose, and castor-* commands for datasets and config files.
- * The provisioner's key needs an entry in ~/.ssh/config (or the agent).
+ * A remote node: TrueNAS SCALE (native ZFS and Docker) or a Mac mini (OpenZFS
+ * on macOS, Docker in Colima). Every call goes over SSH to the castor-ssh
+ * gate: the Docker CLI's ssh:// transport for docker/compose, and castor-*
+ * commands for datasets and config files. Both platforms behave the same;
+ * only the paths differ (nodeLayout). The provisioner's key needs an entry in
+ * ~/.ssh/config (or the agent).
  */
 export class SshNode implements NodeExec, HostExec {
   readonly name: string;
@@ -195,7 +200,8 @@ export class SshNode implements NodeExec, HostExec {
   readonly edgeUrl?: string;
   readonly gatewayBind?: string;
   private readonly target: string;
-  private readonly pool: string;
+  private readonly layout: ReturnType<typeof nodeLayout>;
+  private readonly edgePort: number;
   private readonly config: LocalConfig;
 
   constructor(private readonly root: string, cfg: SshNodeConfig) {
@@ -204,19 +210,20 @@ export class SshNode implements NodeExec, HostExec {
     if (!/^[A-Za-z0-9_-]+$/.test(cfg.pool)) throw new Error(`invalid pool name: ${cfg.pool}`);
     this.name = cfg.name;
     this.target = cfg.target;
-    this.pool = cfg.pool;
+    this.layout = nodeLayout(cfg.kind, cfg.pool);
     this.authHostIp = cfg.authHostIp;
-    if (cfg.edgeHost !== undefined && !/^[A-Za-z0-9.:-]+$/.test(cfg.edgeHost)) throw new Error(`invalid edge host: ${cfg.edgeHost}`);
-    this.edgeUrl = cfg.edgeHost ? `http://${cfg.edgeHost}` : undefined;
-    // The gateway's admin API listens on the VM's LAN address, next to the edge proxy.
-    this.gatewayBind = cfg.edgeHost;
+    const edge = cfg.edgeHost === undefined ? undefined : parseEdge(cfg.edgeHost);
+    this.edgePort = edge?.port ?? 80;
+    this.edgeUrl = edge?.url;
+    // The gateway's admin API listens on the node's LAN address, next to the edge proxy.
+    this.gatewayBind = edge?.host;
     this.paths = {
       templates: path.join(root, "packages/stack-templates"),
-      nodeTemplates: `${MAC_NODE_ROOT}/files/templates`,
+      nodeTemplates: `${this.layout.root}/files/templates`,
       infra: path.join(root, "infra/node"),
-      nodeInfra: `${MAC_NODE_ROOT}/files/node`,
-      brand: `${MAC_NODE_ROOT}/files/brand`,
-      ca: `${MAC_NODE_ROOT}/files/ca`,
+      nodeInfra: `${this.layout.root}/files/node`,
+      brand: `${this.layout.root}/files/brand`,
+      ca: `${this.layout.root}/files/ca`,
     };
   }
 
@@ -248,7 +255,7 @@ export class SshNode implements NodeExec, HostExec {
   }
 
   nodeConfigDir(slug: string) {
-    return `${MAC_NODE_ROOT}/tenants/${slug}`;
+    return `${this.layout.root}/tenants/${slug}`;
   }
 
   removeConfig(slug: string) {
@@ -257,7 +264,7 @@ export class SshNode implements NodeExec, HostExec {
   }
 
   storage(tenantId: string, slug: string, wrappedKey: string) {
-    return new ZfsDataset(this, tenantId, slug, wrappedKey, this.pool);
+    return new ZfsDataset(this, tenantId, slug, wrappedKey, this.layout.mountRoot);
   }
 
   /** Pool size/usage/health and host facts, for registration and health checks. */
@@ -269,7 +276,7 @@ export class SshNode implements NodeExec, HostExec {
       poolSizeMb: Number(pool[1]),
       poolUsedMb: Number(pool[2]),
       poolHealth: pool[3],
-      macosVersion: info[1],
+      osVersion: info[1],
       memoryMb: Number(info[2]),
       cpus: Number(info[3]),
       dockerVersion: this.docker(["version", "--format", "{{.Server.Version}}"]).trim(),
@@ -301,7 +308,7 @@ export class SshNode implements NodeExec, HostExec {
       "compose", "-p", "pc-edge",
       "-f", path.join(this.root, "infra/node/edge.yml"),
       "up", "-d", "--remove-orphans",
-    ]);
+    ], { env: { EDGE_PORT: String(this.edgePort) } });
     buildAssistantTools(this, this.root);
   }
 }
