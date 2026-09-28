@@ -4,6 +4,7 @@
 #
 #   docker system dial-stdio      the Docker CLI's ssh:// transport (Colima's engine)
 #   castor-zfs <args...>          tenant datasets, via sudo (see castor-zfs)
+#   castor-snap <args...>         backup snapshots and restores, via sudo (see ../castor-snap)
 #   castor-put <path> [644]       stdin -> $ROOT/<path> (tenant config files, mode 600;
 #                                 644 for files unprivileged containers read)
 #   castor-rm tenants/<slug>[/<dir>]  removes a tenant's config directory (or part of it)
@@ -33,6 +34,10 @@ case "${1:-}" in
   castor-zfs)
     shift
     exec sudo -n "$BIN/castor-zfs" "$@"
+    ;;
+  castor-snap)
+    shift
+    exec sudo -n "$BIN/castor-snap" "$@"
     ;;
   castor-put)
     safe_path "${2:?path}"

@@ -24,8 +24,8 @@ function tenantQueue() {
  * Records and enqueues a lifecycle job. Jobs for one tenant run one at a time
  * (the worker serializes by tenant), in order.
  */
-export async function enqueueTenantJob(tenantId: string, kind: JobKind) {
-  const job = await prisma.job.create({ data: { tenantId, kind } });
+export async function enqueueTenantJob(tenantId: string, kind: JobKind, params?: object) {
+  const job = await prisma.job.create({ data: { tenantId, kind, params: params as never } });
   await tenantQueue().add(kind, { jobId: job.id, tenantId, kind }, {
     jobId: job.id,
     attempts: 5,

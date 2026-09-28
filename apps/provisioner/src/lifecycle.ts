@@ -217,6 +217,22 @@ export class Lifecycle {
     await prisma.tenant.update({ where: { id: tenant.id }, data: { status: "SUSPENDED" } });
   }
 
+  /**
+   * Stops the stack and locks its storage, leaving the tenant's status alone
+   * (before a restore). A node without the tenant's data has nothing to stop.
+   */
+  async stop(tenantId: string) {
+    const tenant = await this.load(tenantId);
+    const node = await this.nodeFor(tenant.nodeId);
+    const volume = this.storage(node, tenant);
+    if (volume?.status().state === "missing") return;
+    this.compose(node, tenant, ["stop"], ALL_PROFILES);
+    if (volume) {
+      volume.close();
+      await audit("system", "volume.lock", tenant.id, { reason: "restore" });
+    }
+  }
+
   /** Irreversible: removes the stack, the volume, and the key (crypto-shredding). */
   async delete(tenantId: string) {
     const tenant = await this.load(tenantId);

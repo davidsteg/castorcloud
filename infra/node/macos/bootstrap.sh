@@ -61,8 +61,8 @@ mdutil -i off "/Volumes/$POOL" >/dev/null 2>&1 || true   # no Spotlight on tenan
 
 step "castor-zfs and the SSH gate"
 mkdir -p "$BIN"
-install -o root -g wheel -m 755 "$HERE/castor-zfs" "$HERE/castor-ssh" "$BIN/"
-printf '%s ALL=(root) NOPASSWD: %s/castor-zfs\n' "$USER_NAME" "$BIN" > /etc/sudoers.d/castor
+install -o root -g wheel -m 755 "$HERE/castor-zfs" "$HERE/castor-ssh" "$HERE/../castor-snap" "$BIN/"
+printf '%s ALL=(root) NOPASSWD: %s/castor-zfs, %s/castor-snap\n' "$USER_NAME" "$BIN" "$BIN" > /etc/sudoers.d/castor
 chmod 440 /etc/sudoers.d/castor
 visudo -cf /etc/sudoers.d/castor >/dev/null
 home=/Users/$USER_NAME
