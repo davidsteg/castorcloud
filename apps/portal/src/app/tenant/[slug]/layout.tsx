@@ -1,6 +1,7 @@
 import { BRAND_NAME, SERVICES } from "@/lib/config";
 import { requireTenantMember } from "@/lib/tenant";
 import { ShellNav, type ShellNavItem } from "@/components/ShellNav";
+import { signOutEverywhere } from "@/lib/signout";
 
 export default async function TenantLayout({
   children,
@@ -22,7 +23,7 @@ export default async function TenantLayout({
 
   return (
     <div className="shell">
-      <ShellNav brand={BRAND_NAME} tenantName={tenant.displayName} email={session.user?.email ?? ""} items={items} />
+      <ShellNav brand={BRAND_NAME} tenantName={tenant.displayName} email={session.user?.email ?? ""} items={items} signOut={{ label: t.account.logout, action: signOutEverywhere }} />
       <main className="shell-main">
         {tenant.status === "ACTIVE" ? children : <div className="page"><p className="notice">{tenant.status}</p></div>}
       </main>

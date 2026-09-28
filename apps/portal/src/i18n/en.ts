@@ -228,6 +228,9 @@ const en = {
     connect: "After signing in, your cloud shows you step by step how to connect the apps.",
   },
   setup: {
+    frameExpiredTitle: "Please sign in again",
+    frameExpiredBody: "This app couldn't open. Your sign-in has probably expired.",
+    signInAgain: "Sign in again",
     nav: "Set up apps",
     home: "Overview",
     welcome: "Welcome to your cloud",

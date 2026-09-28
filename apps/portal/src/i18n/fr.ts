@@ -228,6 +228,9 @@ const fr: Dictionary = {
     connect: "Après la connexion, votre cloud vous montre pas à pas comment connecter les applications.",
   },
   setup: {
+    frameExpiredTitle: "Veuillez vous reconnecter",
+    frameExpiredBody: "Cette application n’a pas pu s’ouvrir. Votre session a probablement expiré.",
+    signInAgain: "Se reconnecter",
     nav: "Configurer les applications",
     home: "Vue d’ensemble",
     welcome: "Bienvenue dans votre cloud",

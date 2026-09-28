@@ -6,7 +6,13 @@ import { Logo } from "@/components/site/SiteHeader";
 
 export type ShellNavItem = { href: string; label: string; icon: string };
 
-export function ShellNav({ brand, tenantName, email, items }: { brand: string; tenantName: string; email: string; items: ShellNavItem[] }) {
+export function ShellNav({ brand, tenantName, email, items, signOut }: {
+  brand: string;
+  tenantName: string;
+  email: string;
+  items: ShellNavItem[];
+  signOut: { label: string; action: () => Promise<void> };
+}) {
   const pathname = usePathname();
 
   return (
@@ -21,6 +27,12 @@ export function ShellNav({ brand, tenantName, email, items }: { brand: string; t
           </Link>
         );
       })}
+      <form action={signOut.action}>
+        <button type="submit" className="shell-link">
+          <span aria-hidden>⏻</span>
+          {signOut.label}
+        </button>
+      </form>
       <div className="shell-footer">
         <div>{tenantName}</div>
         <div>{email}</div>

@@ -1,10 +1,11 @@
 import Link from "next/link";
 import { redirect } from "next/navigation";
 import { prisma } from "@pc/db";
-import { signIn, signOut } from "@/auth";
+import { signIn } from "@/auth";
 import { getDictionary, type Locale } from "@/i18n";
 import { APP_LABEL, BASE_DOMAIN, PUBLIC_SCHEME } from "@/lib/config";
 import { currentUser, memberTenant } from "@/lib/session";
+import { signOutEverywhere } from "@/lib/signout";
 import { stripe } from "@/lib/stripe";
 import { SiteHeader } from "@/components/site/SiteHeader";
 
@@ -50,11 +51,6 @@ export default async function AccountPage({ params }: { params: Promise<{ locale
     redirect(portal.url);
   }
 
-  async function logout() {
-    "use server";
-    await signOut({ redirectTo: `/${locale}` });
-  }
-
   return (
     <>
       <SiteHeader locale={locale} t={t} path="/account" />
@@ -86,7 +82,7 @@ export default async function AccountPage({ params }: { params: Promise<{ locale
             </div>
           ))}
           <Link className="button secondary block" href={`/${locale}/pricing`}>{t.account.create}</Link>
-          <form action={logout}>
+          <form action={signOutEverywhere}>
             <button className="button secondary block" type="submit">{t.account.logout}</button>
           </form>
         </div>

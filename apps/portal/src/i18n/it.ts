@@ -228,6 +228,9 @@ const it: Dictionary = {
     connect: "Dopo l’accesso, il tuo cloud ti mostra passo per passo come collegare le app.",
   },
   setup: {
+    frameExpiredTitle: "Accedi di nuovo",
+    frameExpiredBody: "Non è stato possibile aprire questa app. Probabilmente la sessione è scaduta.",
+    signInAgain: "Accedi di nuovo",
     nav: "Configura le app",
     home: "Panoramica",
     welcome: "Benvenuto nel tuo cloud",

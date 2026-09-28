@@ -229,6 +229,9 @@ const de: Dictionary = {
     connect: "Nach der Anmeldung zeigen wir Ihnen in Ihrer Cloud Schritt für Schritt, wie Sie die Apps verbinden.",
   },
   setup: {
+    frameExpiredTitle: "Bitte erneut anmelden",
+    frameExpiredBody: "Diese App konnte nicht geöffnet werden. Ihre Anmeldung ist wahrscheinlich abgelaufen.",
+    signInAgain: "Erneut anmelden",
     nav: "Apps einrichten",
     home: "Übersicht",
     welcome: "Willkommen in Ihrer Cloud",
