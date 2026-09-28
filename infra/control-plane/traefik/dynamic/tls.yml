@@ -1,7 +1,10 @@
 # Development TLS: one wildcard certificate from the local dev CA.
+# Production gets its wildcard from ACME instead (docker-compose.prod.yml).
+{{ if not (env "CF_DNS_API_TOKEN") }}
 tls:
   stores:
     default:
       defaultCertificate:
         certFile: /certs/wildcard.crt
         keyFile: /certs/wildcard.key
+{{ end }}

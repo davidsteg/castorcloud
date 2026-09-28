@@ -13,6 +13,7 @@
     "db:generate": "npm run generate -w @pc/db",
     "db:migrate": "npm run migrate -w @pc/db",
     "cp:up": "docker compose -f infra/control-plane/docker-compose.yml --env-file .env up -d",
+    "cp:up:prod": "docker compose -f infra/control-plane/docker-compose.yml -f infra/control-plane/docker-compose.prod.yml --env-file .env up -d",
     "cp:down": "docker compose -f infra/control-plane/docker-compose.yml --env-file .env down"
   },
   "devDependencies": {

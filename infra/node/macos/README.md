@@ -76,8 +76,17 @@ provisioner writes `infra/control-plane/traefik/dynamic/tenant-<slug>.yml`
 (`photos-<slug>`, `docs-<slug>`, …) to its node's edge proxy. A new tenant
 needs no DNS change, and moving a tenant only rewrites its route.
 
-Between the control plane and the Macs this is plain HTTP, so they should share
-a LAN. If the control plane runs elsewhere, put a WireGuard tunnel between
+**Production setup (Cloudflare):** in the castorcloud.ch zone, add `A`
+records for `castorcloud.ch` and `*.castorcloud.ch` pointing to the site's public
+IP, and set them to **DNS only** (grey cloud). Proxied requests are capped
+at 100 MB, which breaks video uploads. On the router, forward 80 and 443 to the
+control plane host. Put `ACME_EMAIL` and `CF_DNS_API_TOKEN` (Edit zone DNS) in
+`.env` and start with `npm run cp:up:prod`; Traefik then fetches one wildcard
+certificate. If the public IP changes, the two records have to follow it
+(Cloudflare DDNS, e.g. from the router).
+
+Between the control plane and the Macs this is plain HTTP, so they share
+a LAN (they do at castorcloud.ch). If the control plane runs elsewhere, put a WireGuard tunnel between
 them and use the tunnel addresses for `--edge`. All uploads pass through the
 control plane, so it needs the bandwidth for them.
 
