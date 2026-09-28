@@ -62,7 +62,12 @@ export const SERVICES: Record<ServiceKey, ServiceDef> = {
 
 /** Volumes every stack has, whatever is booked. */
 export const BASE_VOLUMES = ["db", "redis"];
-export const ALL_VOLUMES = [...BASE_VOLUMES, ...STACK_SERVICES.flatMap((s) => SERVICES[s].volumes)];
+/** Hermes' data: config, sessions and each member's memory. */
+export const ASSISTANT_VOLUMES = ["assistant"];
+export const ALL_VOLUMES = [...BASE_VOLUMES, ...STACK_SERVICES.flatMap((s) => SERVICES[s].volumes), ...ASSISTANT_VOLUMES];
+
+/** Compose services of the assistant profile. */
+export const ASSISTANT_CONTAINERS = ["assistant", "assistant-init", "assistant-tools"];
 
 export function names(slug: string, p: Platform) {
   return {
@@ -73,6 +78,8 @@ export function names(slug: string, p: Platform) {
     portalOrigin: `${p.scheme}://${slug}.${p.baseDomain}`,
     // Flat hostnames: one *.domain certificate covers every tenant.
     serviceOrigin: (s: ServiceKey) => `${p.scheme}://${s}-${slug}.${p.baseDomain}`,
+    /** Hermes' API, for the portal's server only (see the skin template). */
+    assistantOrigin: `${p.scheme}://assistant-${slug}.${p.baseDomain}`,
     appSlug: (s: ServiceKey) => `${slug}-${s}`,
     issuer: (s: ServiceKey) => `${p.scheme}://auth.${p.baseDomain}/application/o/${slug}-${s}/`,
   };
@@ -95,6 +102,7 @@ export const SECRET_KEYS = [
   "AIRTRAIL_DB_PASSWORD", "PAPERLESS_SECRET_KEY", "PAPERLESS_SERVICE_PASSWORD",
   "IMMICH_SERVICE_PASSWORD", "PHOTOS_OIDC_CLIENT_SECRET", "DOCS_OIDC_CLIENT_SECRET",
   "PLACES_OIDC_CLIENT_SECRET", "FLIGHTS_OIDC_CLIENT_SECRET", "DAWARICH_SECRET_KEY_BASE",
+  "ASSISTANT_ADMIN_KEY", "LLM_VIRTUAL_KEY",
 ] as const;
 
 /** Fills in any missing secret; existing values are kept so re-runs are safe. */
@@ -103,7 +111,8 @@ export function ensureSecrets(existing: TenantSecrets): { secrets: TenantSecrets
   const created: string[] = [];
   for (const key of SECRET_KEYS) {
     if (secrets[key]) continue;
-    secrets[key] = key === "DAWARICH_SECRET_KEY_BASE" ? token(64) : token();
+    secrets[key] =
+      key === "DAWARICH_SECRET_KEY_BASE" ? token(64) : key === "LLM_VIRTUAL_KEY" ? `sk-castor-${token(32)}` : token();
     created.push(key);
   }
   return { secrets, created };
@@ -160,6 +169,8 @@ export function tenantEnv(opts: {
   configDir: string;
   brandDir: string;
   caDir: string;
+  /** Booked services the assistant's tools may read; empty = no assistant. */
+  assistantServices?: ServiceKey[];
 }): string {
   const { slug, p, secrets } = opts;
   const n = names(slug, p);
@@ -181,10 +192,29 @@ export function tenantEnv(opts: {
     PLACES_OIDC_CLIENT_ID: n.appSlug("places"),
     FLIGHTS_OIDC_CLIENT_ID: n.appSlug("flights"),
     PAPERLESS_SOCIALACCOUNT_PROVIDERS: JSON.stringify(paperlessProviders(slug, p, secrets)),
+    ...assistantToolsEnv(opts.assistantServices ?? [], secrets),
     ...secrets,
   };
   // Single quotes: compose takes the value literally (JSON, spaces).
   return Object.entries(vars).map(([k, v]) => `${k}='${v}'`).join("\n") + "\n";
+}
+
+/**
+ * Where the assistant's tools reach each booked service on the private
+ * network, and the database logins used to issue members read-only API keys
+ * (see agent/tools/src/db.ts). Unbooked services stay empty.
+ */
+export function assistantToolsEnv(services: ServiceKey[], secrets: TenantSecrets): Record<string, string> {
+  const on = (s: ServiceKey, v: string) => (services.includes(s) ? v : "");
+  return {
+    ASSISTANT_IMMICH_URL: on("photos", "http://immich-server:2283"),
+    ASSISTANT_IMMICH_DB_URL: on("photos", `postgres://immich:${secrets.IMMICH_DB_PASSWORD}@immich-db:5432/immich`),
+    ASSISTANT_PAPERLESS_URL: on("docs", "http://paperless:8000"),
+    ASSISTANT_DAWARICH_URL: on("places", "http://dawarich:3000"),
+    ASSISTANT_DAWARICH_DB_URL: on("places", `postgres://dawarich:${secrets.DAWARICH_DB_PASSWORD}@db:5432/dawarich`),
+    ASSISTANT_AIRTRAIL_URL: on("flights", "http://airtrail:3000"),
+    ASSISTANT_AIRTRAIL_DB_URL: on("flights", `postgres://airtrail:${secrets.AIRTRAIL_DB_PASSWORD}@db:5432/airtrail`),
+  };
 }
 
 /** Binds every named volume into the tenant's encrypted mount. */

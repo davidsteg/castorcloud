@@ -3,7 +3,8 @@
   "private": true,
   "workspaces": [
     "apps/*",
-    "packages/*"
+    "packages/*",
+    "agent/*"
   ],
   "scripts": {
     "dev": "turbo run dev",

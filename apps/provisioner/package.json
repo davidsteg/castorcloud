@@ -7,11 +7,13 @@
     "worker": "cross-env NODE_EXTRA_CA_CERTS=../../.dev-certs/ca.crt tsx src/worker.ts",
     "e2e": "cross-env NODE_EXTRA_CA_CERTS=../../.dev-certs/ca.crt tsx src/e2e.ts",
     "delete-tenant": "tsx src/delete-tenant.ts",
+    "test": "node --test --experimental-strip-types src/*.test.ts",
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
     "@pc/core": "^0.0.0",
     "@pc/db": "^0.0.0",
+    "@pc/pricing": "^0.0.0",
     "bullmq": "^5.81.5",
     "dotenv": "^17.2.0"
   },

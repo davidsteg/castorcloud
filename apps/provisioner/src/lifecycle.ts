@@ -4,10 +4,15 @@ import { rmSync } from "node:fs";
 import path from "node:path";
 import { prisma, type Tenant } from "@pc/db";
 import { audit, newWrappedVolumeKey, openSecret, sealSecret } from "@pc/core";
+import { AI_BUDGET_WARN_AT, aiBudgetUsd } from "@pc/pricing";
+import {
+  assistantFiles, isMemberSecret, memberKeyName, memberToolsTokenName, newAssistantSecret, type AssistantMember,
+} from "./assistant.ts";
 import type { Authentik } from "./authentik.ts";
+import type { LlmGateway } from "./llm.ts";
 import type { NodeExec } from "./node.ts";
 import {
-  ALL_VOLUMES, SERVICES, STACK_SERVICES, ensureSecrets, immichConfig, names, redirectUris,
+  ALL_VOLUMES, ASSISTANT_CONTAINERS, SERVICES, STACK_SERVICES, ensureSecrets, immichConfig, names, redirectUris,
   tenantEnv, volumesOverride, type Platform, type ServiceKey,
 } from "./tenant.ts";
 import { TenantVolume } from "./volume.ts";
@@ -16,6 +21,15 @@ export type Step = "identity" | "storage" | "services" | "ready";
 export type Reporter = (step: Step, message: string) => Promise<void>;
 
 const SHARED_CONTAINERS = ["pc-node-immich-ml", "pc-node-tika", "pc-node-gotenberg"];
+const LLM_GATEWAY = "pc-node-llm-gateway";
+/** Compose profiles: one per stack service, plus the assistant. */
+const ALL_PROFILES = [...STACK_SERVICES, "assistant"];
+
+export type AssistantSettings = {
+  gateway: LlmGateway;
+  /** Conservative CHF -> USD rate for budgets (the gateway meters in USD). */
+  usdPerChf: number;
+};
 
 export class Lifecycle {
   constructor(
@@ -24,6 +38,7 @@ export class Lifecycle {
     private readonly p: Platform,
     private readonly versions: Record<string, string>,
     private readonly versionsFile: string,
+    private readonly assistant?: AssistantSettings,
   ) {}
 
   private async load(tenantId: string) {
@@ -37,7 +52,11 @@ export class Lifecycle {
     return STACK_SERVICES.filter((s) => tenant.services.some((i) => i.enabled && i.kind === s.toUpperCase()));
   }
 
-  private compose(tenant: Tenant, args: string[], profiles: ServiceKey[]) {
+  private assistantBooked(tenant: Awaited<ReturnType<Lifecycle["load"]>>) {
+    return tenant.services.some((i) => i.enabled && i.kind === "ASSISTANT");
+  }
+
+  private compose(tenant: Tenant, args: string[], profiles: string[]) {
     const n = names(tenant.slug, this.p);
     const dir = this.node.configDir(tenant.slug);
     return this.node.docker([
@@ -55,6 +74,9 @@ export class Lifecycle {
     let tenant = await this.load(tenantId);
     const n = names(tenant.slug, this.p);
     const enabled = this.enabled(tenant);
+    const assistant = this.assistantBooked(tenant);
+    if (assistant && !this.assistant) throw new Error("assistant booked but the LLM gateway is not configured");
+    const profiles = assistant ? [...enabled, "assistant"] : enabled;
 
     // ------------------------------------------------------------ identity
     await report("identity", "authentik groups and apps");
@@ -109,29 +131,47 @@ export class Lifecycle {
       tenantEnv({
         slug: tenant.slug, p: this.p, secrets, versions: this.versions,
         configDir, brandDir: this.node.paths.brand, caDir: this.node.paths.ca,
+        assistantServices: assistant ? enabled : [],
       }),
     );
+    if (assistant) await this.prepareAssistant(tenant, secrets, enabled);
+    else if (this.assistant) await this.assistant.gateway.block(secrets.LLM_VIRTUAL_KEY);
 
     this.node.docker(["compose", "-f", path.join(this.node.paths.templates, "../../infra/node/compose.yml"), "--env-file", this.versionsFile, "up", "-d"]);
-    this.compose(tenant, ["up", "-d", "--remove-orphans"], enabled);
+    this.compose(tenant, ["up", "-d", "--remove-orphans"], profiles);
     for (const c of SHARED_CONTAINERS) {
       this.node.docker(["network", "connect", `${n.project}-shared`, c], { allowFail: true });
     }
+    if (assistant) {
+      // The gateway is the assistant's only way out of the stack.
+      this.node.docker(["network", "connect", `${n.project}-llm`, LLM_GATEWAY], { allowFail: true });
+      // Re-copy the rendered config (members, services) and restart Hermes.
+      this.compose(tenant, ["up", "-d", "--force-recreate", "assistant-init", "assistant"], profiles);
+    }
     // Unbooked services: stop and remove their containers; data stays on the volume.
-    for (const s of STACK_SERVICES.filter((x) => !enabled.includes(x))) {
-      for (const c of SERVICES[s].containers) {
-        const ids = this.node.docker(["ps", "-aq", "--filter", `label=com.docker.compose.project=${n.project}`, "--filter", `label=com.docker.compose.service=${c}`]).trim();
-        if (ids) this.node.docker(["rm", "-f", ...ids.split(/\s+/)]);
-      }
+    const unbooked = [
+      ...STACK_SERVICES.filter((x) => !enabled.includes(x)).flatMap((s) => SERVICES[s].containers),
+      ...(assistant ? [] : ASSISTANT_CONTAINERS),
+    ];
+    for (const c of unbooked) {
+      const ids = this.node.docker(["ps", "-aq", "--filter", `label=com.docker.compose.project=${n.project}`, "--filter", `label=com.docker.compose.service=${c}`]).trim();
+      if (ids) this.node.docker(["rm", "-f", ...ids.split(/\s+/)]);
     }
 
     for (const s of enabled) await this.waitHealthy(n.serviceOrigin(s) + SERVICES[s].healthPath, s);
     if (enabled.includes("photos")) await this.immichServiceAccount(tenant.slug, secrets);
+    if (assistant) await this.waitHealthy(`${n.assistantOrigin}/health`, "assistant");
 
     for (const s of enabled) {
       await prisma.serviceInstance.update({
         where: { tenantId_kind: { tenantId: tenant.id, kind: s.toUpperCase() as never } },
         data: { healthy: true, lastHealthAt: new Date(), version: this.versionOf(s) },
+      });
+    }
+    if (assistant) {
+      await prisma.serviceInstance.update({
+        where: { tenantId_kind: { tenantId: tenant.id, kind: "ASSISTANT" } },
+        data: { healthy: true, lastHealthAt: new Date(), version: this.versions.HERMES_IMAGE?.split(":").pop() },
       });
     }
 
@@ -142,7 +182,9 @@ export class Lifecycle {
 
   async suspend(tenantId: string) {
     const tenant = await this.load(tenantId);
-    this.compose(tenant, ["stop"], STACK_SERVICES);
+    this.compose(tenant, ["stop"], ALL_PROFILES);
+    const llmKey = await this.existingSecret(tenant.id, "LLM_VIRTUAL_KEY");
+    if (this.assistant && llmKey) await this.assistant.gateway.block(llmKey);
     if (tenant.volumeKey) {
       new TenantVolume(this.node, tenant.id, tenant.slug, tenant.volumeKey.wrappedKey).close();
       await audit("system", "volume.lock", tenant.id, { reason: "suspend" });
@@ -160,8 +202,12 @@ export class Lifecycle {
     for (const c of SHARED_CONTAINERS) {
       this.node.docker(["network", "disconnect", "-f", `${n.project}-shared`, c], { allowFail: true });
     }
-    this.compose(tenant, ["down", "--volumes", "--remove-orphans"], STACK_SERVICES);
+    this.node.docker(["network", "disconnect", "-f", `${n.project}-llm`, LLM_GATEWAY], { allowFail: true });
+    this.compose(tenant, ["down", "--volumes", "--remove-orphans"], ALL_PROFILES);
     this.node.docker(["network", "rm", `${n.project}-shared`], { allowFail: true });
+    this.node.docker(["network", "rm", `${n.project}-llm`], { allowFail: true });
+    const llmKey = await this.existingSecret(tenant.id, "LLM_VIRTUAL_KEY");
+    if (this.assistant && llmKey) await this.assistant.gateway.delete(llmKey);
     if (tenant.volumeKey) {
       new TenantVolume(this.node, tenant.id, tenant.slug, tenant.volumeKey.wrappedKey).destroy();
       // Without the key, any copy of the volume (and its backups) is unreadable.
@@ -188,6 +234,68 @@ export class Lifecycle {
       await prisma.secret.create({ data: { tenantId, key, ciphertext: sealSecret(tenantId, key, secrets[key]) } });
     }
     return secrets;
+  }
+
+  private async existingSecret(tenantId: string, key: string) {
+    const row = await prisma.secret.findUnique({ where: { tenantId_key: { tenantId, key } } });
+    return row ? openSecret(tenantId, key, row.ciphertext) : undefined;
+  }
+
+  /**
+   * Assistant: the tenant's LLM key with this month's budget, one Hermes
+   * profile per member (own API key and tools token), rendered config.
+   */
+  private async prepareAssistant(
+    tenant: Awaited<ReturnType<Lifecycle["load"]>>,
+    secrets: Record<string, string>,
+    services: ServiceKey[],
+  ) {
+    const { gateway, usdPerChf } = this.assistant!;
+    await gateway.ensureTenantKey({
+      key: secrets.LLM_VIRTUAL_KEY,
+      slug: tenant.slug,
+      tenantId: tenant.id,
+      maxBudgetUsd: aiBudgetUsd(tenant.aiCreditChf, usdPerChf),
+      warnAt: AI_BUDGET_WARN_AT,
+    });
+
+    const members: { member: AssistantMember; apiKey: string; toolsToken: string }[] = [];
+    for (const m of tenant.members) {
+      members.push({
+        member: {
+          id: m.id,
+          email: m.user.email,
+          authentikSub: m.user.authentikSub,
+          name: m.user.name,
+          locale: m.user.locale ?? tenant.locale,
+        },
+        apiKey: await this.memberSecret(tenant.id, memberKeyName(m.id)),
+        toolsToken: await this.memberSecret(tenant.id, memberToolsTokenName(m.id)),
+      });
+    }
+    // Members who left lose their keys; assistant-init removes their memory.
+    const current = new Set(tenant.members.flatMap((m) => [memberKeyName(m.id), memberToolsTokenName(m.id)]));
+    const stale = await prisma.secret.findMany({ where: { tenantId: tenant.id }, select: { key: true } });
+    const gone = stale.map((r) => r.key).filter((k) => isMemberSecret(k) && !current.has(k));
+    if (gone.length) await prisma.secret.deleteMany({ where: { tenantId: tenant.id, key: { in: gone } } });
+
+    const files = assistantFiles({
+      brandName: this.p.brandName,
+      services,
+      adminKey: secrets.ASSISTANT_ADMIN_KEY,
+      llmKey: secrets.LLM_VIRTUAL_KEY,
+      members,
+    });
+    rmSync(path.join(this.node.configDir(tenant.slug), "assistant/hermes/profiles"), { recursive: true, force: true });
+    for (const [file, content] of Object.entries(files)) this.node.writeConfig(tenant.slug, `assistant/${file}`, content);
+  }
+
+  private async memberSecret(tenantId: string, key: string) {
+    const existing = await this.existingSecret(tenantId, key);
+    if (existing) return existing;
+    const value = newAssistantSecret();
+    await prisma.secret.create({ data: { tenantId, key, ciphertext: sealSecret(tenantId, key, value) } });
+    return value;
   }
 
   private versionOf(s: ServiceKey) {

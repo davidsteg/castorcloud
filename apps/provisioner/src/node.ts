@@ -54,9 +54,8 @@ export class LocalNode implements NodeExec {
   }
 
   writeConfig(slug: string, file: string, content: string) {
-    const dir = this.configDir(slug);
-    mkdirSync(dir, { recursive: true });
-    const target = path.join(dir, file);
+    const target = path.join(this.configDir(slug), file);
+    mkdirSync(path.dirname(target), { recursive: true });
     writeFileSync(target, content, { mode: 0o600 });
     return posix(target);
   }
@@ -70,7 +69,10 @@ export class LocalNode implements NodeExec {
       "mkdir -p /srv/pc/volumes /srv/pc/tenants && (findmnt -no PROPAGATION /srv/pc | grep -q shared || (mount --bind /srv/pc /srv/pc && mount --make-rshared /srv/pc))",
     ]);
     this.docker(["build", "-q", "-t", CRYPTD_IMAGE, path.join(this.root, "infra/node/cryptd")]);
+    this.docker(["build", "-q", "-t", ASSISTANT_TOOLS_IMAGE, "-f", path.join(this.root, "agent/tools/Dockerfile"), this.root]);
   }
 }
 
 export const CRYPTD_IMAGE = "pc-cryptd:1";
+/** Same tag as ASSISTANT_TOOLS_IMAGE in packages/stack-templates/versions.env. */
+export const ASSISTANT_TOOLS_IMAGE = "pc-assistant-tools:1";

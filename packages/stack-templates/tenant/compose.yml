@@ -6,6 +6,9 @@
 #   shared    - pc-t-<slug>-shared; the node's shared immich-ml/tika/gotenberg
 #               containers are attached to it by the provisioner
 #   pc-edge   - only the skin proxy, so Traefik can reach it
+#   assistant - Hermes, its tools and the skin proxy; no internet access
+#   llm       - pc-t-<slug>-llm; Hermes and the node's LLM gateway (attached
+#               by the provisioner), the assistant's only way out
 #
 # Trust: ${CA_DIR}/ca-bundle.pem replaces/extends each runtime's CA store
 # (dev: public roots + the local dev CA; production: public roots).
@@ -33,7 +36,7 @@ services:
     labels:
       - traefik.enable=true
       - traefik.docker.network=pc-edge
-      - traefik.http.routers.pc-t-${SLUG}.rule=Host(`photos-${SLUG}.${BASE_DOMAIN}`) || Host(`docs-${SLUG}.${BASE_DOMAIN}`) || Host(`places-${SLUG}.${BASE_DOMAIN}`) || Host(`flights-${SLUG}.${BASE_DOMAIN}`)
+      - traefik.http.routers.pc-t-${SLUG}.rule=Host(`photos-${SLUG}.${BASE_DOMAIN}`) || Host(`docs-${SLUG}.${BASE_DOMAIN}`) || Host(`places-${SLUG}.${BASE_DOMAIN}`) || Host(`flights-${SLUG}.${BASE_DOMAIN}`) || Host(`assistant-${SLUG}.${BASE_DOMAIN}`)
       - traefik.http.routers.pc-t-${SLUG}.entrypoints=websecure
       - traefik.http.services.pc-t-${SLUG}.loadbalancer.server.port=80
     depends_on:
@@ -41,7 +44,8 @@ services:
       paperless: { condition: service_started, required: false }
       dawarich: { condition: service_started, required: false }
       airtrail: { condition: service_started, required: false }
-    networks: [internal, pc-edge]
+      assistant: { condition: service_started, required: false }
+    networks: [internal, assistant, pc-edge]
     restart: unless-stopped
 
   # ---------------------------------------------------------------- data
@@ -118,6 +122,8 @@ services:
     profiles: [docs]
     environment:
       PAPERLESS_URL: ${SCHEME}://docs-${SLUG}.${BASE_DOMAIN}
+      # "paperless": the assistant's tools call the API on the private network.
+      PAPERLESS_ALLOWED_HOSTS: docs-${SLUG}.${BASE_DOMAIN},paperless
       PAPERLESS_SECRET_KEY: ${PAPERLESS_SECRET_KEY}
       PAPERLESS_TIME_ZONE: ${TZ}
       PAPERLESS_DBENGINE: postgresql
@@ -171,7 +177,8 @@ services:
       DATABASE_USERNAME: dawarich
       DATABASE_PASSWORD: ${DAWARICH_DB_PASSWORD}
       DATABASE_NAME: dawarich
-      APPLICATION_HOSTS: places-${SLUG}.${BASE_DOMAIN}
+      # "dawarich": the assistant's tools call the API on the private network.
+      APPLICATION_HOSTS: places-${SLUG}.${BASE_DOMAIN},dawarich
       APPLICATION_PROTOCOL: ${SCHEME}
       TIME_ZONE: ${TZ}
       SECRET_KEY_BASE: ${DAWARICH_SECRET_KEY_BASE}
@@ -237,7 +244,61 @@ services:
     networks: [internal]
     restart: unless-stopped
 
+  # ----------------------------------------------------------- assistant
+  # Hermes Agent, one profile per household member (own memory, own tool
+  # token). Its API is only called by the portal's server, with the member's
+  # key, through the skin proxy at assistant-<slug>. It has no internet
+  # access: the LLM gateway is reachable on the llm network, nothing else.
+  assistant-init:
+    image: ${NGINX_IMAGE} # any small image with sh and cp
+    profiles: [assistant]
+    # Copies the provisioner's rendered config into the data volume and drops
+    # profiles of members who left (their memory goes with them).
+    entrypoint: ["/bin/sh", "/rendered/sync.sh"]
+    volumes:
+      - ${TENANT_DIR}/assistant:/rendered:ro
+      - assistant:/opt/data
+    network_mode: none
+
+  assistant:
+    image: ${HERMES_IMAGE}
+    profiles: [assistant]
+    command: ["gateway", "run"]
+    environment:
+      HERMES_UID: "10000"
+      HERMES_GID: "10000"
+      TZ: ${TZ}
+    volumes:
+      - assistant:/opt/data
+    depends_on:
+      assistant-init: { condition: service_completed_successfully }
+      assistant-tools: { condition: service_started }
+    networks: [assistant, llm]
+    restart: unless-stopped
+
+  assistant-tools:
+    image: ${ASSISTANT_TOOLS_IMAGE}
+    profiles: [assistant]
+    environment:
+      MEMBERS_FILE: /config/members.json
+      PORTAL_ORIGIN: ${PORTAL_ORIGIN}
+      # Empty for services that are not booked; their tools are then absent.
+      IMMICH_URL: ${ASSISTANT_IMMICH_URL:-}
+      IMMICH_DB_URL: ${ASSISTANT_IMMICH_DB_URL:-}
+      PAPERLESS_URL: ${ASSISTANT_PAPERLESS_URL:-}
+      PAPERLESS_USER: pc-service
+      PAPERLESS_PASSWORD: ${PAPERLESS_SERVICE_PASSWORD}
+      DAWARICH_URL: ${ASSISTANT_DAWARICH_URL:-}
+      DAWARICH_DB_URL: ${ASSISTANT_DAWARICH_DB_URL:-}
+      AIRTRAIL_URL: ${ASSISTANT_AIRTRAIL_URL:-}
+      AIRTRAIL_DB_URL: ${ASSISTANT_AIRTRAIL_DB_URL:-}
+    volumes:
+      - ${TENANT_DIR}/assistant/members.json:/config/members.json:ro
+    networks: [internal, assistant]
+    restart: unless-stopped
+
 volumes:
+  assistant:
   immich-db:
   db:
   redis:
@@ -252,6 +313,11 @@ volumes:
 
 networks:
   internal:
+  assistant:
+    internal: true
+  llm:
+    name: pc-t-${SLUG}-llm
+    internal: true
   shared:
     name: pc-t-${SLUG}-shared
   pc-edge:

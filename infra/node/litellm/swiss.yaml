@@ -1,0 +1,25 @@
+# LLM gateway config for AI_PROVIDER=swiss: an OpenAI-compatible provider
+# with Swiss data centres and no training on customer data (e.g. Infomaniak
+# AI Tools). Only set AI_PROVIDER=swiss when that is really the provider: the
+# website's privacy statement depends on it.
+model_list:
+  - model_name: assistant
+    litellm_params:
+      model: os.environ/AI_MODEL # e.g. openai/<model name at the provider>
+      api_base: os.environ/LLM_BASE_URL
+      api_key: os.environ/LLM_API_KEY
+    # Budgets need a price. LiteLLM does not know Swiss providers' models, so
+    # set the provider's price per token (USD) here before going live.
+    model_info:
+      input_cost_per_token: 0.000001
+      output_cost_per_token: 0.000003
+
+litellm_settings:
+  drop_params: true
+  turn_off_message_logging: true
+  telemetry: false
+
+general_settings:
+  master_key: os.environ/LITELLM_MASTER_KEY
+  database_url: os.environ/LITELLM_DATABASE_URL
+  store_prompts_in_spend_logs: false

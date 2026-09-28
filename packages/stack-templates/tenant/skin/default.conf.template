@@ -1,5 +1,7 @@
 # Skin proxy: sits between Traefik and the tenant's services.
 #  - routes <service>-<slug>.<domain> to the right container
+#  - routes assistant-<slug>.<domain> to Hermes' chat API (called by the
+#    portal's server only, with the member's key; see the second server)
 #  - injects brand CSS + iframe bridge into every HTML page
 #  - lets the tenant portal (and only it) embed the services
 # ${PORTAL_ORIGIN} is filled in by the nginx image's envsubst at startup;
@@ -59,5 +61,36 @@ server {
         proxy_hide_header X-Frame-Options;
         proxy_hide_header Content-Security-Policy;
         add_header Content-Security-Policy "frame-ancestors ${PORTAL_ORIGIN}" always;
+    }
+}
+
+# Assistant: Hermes' API server. Only the session chat endpoints of member
+# profiles are reachable; everything else (default profile, cron, runs,
+# dashboard) stays private to the stack.
+server {
+    listen 80;
+    server_name ~^assistant-;
+    resolver 127.0.0.11 valid=30s ipv6=off;
+    set $pc_assistant http://assistant:8642;
+
+    client_max_body_size 64k;
+
+    location = /health {
+        proxy_pass $pc_assistant;
+    }
+
+    location ~ ^/p/[a-z0-9-]+/api/sessions(/[A-Za-z0-9_-]+(/messages|/chat/stream)?)?$ {
+        proxy_pass $pc_assistant;
+        proxy_http_version 1.1;
+        proxy_set_header Host $host;
+        proxy_set_header Connection "";
+        # Server-sent events: pass every token through as it arrives.
+        proxy_buffering off;
+        proxy_cache off;
+        proxy_read_timeout 600s;
+    }
+
+    location / {
+        return 404;
     }
 }
