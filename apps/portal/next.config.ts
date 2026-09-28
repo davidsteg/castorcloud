@@ -10,6 +10,10 @@ const nextConfig: NextConfig = {
   env: { NEXT_PUBLIC_BASE_DOMAIN: process.env.BASE_DOMAIN },
   // Worker-only packages must not be bundled.
   serverExternalPackages: ["bullmq"],
+  // Container builds (apps/portal/Dockerfile) ship a self-contained server.
+  ...(process.env.PC_STANDALONE
+    ? { output: "standalone" as const, outputFileTracingRoot: path.resolve(process.cwd(), "../..") }
+    : {}),
 };
 
 export default nextConfig;

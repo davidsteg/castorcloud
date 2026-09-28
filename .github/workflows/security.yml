@@ -1,0 +1,128 @@
+name: Security
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  schedule:
+    # Weekly, so advisories published for unchanged code still surface.
+    - cron: "23 4 * * 1"
+
+permissions: {}
+
+concurrency:
+  group: security-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  codeql:
+    name: CodeQL (${{ matrix.language }})
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      actions: read # CodeQL reads workflow run metadata
+    strategy:
+      fail-fast: false
+      matrix:
+        language: [javascript-typescript, actions]
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - uses: github/codeql-action/init@2892aa5e19bbd11bc0cff5427e3b750a04d9e3c2 # v4.38.2
+        with:
+          languages: ${{ matrix.language }}
+          build-mode: none
+          queries: security-extended
+
+      # Code scanning uploads need GitHub Code Security on private repos, so
+      # results stay in the job: the summary lists them and any finding fails.
+      - uses: github/codeql-action/analyze@2892aa5e19bbd11bc0cff5427e3b750a04d9e3c2 # v4.38.2
+        with:
+          category: /language:${{ matrix.language }}
+          upload: never
+          output: sarif
+
+      - name: Fail on findings
+        env:
+          LANGUAGE: ${{ matrix.language }}
+        run: |
+          jq -r '.runs[] | .tool.driver.rules as $rules | .results[]
+            | "\(.ruleId)\t\(.locations[0].physicalLocation.artifactLocation.uri):\(.locations[0].physicalLocation.region.startLine)\t\(.message.text | split("\n")[0])"' \
+            sarif/*.sarif > findings.tsv
+          {
+            echo "## CodeQL ($LANGUAGE)"
+            if [[ -s findings.tsv ]]; then
+              echo "| Rule | Location | Message |"
+              echo "| --- | --- | --- |"
+              while IFS=$'\t' read -r rule loc msg; do echo "| $rule | $loc | $msg |"; done < findings.tsv
+            else
+              echo "No findings."
+            fi
+          } >> "$GITHUB_STEP_SUMMARY"
+          if [[ -s findings.tsv ]]; then
+            while IFS=$'\t' read -r rule loc msg; do echo "::error file=${loc%%:*},line=${loc##*:}::$rule: $msg"; done < findings.tsv
+            exit 1
+          fi
+
+  npm-audit:
+    name: npm audit
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: 24
+
+      # Pull requests fail only on advisories they add; main and the weekly
+      # run list everything in the summary.
+      - name: Audit dependencies
+        env:
+          BASE_REF: ${{ github.event_name == 'pull_request' && format('origin/{0}', github.base_ref) || '' }}
+        run: .github/scripts/audit-new.sh ${BASE_REF:+"$BASE_REF"}
+
+  gitleaks:
+    name: Secret scan (gitleaks)
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+
+      # Whole history, so a secret that was committed and later removed still counts.
+      - name: Scan
+        run: |
+          docker run --rm -v "$PWD:/repo" -w /repo \
+            zricethezav/gitleaks:v8.30.1@sha256:c00b6bd0aeb3071cbcb79009cb16a60dd9e0a7c60e2be9ab65d25e6bc8abbb7f \
+            git --redact --no-banner --exit-code 1 .
+
+  hadolint:
+    name: Dockerfile lint (hadolint)
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Lint
+        run: |
+          status=0
+          for f in $(git ls-files '*Dockerfile*'); do
+            echo "== $f"
+            docker run --rm -i -v "$PWD/.hadolint.yaml:/hadolint.yaml:ro" \
+              hadolint/hadolint:v2.15.1@sha256:32dac94127fd60b7b7e3fbfc65e1383b9b5e25c9bfd7b8536de7a539fe68a12d \
+              hadolint -c /hadolint.yaml --format tty - < "$f" || status=1
+          done
+          exit $status

@@ -1,0 +1,32 @@
+# Keeps pinned actions, base image digests and npm packages current.
+# Security updates arrive as soon as an advisory is published; the rest weekly.
+version: 2
+updates:
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: weekly
+    groups:
+      actions:
+        patterns: ["*"]
+
+  - package-ecosystem: docker
+    directories:
+      - /apps/portal
+      - /apps/provisioner
+      - /agent/tools
+      - /infra/node/cryptd
+    schedule:
+      interval: weekly
+    groups:
+      base-images:
+        patterns: ["*"]
+
+  - package-ecosystem: npm
+    directory: /
+    schedule:
+      interval: weekly
+    open-pull-requests-limit: 5
+    groups:
+      minor-and-patch:
+        update-types: [minor, patch]
