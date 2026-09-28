@@ -9,7 +9,8 @@ public security page (`/[locale]/security`) must never promise more than this.
 | Threat | Protected? | How |
 |---|---|---|
 | Stolen / decommissioned disks, hosting-provider staff with disk access | Yes | Per-tenant LUKS2 volume (AES-XTS-512); key never on the node's disk |
-| Backup provider reads backups | Yes (planned, phase 7) | restic, encrypted on the node with a per-tenant key |
+| Backup box (or whoever steals it) reads backups | Yes | Raw ZFS sends: backups stay encrypted with the tenant's own key, which never reaches the box. See [backups.md](backups.md) |
+| Someone with the provisioner's key wipes the backups | Partially | The box itself refuses to delete anything younger than 7 days or a tenant's newest backup |
 | Another customer reads my data | Yes | Separate stack, private networks, separate DBs, separate OIDC apps restricted to the tenant group |
 | Another household member reads my data through the assistant | Yes | One Hermes profile, API key and tools token per member; the tools use that member's own read-only credentials (or Paperless' visibility rules). See [assistant.md](assistant.md) |
 | The AI provider keeps or trains on my data | By contract + config | Zero-data-retention, no-training routing enforced by the gateway; only the question and short excerpts leave the stack, never images |
@@ -36,6 +37,8 @@ We therefore never claim "zero knowledge" or "we cannot read your data".
   typical I/O). No per-file encryption, no impact on search/ML features.
 - **Crypto-shredding**: deleting a tenant destroys the LUKS header *and* the
   wrapped key. Leftover copies or backups of the volume become unreadable.
+  Encrypted control-plane database dumps still hold the wrapped key for up to
+  30 days, so deletion is final at most 30 days later ([backups.md](backups.md)).
 - **Locking**: suspending a tenant closes the volume. After a node reboot all
   volumes are closed until the provisioner re-opens them.
 - **Tenant secrets** (DB passwords, OIDC client secrets): `Secret` table,
@@ -51,6 +54,7 @@ We therefore never claim "zero knowledge" or "we cannot read your data".
 | Stripe secret key, webhook secret | control plane env | Restricted key; webhook signature verified on every call |
 | `LITELLM_MASTER_KEY` | control plane + node env | The one key that also lives on nodes (the gateway needs it). It manages LLM keys and budgets only, it cannot unlock data. The portal and bot use each tenant's own key |
 | `TELEGRAM_BOT_TOKEN` | control plane env | Whoever holds it can read and answer messages sent to the bot |
+| Database dump secret key | **offline only** | Opens the control-plane database dumps (`npm run backup -- db-keygen`). Keep it with offline copies of `VOLUME_KEK` and `SECRETS_ENCRYPTION_KEY`: restoring a lost control plane needs all three |
 
 Never store these on data-plane nodes.
 
@@ -91,7 +95,7 @@ Deleting a tenant destroys the data and keys, so it needs no revocation.
 
 ## Open items before launch
 
-- Backups (restic, per-tenant key, off-site in CH) and restore drills.
+- Backup box off-site in Switzerland, and a restore drill before launch ([backups.md](backups.md)).
 - KEK in HSM/Vault; Authentik service-account token; Stripe restricted key.
 - Rate limiting on signup/login; CSP for the portal; security headers (HSTS).
 - Monitoring and alerting (volume fill level ≥ 90 %, failed jobs).

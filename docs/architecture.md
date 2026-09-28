@@ -104,7 +104,7 @@ agent/tools/            read-only MCP servers for the assistant (Hermes runs fro
 2. **Single stack by hand** – one working customer compose (all 4 services, OIDC, shared ML/tika), skin proxy + CSS; prove SSO-in-iframe works.
 3. **Provisioner** – automate phase 2 end to end (create/suspend/delete).
 4. **Portal shell** – nav, iframes + bridge, dashboard widgets, onboarding/QR, admin console. ← **MVP done**
-5. Hermes agent + MCP tools, LLM gateway, web chat, Telegram. ← **built** 6. Stripe plans/quotas. 7. restic backups, monitoring (Prometheus/Grafana/Uptime Kuma), update pipeline.
+5. Hermes agent + MCP tools, LLM gateway, web chat, Telegram. ← **built** 6. Stripe plans/quotas. 7. Encrypted ZFS backups ([backups.md](backups.md)) ← **built**, monitoring (Prometheus/Grafana/Uptime Kuma), update pipeline.
 
 ## Risks / notes
 - **Licenses**: Immich/Dawarich AGPL-3, Paperless GPL-3, AirTrail GPL-3 – offering them as SaaS is allowed, but any modified source must be published; keep license/attribution reachable (e.g. "About" page). Don't use their trademarks in the brand.

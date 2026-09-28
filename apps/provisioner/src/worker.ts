@@ -16,6 +16,7 @@ const { Authentik } = await import("./authentik.ts");
 const { Lifecycle } = await import("./lifecycle.ts");
 const { LlmGateway } = await import("./llm.ts");
 const { Nodes } = await import("./nodes.ts");
+const { Backups, backupSettings } = await import("./backup.ts");
 const { parseEnvFile } = await import("./tenant.ts");
 type TenantJobData = import("@pc/core").TenantJobData;
 
@@ -38,6 +39,9 @@ const assistant = process.env.LITELLM_MASTER_KEY
   : undefined;
 const lifecycle = new Lifecycle((id) => nodes.forTenant(id), ak, platform, parseEnvFile(readFileSync(versionsFile, "utf8")), versionsFile, assistant);
 const connection = redisConnection();
+const backupConfig = backupSettings();
+const backups = backupConfig ? new Backups(backupConfig) : undefined;
+if (!backups) console.warn("BACKUP_TARGET is not set: tenant backups are OFF");
 
 // Self-registration flow: verified e-mail when SMTP is configured.
 await ak.ensureBlueprintInstance(
@@ -93,6 +97,22 @@ async function run(job: BullJob<TenantJobData>) {
       await lifecycle.delete(tenantId);
       await log("deleted");
       break;
+    case "RESTORE": {
+      if (!backups) throw new Error("BACKUP_TARGET is not set");
+      const row = await prisma.job.findUniqueOrThrow({ where: { id: jobId } });
+      const params = row.params as { gen: string; snap: string; received?: boolean } | null;
+      if (!params?.gen || !params.snap) throw new Error("RESTORE needs params { gen, snap }");
+      // A retry after the data is back only restarts the stack.
+      if (!params.received) {
+        await lifecycle.stop(tenantId);
+        const tenant = await prisma.tenant.findUniqueOrThrow({ where: { id: tenantId }, include: { node: true } });
+        if (!tenant.node) throw new Error("tenant has no node");
+        await backups.restore(tenant, tenant.node, params.gen, params.snap, log);
+        await prisma.job.update({ where: { id: jobId }, data: { params: { ...params, received: true } } });
+      }
+      await lifecycle.apply(tenantId, report);
+      break;
+    }
   }
   await prisma.job.update({ where: { id: jobId }, data: { status: "SUCCEEDED", finishedAt: new Date() } });
 }
@@ -122,6 +142,33 @@ const maintenance = new Queue("maintenance", { connection });
 await maintenance.upsertJobScheduler("sweep-deletions", { every: 60 * 60 * 1000 }, { name: "sweep-deletions" });
 await maintenance.upsertJobScheduler("measure-storage", { every: 60 * 60 * 1000 }, { name: "measure-storage" });
 await maintenance.upsertJobScheduler("watch-nodes", { every: 5 * 60 * 1000 }, { name: "watch-nodes" });
+
+// Backups: their own queue, so a long first send doesn't hold up the node
+// watcher. Every BACKUP_INTERVAL_HOURS: send, then prune. Nightly: the
+// control-plane database. Weekly: read every tenant's newest backup back.
+if (backups) {
+  const backupQueue = new Queue("backups", { connection });
+  await backupQueue.upsertJobScheduler("backup-tenants", { every: backups.s.intervalHours * 3600_000 }, { name: "backup-tenants" });
+  await backupQueue.upsertJobScheduler("backup-database", { pattern: "30 2 * * *", tz: platform.timeZone }, { name: "backup-database" });
+  await backupQueue.upsertJobScheduler("verify-backups", { pattern: "0 4 * * 0", tz: platform.timeZone }, { name: "verify-backups" });
+  new Worker(
+    "backups",
+    async (job) => {
+      const log = (line: string) => console.log(`[${job.name}] ${line}`);
+      if (job.name === "backup-tenants") {
+        await backups.runAll(log);
+        for (const p of await backups.problems()) console.error(`[backup ${p.slug}] ${p.issues.join("; ")}`);
+      } else if (job.name === "backup-database") {
+        if (backups.s.dbPublicKey) await backups.dumpDatabase(log);
+        else console.error("[backup-database] BACKUP_DB_PUBLIC_KEY is not set: the control-plane database is NOT backed up");
+      } else if (job.name === "verify-backups") {
+        await backups.verifyAll(log);
+      }
+    },
+    // Hours-long sends: renew the lock well within its duration.
+    { connection, concurrency: 1, lockDuration: 5 * 60_000 },
+  );
+}
 
 new Worker(
   "maintenance",

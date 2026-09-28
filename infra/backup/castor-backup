@@ -1,0 +1,158 @@
+#!/bin/sh
+# The backup box: receives tenant datasets as raw (still encrypted) ZFS
+# streams and keeps their snapshots. It never holds a tenant key, so it can't
+# read what it stores. authorized_keys runs this as the provisioner's forced
+# command; it re-runs itself as root through sudo for the zfs calls.
+#
+#   castor-backup pool                         "pool <size-mb> <alloc-mb> <health>"
+#   castor-backup list                         "<slug> <gen> <snap> <created-epoch> <used-bytes>"
+#                                              per snapshot, oldest first
+#   castor-backup recv   <slug> <gen>          raw stream on stdin -> <root>/t/<slug>/<gen>
+#                                              (a full stream starts a new generation)
+#   castor-backup send   <slug> <gen> <snap>   raw full stream of that snapshot (restore)
+#   castor-backup verify <slug> <gen> <snap>   reads the snapshot back, checking every
+#                                              block's checksum; prints "ok"
+#   castor-backup prune  <slug> <gen> <snap>   destroys one snapshot
+#   castor-backup forget <slug>                destroys everything of a deleted tenant
+#   castor-backup db-put <name>                encrypted control-plane dump on stdin
+#   castor-backup db-list                      "<name> <bytes>" per dump
+#   castor-backup db-get <name>                that dump on stdout
+#
+# Its own guard, whatever the control plane asks: nothing younger than
+# MIN_DAYS (default 7, set in castor-backup.conf) is ever deleted, nor a
+# tenant's newest snapshot. A stolen provisioner key can add backups, not wipe
+# recent ones. Nothing is received with -F (history is never rolled back).
+#
+# Setup (as root, once): castor-backup init <pool>. See README.md.
+set -euf
+PATH=/usr/local/zfs/bin:/usr/sbin:/usr/bin:/sbin:/bin
+HERE=$(cd "$(dirname "$0")" && pwd)
+BIN=$HERE/castor-backup
+# Next to the script, on the pool: survives TrueNAS updates, unlike /etc.
+CONF=$HERE/castor-backup.conf
+
+if [ "$(id -u)" != 0 ]; then
+  # Forced command: the words come from SSH_ORIGINAL_COMMAND.
+  set -- $(printf '%s' "${SSH_ORIGINAL_COMMAND:-}" | tr -d "'\"")
+  for a in "$@"; do
+    case "$a" in *[!A-Za-z0-9._-]*) echo "castor-backup: bad argument" >&2; exit 2;; esac
+  done
+  [ "${1:-}" = castor-backup ] && shift
+  [ "${1:-}" = init ] && { echo "castor-backup: init runs as root" >&2; exit 2; }
+  exec sudo -n "$BIN" "$@"
+fi
+
+cmd=${1:?command}
+if [ "$cmd" = init ]; then
+  pool=${2:?usage: castor-backup init <pool>}
+  zpool list -H -o name "$pool" >/dev/null
+  printf 'POOL=%s\n' "$pool" > "$CONF"
+  zfs list -H "$pool/castor-backup" >/dev/null 2>&1 || zfs create -o canmount=off "$pool/castor-backup"
+  zfs list -H "$pool/castor-backup/t" >/dev/null 2>&1 || zfs create -o canmount=off "$pool/castor-backup/t"
+  # Dumps are encrypted before they leave the control plane; this is a plain
+  # dataset at its default mountpoint (TrueNAS: /mnt/<pool>/castor-backup/db).
+  zfs list -H "$pool/castor-backup/db" >/dev/null 2>&1 || zfs create "$pool/castor-backup/db"
+  chmod 700 "$(zfs get -H -o value mountpoint "$pool/castor-backup/db")"
+  echo "ready: $pool/castor-backup"
+  exit 0
+fi
+
+[ -r "$CONF" ] || { echo "not set up: castor-backup init <pool>" >&2; exit 2; }
+. "$CONF"
+ROOT="$POOL/castor-backup"
+# Set in the config file only: sudo drops the caller's environment.
+MIN_DAYS=${MIN_DAYS:-7}
+DB_DAYS=${DB_DAYS:-30}
+[ "$DB_DAYS" -ge "$MIN_DAYS" ] || DB_DAYS=$MIN_DAYS
+DBDIR=$(zfs get -H -o value mountpoint "$ROOT/db")
+
+slug_ok() { case "$1" in ""|-*|*[!a-z0-9-]*) echo "invalid slug" >&2; exit 2;; esac; }
+gen_ok() { case "$1" in g[1-9]*) case "${1#g}" in *[!0-9]*) echo "invalid generation" >&2; exit 2;; esac;; *) echo "invalid generation" >&2; exit 2;; esac; }
+snap_ok() { case "$1" in cb-*[!A-Za-z0-9-]*|cb-) echo "invalid snapshot" >&2; exit 2;; cb-*) ;; *) echo "invalid snapshot" >&2; exit 2;; esac; }
+file_ok() { case "$1" in cp-*[!A-Za-z0-9.-]*|*..*) echo "invalid name" >&2; exit 2;; cp-*.enc) ;; *) echo "invalid name" >&2; exit 2;; esac; }
+exists() { zfs list -H -o name "$1" >/dev/null 2>&1; }
+created() { zfs get -Hp -o value creation "$1"; }
+# Newest snapshot of a tenant across its generations.
+newest() { zfs list -Hp -o name -t snapshot -s creation -r "$ROOT/t/$1" 2>/dev/null | tail -n 1; }
+old_enough() { [ $(( $(date +%s) - $1 )) -ge $(( MIN_DAYS * 86400 )) ]; }
+
+case "$cmd" in
+  pool)
+    zpool list -Hp -o size,alloc,health "$POOL" | awk '{ printf "pool %d %d %s\n", $1/1048576, $2/1048576, $3 }'
+    ;;
+  list)
+    zfs list -Hp -o name,creation,used -t snapshot -s creation -r "$ROOT/t" | awk -v root="$ROOT/t/" '
+      index($1, root) == 1 {
+        rest = substr($1, length(root) + 1)       # <slug>/<gen>@<snap>
+        split(rest, a, "[/@]")
+        if (a[3] != "") print a[1], a[2], a[3], $2, $3
+      }'
+    ;;
+  recv)
+    slug=${2:?slug}; slug_ok "$slug"; gen=${3:?gen}; gen_ok "$gen"
+    exists "$ROOT/t/$slug" || zfs create -o canmount=off "$ROOT/t/$slug"
+    # Incremental into an existing generation, or a full stream into a new one.
+    # -u: never mounted (it couldn't be: no key). No -F: history is never rolled back.
+    if exists "$ROOT/t/$slug/$gen"; then
+      zfs receive -u "$ROOT/t/$slug/$gen"
+    else
+      zfs receive -u -o canmount=off "$ROOT/t/$slug/$gen"
+    fi
+    echo "received"
+    ;;
+  send|verify|prune)
+    slug=${2:?slug}; slug_ok "$slug"; gen=${3:?gen}; gen_ok "$gen"; snap=${4:?snap}; snap_ok "$snap"
+    s="$ROOT/t/$slug/$gen@$snap"
+    exists "$s" || { echo "missing" >&2; exit 3; }
+    case "$cmd" in
+      send) exec zfs send -w "$s" ;;
+      verify)
+        # Reading the stream makes ZFS check every block against its checksum.
+        zfs send -w "$s" > /dev/null
+        echo "ok"
+        ;;
+      prune)
+        [ "$(newest "$slug")" = "$s" ] && { echo "refused: newest backup of $slug" >&2; exit 4; }
+        old_enough "$(created "$s")" || { echo "refused: younger than $MIN_DAYS days" >&2; exit 4; }
+        zfs destroy "$s"
+        # A generation without snapshots is only its (unreachable) head: remove it.
+        if [ -z "$(zfs list -H -o name -t snapshot -d 1 "$ROOT/t/$slug/$gen")" ]; then
+          zfs destroy "$ROOT/t/$slug/$gen"
+        fi
+        echo "pruned"
+        ;;
+    esac
+    ;;
+  forget)
+    slug=${2:?slug}; slug_ok "$slug"
+    exists "$ROOT/t/$slug" || { echo "forgotten"; exit 0; }
+    last=$(newest "$slug")
+    if [ -n "$last" ]; then
+      old_enough "$(created "$last")" || { echo "refused: newest backup younger than $MIN_DAYS days" >&2; exit 4; }
+    fi
+    zfs destroy -r "$ROOT/t/$slug"
+    echo "forgotten"
+    ;;
+  db-put)
+    name=${2:?name}; file_ok "$name"
+    [ -e "$DBDIR/$name" ] && { echo "exists" >&2; exit 2; }
+    umask 077
+    cat > "$DBDIR/$name.tmp"
+    mv "$DBDIR/$name.tmp" "$DBDIR/$name"
+    # Dumps older than DB_DAYS go, but never the newest three.
+    find "$DBDIR" -maxdepth 1 -name 'cp-*.enc' | sort -r | awk 'NR > 3' | while read -r f; do
+      [ -n "$(find "$f" -mtime +"$DB_DAYS")" ] && rm -f "$f"
+    done
+    echo "stored $name"
+    ;;
+  db-list)
+    find "$DBDIR" -maxdepth 1 -name 'cp-*.enc' | sort | while read -r f; do
+      printf '%s %s\n' "$(basename "$f")" "$(wc -c < "$f" | tr -d ' ')"
+    done
+    ;;
+  db-get)
+    name=${2:?name}; file_ok "$name"
+    exec cat "$DBDIR/$name"
+    ;;
+  *) echo "unknown command: $cmd" >&2; exit 2;;
+esac

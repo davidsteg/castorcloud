@@ -1,0 +1,127 @@
+#!/bin/sh
+# Backup side of the tenant datasets on a node (macOS or TrueNAS SCALE).
+# Runs as root via sudo; the provisioner reaches it through the node's SSH
+# gate, next to castor-zfs. It never sees a key: raw sends (zfs send -w) carry
+# the data still encrypted, and a received dataset stays locked until
+# castor-zfs opens it with the tenant's key.
+#
+#   castor-snap snapshot  <slug> <snap>           creates <ds>@<snap>
+#   castor-snap send      <slug> <snap> [<base>]  raw stream of @<snap> on stdout,
+#                                                 incremental from bookmark #<base>
+#   castor-snap sent      <slug> <snap>           bookmarks @<snap> as #<snap>, then drops
+#                                                 every backup snapshot and older bookmark
+#   castor-snap drop      <slug> <snap>           destroys @<snap> (a failed backup)
+#   castor-snap bookmarks <slug>                  backup bookmarks, oldest first
+#   castor-snap set-aside <slug> <tag>            locks <ds> and renames it to <ds>.<tag>
+#   castor-snap receive   <slug> <quota-mb>       raw stream on stdin -> <ds> (must not
+#                                                 exist), left locked and unmounted
+#   castor-snap put-back  <slug> <tag>            undoes set-aside (a failed restore)
+#   castor-snap discard   <slug> <tag>            destroys <ds>.<tag> after a restore
+#
+# Snapshots only live while they're sent: afterwards a bookmark (no space)
+# is the base of the next incremental, so backups don't eat the tenant's quota.
+# Backup snapshots and bookmarks are named cb-<UTC time>.
+set -eu
+PATH=/usr/local/zfs/bin:/usr/sbin:/usr/bin:/sbin:/bin
+# The node's castor.conf (root-owned, next to the scripts, shared with
+# castor-zfs) names the pool and where tenant datasets live: TrueNAS
+# <pool>/castor/t, macOS castor/t. sudo clears the environment, so it's read
+# from there, not from the caller.
+here=$(cd "$(dirname "$0")" && pwd)
+if [ -f "$here/castor.conf" ]; then . "$here/castor.conf"; fi
+POOL=${POOL:-castor}
+PARENT=${DATASET_ROOT:-$POOL/t}
+MPROP=ch.castorcloud:mountpoint
+
+cmd=${1:?command}
+slug=${2:?slug}
+case "$slug" in ""|-*|*[!a-z0-9-]*) echo "invalid slug" >&2; exit 2;; esac
+ds="$PARENT/$slug"
+
+name_ok() { case "$1" in cb-*[!A-Za-z0-9-]*|cb-) echo "invalid name: $1" >&2; exit 2;; cb-*) ;; *) echo "invalid name: $1" >&2; exit 2;; esac; }
+tag_ok() { case "$1" in ""|*[!a-z0-9-]*) echo "invalid tag" >&2; exit 2;; esac; }
+exists() { zfs list -H -o name "$1" >/dev/null 2>&1; }
+need() { exists "$ds" || { echo "missing"; exit 3; }; }
+
+case "$cmd" in
+  snapshot)
+    name_ok "${3:?snap}"; need
+    zfs snapshot "$ds@$3"
+    echo "snapshot $3"
+    ;;
+  send)
+    name_ok "${3:?snap}"; need
+    if [ -n "${4:-}" ]; then
+      name_ok "$4"
+      exec zfs send -w -i "$ds#$4" "$ds@$3"
+    fi
+    exec zfs send -w "$ds@$3"
+    ;;
+  sent)
+    name_ok "${3:?snap}"; need
+    exists "$ds#$3" || zfs bookmark "$ds@$3" "$ds#$3"
+    zfs list -H -o name -t snapshot -d 1 "$ds" | while read -r s; do
+      case "${s#*@}" in cb-*) zfs destroy "$s";; esac
+    done
+    zfs list -H -o name -t bookmark -d 1 "$ds" | while read -r b; do
+      case "${b#*#}" in "$3") ;; cb-*) zfs destroy "$b";; esac
+    done
+    echo "sent $3"
+    ;;
+  drop)
+    name_ok "${3:?snap}"
+    if exists "$ds@$3"; then zfs destroy "$ds@$3"; fi
+    echo "dropped $3"
+    ;;
+  bookmarks)
+    need
+    zfs list -H -o name -t bookmark -s createtxg -d 1 "$ds" | while read -r b; do
+      case "${b#*#}" in cb-*) echo "${b#*#}";; esac
+    done
+    ;;
+  set-aside)
+    tag=${3:?tag}; tag_ok "$tag"
+    exists "$ds" || { echo "missing"; exit 0; }
+    exists "$ds.$tag" && { echo "exists: $slug.$tag" >&2; exit 2; }
+    # Remember where it was mounted: the restored dataset takes its place.
+    src=$(zfs get -H -o source mountpoint "$ds")
+    if [ "$src" = local ]; then zfs set "$MPROP=$(zfs get -H -o value mountpoint "$ds")" "$ds"; fi
+    if [ "$(zfs get -H -o value mounted "$ds")" = yes ]; then zfs unmount "$ds"; fi
+    if [ "$(zfs get -H -o value keystatus "$ds")" = available ]; then zfs unload-key "$ds"; fi
+    zfs set canmount=noauto "$ds"
+    zfs rename "$ds" "$ds.$tag"
+    echo "set aside $slug.$tag"
+    ;;
+  receive)
+    quota=${3:?quota-mb}
+    case "$quota" in ""|*[!0-9]*) echo "invalid size" >&2; exit 2;; esac
+    exists "$ds" && { echo "exists: set it aside first" >&2; exit 2; }
+    # A raw stream keeps the tenant's encryption; the quota and mountpoint
+    # aren't in it, so they're set here (mountpoint: from the dataset set aside).
+    mp=$(zfs list -H -o name,"$MPROP" -s creation -d 1 "$PARENT" | awk -v p="$ds." 'index($1, p) == 1 && $2 != "-" { m = $2 } END { print m }')
+    if [ -n "$mp" ]; then
+      zfs receive -u -o quota="${quota}M" -o mountpoint="$mp" "$ds"
+    else
+      zfs receive -u -o quota="${quota}M" "$ds"
+    fi
+    zfs set keylocation=prompt "$ds"
+    # Snapshots that came with the stream: the next backup starts a new chain.
+    zfs list -H -o name -t snapshot -d 1 "$ds" | while read -r s; do zfs destroy "$s"; done
+    echo "received"
+    ;;
+  put-back)
+    tag=${3:?tag}; tag_ok "$tag"
+    exists "$ds.$tag" || { echo "nothing set aside as $slug.$tag" >&2; exit 3; }
+    exists "$ds" && { echo "exists: $slug (not overwriting)" >&2; exit 2; }
+    zfs rename "$ds.$tag" "$ds"
+    zfs set canmount=on "$ds"
+    zfs inherit "$MPROP" "$ds"
+    echo "put back"
+    ;;
+  discard)
+    tag=${3:?tag}; tag_ok "$tag"
+    if exists "$ds.$tag"; then zfs destroy -r "$ds.$tag"; fi
+    echo "discarded $slug.$tag"
+    ;;
+  *) echo "unknown command: $cmd" >&2; exit 2;;
+esac

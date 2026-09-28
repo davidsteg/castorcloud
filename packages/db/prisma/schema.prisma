@@ -46,6 +46,7 @@ enum JobKind {
   RESUME
   DELETE
   REVOKE_ACCESS // process the tenant's pending AccessRevocations
+  RESTORE  // puts a backup back onto the tenant's node (params: gen, snap)
 }
 
 enum RevocationScope {
@@ -133,6 +134,7 @@ model Tenant {
   services             ServiceInstance[]
   secrets              Secret[]
   volumeKey            VolumeKey?
+  backup               TenantBackup?
   jobs                 Job[]
   revocations          AccessRevocation[]
   createdAt            DateTime        @default(now())
@@ -233,6 +235,8 @@ model Job {
   step       String?   // last completed step, shown on the welcome page
   error      String?
   log        String    @default("")
+  /// Job arguments (RESTORE: which backup)
+  params     Json?
   createdAt  DateTime  @default(now())
   finishedAt DateTime?
 }
@@ -251,6 +255,28 @@ model AccessRevocation {
   createdAt DateTime        @default(now())
 
   @@index([tenantId])
+}
+
+/// Backups of the tenant's encrypted dataset on the backup box: raw ZFS
+/// streams, so the box never holds a key (docs/backups.md).
+model TenantBackup {
+  tenant         Tenant    @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  tenantId       String    @id
+  /// Chain on the backup box (t/<slug>/g<n>). A restore, or a lost base on
+  /// the node, starts the next one with a full send.
+  generation     Int       @default(0)
+  /// Newest backup sent; the node keeps it as a bookmark, the next incremental's base
+  lastSnapshot   String?
+  lastBytes      BigInt?
+  lastSuccessAt  DateTime?
+  lastAttemptAt  DateTime?
+  lastError      String?
+  /// Consecutive failed runs
+  failures       Int       @default(0)
+  /// Newest backup read back on the box with every checksum verified
+  lastVerifiedAt DateTime?
+  verifyError    String?
+  updatedAt      DateTime  @updatedAt
 }
 
 /// Append-only record of security-relevant actions (key access, staff access,
