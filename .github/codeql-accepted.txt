@@ -5,3 +5,7 @@
 # The monitor opens a TLS connection only to read the certificate's expiry
 # and trust status (socket.authorized); it sends nothing over it.
 js/disabling-certificate-validation apps/provisioner/src/monitor.ts
+
+# Assistant API keys are 30 random bytes (240 bits), not passwords: a fast
+# hash is right for them, and a slow one would add nothing.
+js/insufficient-password-hash agent/tools/src/db.ts

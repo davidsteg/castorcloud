@@ -13,8 +13,16 @@ export function clampLimit(limit: number | undefined, fallback = 10) {
 /** Plain text, whitespace collapsed, cut at a word boundary. */
 export function excerpt(text: string | null | undefined, max = EXCERPT_CHARS): string | undefined {
   if (!text) return undefined;
-  // Tags go, then any stray angle bracket, so no markup survives in any form.
-  const plain = text.replace(/<[^>]*>/g, "").replace(/[<>]/g, "").replace(/\s+/g, " ").trim();
+  // Drops everything from "<" to ">", and both brackets, so no tag survives
+  // however the input nests them.
+  let stripped = "";
+  let inTag = false;
+  for (const ch of text) {
+    if (ch === "<") inTag = true;
+    else if (ch === ">") inTag = false;
+    else if (!inTag) stripped += ch;
+  }
+  const plain = stripped.replace(/\s+/g, " ").trim();
   if (plain.length <= max) return plain || undefined;
   const cut = plain.slice(0, max);
   const space = cut.lastIndexOf(" ");
