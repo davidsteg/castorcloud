@@ -3,6 +3,7 @@ import { STORAGE_UNIT_GB, formatChf, quote } from "@pc/pricing";
 import { auth, signIn } from "@/auth";
 import { fill, getDictionary, type Locale } from "@/i18n";
 import { configFromQuery, configToQuery } from "@/lib/plan";
+import { BETA } from "@/lib/config";
 import { stripe } from "@/lib/stripe";
 import { SiteHeader } from "@/components/site/SiteHeader";
 import { SignupForm } from "./SignupForm";
@@ -33,6 +34,7 @@ export default async function SignupPage({
       <main className="flow">
         <h1>{t.signup.title}</h1>
         <p className="lead">{session ? t.signup.lead : t.signup.signInFirst}</p>
+        {BETA && <p className="notice" style={{ marginBottom: 24 }}>{t.beta.signupNotice}</p>}
 
         <div className="panel" style={{ marginBottom: 24 }}>
           <h3 style={{ display: "flex", justifyContent: "space-between" }}>
@@ -53,7 +55,7 @@ export default async function SignupPage({
         </div>
 
         {session ? (
-          <SignupForm locale={locale} t={t} config={query} devMode={!stripe()} />
+          <SignupForm locale={locale} t={t} config={query} devMode={!stripe()} beta={BETA} />
         ) : (
           <form action={login}>
             <button className="button block" type="submit">{t.signup.signIn}</button>

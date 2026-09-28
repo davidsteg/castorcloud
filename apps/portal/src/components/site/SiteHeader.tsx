@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { BRAND_NAME } from "@/lib/config";
+import { BETA, BRAND_NAME } from "@/lib/config";
 import { LOCALES, type Dictionary, type Locale } from "@/i18n";
 
 /** castorcloud.ch: beaver mark + wordmark (text, so it stays crisp at any size). */
@@ -18,6 +18,15 @@ export function Logo({ size = 34 }: { size?: number }) {
 export function SiteHeader({ locale, t, path = "" }: { locale: Locale; t: Dictionary; path?: string }) {
   const home = `/${locale}`;
   return (
+    <>
+    {BETA && (
+      <div className="beta-banner" role="note">
+        <div className="container">
+          <span>{t.beta.banner}</span>
+          <Link href={`${home}/beta`}>{t.beta.more}</Link>
+        </div>
+      </div>
+    )}
     <header className="site-header">
       <div className="container">
         <Link href={home} aria-label={BRAND_NAME}>
@@ -47,5 +56,6 @@ export function SiteHeader({ locale, t, path = "" }: { locale: Locale; t: Dictio
         </div>
       </div>
     </header>
+    </>
   );
 }

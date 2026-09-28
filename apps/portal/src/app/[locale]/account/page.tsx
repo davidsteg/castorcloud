@@ -1,10 +1,14 @@
 import Link from "next/link";
 import { redirect } from "next/navigation";
 import { prisma } from "@pc/db";
+import { normalizeEmail } from "@pc/core";
 import { MAX_STORAGE_UNITS, fitsStorage, formatStorage, minStorageUnits, storageQuotaMb } from "@pc/pricing";
 import { signIn } from "@/auth";
 import { fill, getDictionary, type Locale } from "@/i18n";
 import { APP_LABEL, BASE_DOMAIN, PUBLIC_SCHEME } from "@/lib/config";
+import { withdrawApplication } from "@/lib/applications";
+import { checkoutUrl } from "@/lib/checkout";
+import { subscribe, unsubscribe } from "@/lib/newsletter";
 import { currentUser, memberTenant, ownedTenant } from "@/lib/session";
 import { signOutAllDevices, signOutBrowser } from "@/lib/signout";
 import { itemKeyFromLookup, stripe } from "@/lib/stripe";
@@ -40,6 +44,43 @@ export default async function AccountPage({ params }: { params: Promise<{ locale
     include: { members: { where: { userId: user.id }, select: { role: true } } },
     orderBy: { createdAt: "asc" },
   });
+
+  const email = normalizeEmail(user.email);
+  const newsletter = email ? await prisma.newsletterSubscriber.findUnique({ where: { email } }) : null;
+
+  // An approved application (or, outside the beta, an interrupted signup) waits for payment.
+  async function pay(form: FormData) {
+    "use server";
+    const me = await currentUser();
+    if (!me) return;
+    const url = await checkoutUrl(String(form.get("tenantId")), me, locale, `/${locale}/account`);
+    if (url) redirect(url);
+  }
+
+  async function withdraw(form: FormData) {
+    "use server";
+    const me = await currentUser();
+    if (me) await withdrawApplication(me, String(form.get("tenantId")));
+    redirect(`/${locale}/account`);
+  }
+
+  // Always the signed-in user's own address: the form carries no e-mail.
+  async function newsletterSubscribe() {
+    "use server";
+    const me = await currentUser();
+    const address = normalizeEmail(me?.email);
+    if (address) await subscribe(address, locale, "account");
+    redirect(`/${locale}/account`);
+  }
+
+  async function newsletterUnsubscribe() {
+    "use server";
+    const me = await currentUser();
+    const address = normalizeEmail(me?.email);
+    const sub = address ? await prisma.newsletterSubscriber.findUnique({ where: { email: address } }) : null;
+    if (sub) await unsubscribe(sub.id);
+    redirect(`/${locale}/account`);
+  }
 
   async function billing(form: FormData) {
     "use server";
@@ -87,7 +128,21 @@ export default async function AccountPage({ params }: { params: Promise<{ locale
               <p className="small-print" style={{ marginBottom: 16 }}>
                 {tenant.slug}.{BASE_DOMAIN} · {t.account.status[tenant.status]}
               </p>
+              {tenant.status === "APPLIED" && <p className="small-print" style={{ marginBottom: 16 }}>{t.apply.reviewing}</p>}
+              {tenant.status === "PENDING" && tenant.reviewedAt && <p className="small-print" style={{ marginBottom: 16 }}>{t.apply.approved}</p>}
               <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
+                {tenant.status === "PENDING" && tenant.members[0]?.role === "OWNER" && (
+                  <form action={pay}>
+                    <input type="hidden" name="tenantId" value={tenant.id} />
+                    <button className="button small" type="submit">{t.apply.pay}</button>
+                  </form>
+                )}
+                {tenant.status === "APPLIED" && tenant.members[0]?.role === "OWNER" && (
+                  <form action={withdraw}>
+                    <input type="hidden" name="tenantId" value={tenant.id} />
+                    <button className="button secondary small" type="submit">{t.apply.withdraw}</button>
+                  </form>
+                )}
                 {tenant.status === "ACTIVE" && (
                   <a className="button small" href={`${PUBLIC_SCHEME}://${tenant.slug}.${BASE_DOMAIN}`}>{t.account.open}</a>
                 )}
@@ -131,6 +186,23 @@ export default async function AccountPage({ params }: { params: Promise<{ locale
             </div>
           ))}
           <Link className="button secondary block" href={`/${locale}/pricing`}>{t.account.create}</Link>
+          <div className="panel">
+            <h3 style={{ fontSize: 18, marginBottom: 4 }}>{t.newsletter.title}</h3>
+            <p className="small-print" style={{ marginBottom: 16 }}>
+              {newsletter?.status === "CONFIRMED" ? t.newsletter.accountSubscribed
+                : newsletter?.status === "PENDING" ? t.newsletter.accountPending
+                : t.newsletter.accountNone}
+            </p>
+            {newsletter?.status === "CONFIRMED" || newsletter?.status === "PENDING" ? (
+              <form action={newsletterUnsubscribe}>
+                <button className="button secondary small" type="submit">{t.newsletter.unsubscribeButton}</button>
+              </form>
+            ) : (
+              <form action={newsletterSubscribe}>
+                <button className="button secondary small" type="submit">{t.newsletter.subscribe}</button>
+              </form>
+            )}
+          </div>
           <form action={signOutBrowser}>
             <button className="button secondary block" type="submit">{t.account.logout}</button>
           </form>

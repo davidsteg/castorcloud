@@ -9,6 +9,7 @@
     "delete-tenant": "tsx src/delete-tenant.ts",
     "node": "tsx src/node-admin.ts",
     "backup": "tsx src/backup-admin.ts",
+    "staff": "tsx src/staff-admin.ts",
     "telegram": "cross-env NODE_EXTRA_CA_CERTS=../../.dev-certs/ca.crt tsx src/telegram.ts",
     "monitor": "cross-env NODE_EXTRA_CA_CERTS=../../.dev-certs/ca.crt tsx src/monitor.ts",
     "test": "node --test --experimental-strip-types src/*.test.ts",

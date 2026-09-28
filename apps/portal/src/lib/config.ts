@@ -45,3 +45,14 @@ export function tenantSlugFromHost(host: string | null): string | null {
   if (label === APP_LABEL || label.includes(".") || SERVICE_HOST_RE.test(label)) return null;
   return label;
 }
+
+/**
+ * Beta phase (BETA, on unless "off"): the site shows a beta notice and new
+ * clouds start as applications that staff review before payment (docs/beta.md).
+ */
+export const BETA = process.env.BETA !== "off";
+
+/** Absolute URL on the app host, e.g. for links in e-mails. */
+export function appUrl(path: string): string {
+  return `${PUBLIC_SCHEME}://${APP_LABEL}.${BASE_DOMAIN}${path}`;
+}
