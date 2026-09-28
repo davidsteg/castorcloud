@@ -1,5 +1,7 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
+import { AI_CREDIT_TIERS_CHF } from "./catalog.ts";
+import { aiBudgetChf, aiBudgetUsd } from "./ai-budget.ts";
 import { quote } from "./quote.ts";
 
 const parts = (q: ReturnType<typeof quote>) => Object.values(q.breakdown).reduce((a, b) => a + b, 0);
@@ -68,4 +70,16 @@ test("input is clamped and de-duplicated", () => {
   assert.deepEqual(q.config.services, ["photos"]);
   assert.equal(q.config.storageUnits, 50);
   assert.equal(q.config.extraMembers, 0);
+});
+
+test("the AI budget is the credit net of VAT and payment fees", () => {
+  // 10 / 1.081 - 10 * 3.6 % = 8.8906… -> 8.89
+  assert.equal(aiBudgetChf(10), 8.89);
+  assert.equal(aiBudgetChf(0), 0);
+  assert.equal(aiBudgetUsd(10, 1.1), 9.77);
+  for (const chf of AI_CREDIT_TIERS_CHF) {
+    const q = quote({ services: ["assistant"], storageUnits: 1, aiCreditChf: chf });
+    // Never more than what the price breakdown attributes to the credit.
+    assert.ok(aiBudgetChf(chf) * 100 <= q.breakdown.aiCreditRp);
+  }
 });

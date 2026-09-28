@@ -11,6 +11,8 @@ public security page (`/[locale]/security`) must never promise more than this.
 | Stolen / decommissioned disks, hosting-provider staff with disk access | Yes | Per-tenant LUKS2 volume (AES-XTS-512); key never on the node's disk |
 | Backup provider reads backups | Yes (planned, phase 7) | restic, encrypted on the node with a per-tenant key |
 | Another customer reads my data | Yes | Separate stack, private networks, separate DBs, separate OIDC apps restricted to the tenant group |
+| Another household member reads my data through the assistant | Yes | One Hermes profile, API key and tools token per member; the tools use that member's own read-only credentials (or Paperless' visibility rules). See [assistant.md](assistant.md) |
+| The AI provider keeps or trains on my data | By contract + config | Zero-data-retention, no-training routing enforced by the gateway; only the question and short excerpts leave the stack, never images |
 | Network eavesdropping | Yes | TLS everywhere; OIDC over HTTPS only |
 | Our staff reading data in routine operations | Organisational + audit | No standing access; break-glass requires two people, is written to `AuditLog`, customer is informed |
 | Root on a running node reading mounted data | **No** | The services (search, face recognition, OCR) must process data in clear while running. Only confidential computing (AMD SEV-SNP) could narrow this — possible future premium tier |
@@ -47,6 +49,8 @@ We therefore never claim "zero knowledge" or "we cannot read your data".
 | `SECRETS_ENCRYPTION_KEY` | control plane env | Same |
 | Authentik API token | control plane env | Dedicated service account with only the needed permissions (not the bootstrap token) |
 | Stripe secret key, webhook secret | control plane env | Restricted key; webhook signature verified on every call |
+| `LITELLM_MASTER_KEY` | control plane + node env | The one key that also lives on nodes (the gateway needs it). It manages LLM keys and budgets only, it cannot unlock data. The portal and bot use each tenant's own key |
+| `TELEGRAM_BOT_TOKEN` | control plane env | Whoever holds it can read and answer messages sent to the bot |
 
 Never store these on data-plane nodes.
 

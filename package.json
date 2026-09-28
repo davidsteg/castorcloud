@@ -3,7 +3,8 @@
   "private": true,
   "workspaces": [
     "apps/*",
-    "packages/*"
+    "packages/*",
+    "agent/*"
   ],
   "scripts": {
     "dev": "turbo run dev",
@@ -13,7 +14,9 @@
     "db:generate": "npm run generate -w @pc/db",
     "db:migrate": "npm run migrate -w @pc/db",
     "cp:up": "docker compose -f infra/control-plane/docker-compose.yml --env-file .env up -d",
-    "cp:down": "docker compose -f infra/control-plane/docker-compose.yml --env-file .env down"
+    "cp:up:prod": "docker compose -f infra/control-plane/docker-compose.yml -f infra/control-plane/docker-compose.prod.yml --env-file .env up -d",
+    "cp:down": "docker compose -f infra/control-plane/docker-compose.yml --env-file .env down",
+    "test": "turbo run test"
   },
   "devDependencies": {
     "turbo": "^2.5.0",

@@ -54,16 +54,37 @@ enum JobStatus {
   FAILED
 }
 
+enum NodeKind {
+  LOCAL // the Docker host the provisioner runs on (development), LUKS volumes
+  MAC   // Mac mini: OpenZFS on macOS + Docker in Colima, driven over SSH
+}
+
 model Node {
-  id        String   @id @default(cuid())
-  name      String   @unique
+  id          String    @id @default(cuid())
+  name        String    @unique
+  kind        NodeKind  @default(MAC)
   /// "local" = the Docker host the provisioner runs on (development)
-  sshHost   String
-  sshUser   String   @default("deploy")
-  capacity  Int      // max tenant stacks on this node
-  enabled   Boolean  @default(true)
-  tenants   Tenant[]
-  createdAt DateTime @default(now())
+  sshHost     String
+  sshUser     String    @default("deploy")
+  /// ZFS pool holding the tenant datasets (MAC nodes)
+  zfsPool     String?
+  /// What tenant containers resolve auth.<domain> to (extra_hosts); null = the platform default
+  authHostIp  String?
+  /// The Colima VM's LAN address: the control plane's Traefik forwards the
+  /// node's tenant hosts to its edge proxy there (port 80)
+  edgeHost    String?
+  capacity    Int       // max tenant stacks on this node
+  /// false = draining: keeps its tenants, gets no new ones
+  enabled     Boolean   @default(true)
+  // Measured by the provisioner (registration and health checks)
+  poolSizeMb  Int?
+  poolUsedMb  Int?
+  poolHealth  String?
+  memoryMb    Int?
+  lastSeenAt  DateTime?
+  lastError   String?
+  tenants     Tenant[]
+  createdAt   DateTime  @default(now())
 }
 
 model Tenant {
@@ -81,6 +102,15 @@ model Tenant {
   /// Monthly AI credit in CHF (hard spending limit of the assistant), 0 = none
   aiCreditChf          Int             @default(0)
   billingInterval      BillingInterval @default(MONTH)
+
+  // Storage, measured by the provisioner. The volume size is the hard quota.
+  /// Size of the encrypted volume in MB. Larger than the booking only while
+  /// a downgrade is held back because the data doesn't fit.
+  storageVolumeMb      Int?
+  storageUsedMb        Int?
+  /// Used MB per service: { photos, docs, places, flights, system }
+  storageByService     Json?
+  storageMeasuredAt    DateTime?
 
   // Billing
   stripeCustomerId     String?         @unique
@@ -117,9 +147,30 @@ model Member {
   user      User       @relation(fields: [userId], references: [id], onDelete: Cascade)
   userId    String
   role      MemberRole @default(MEMBER)
+  telegram  TelegramLink?
   createdAt DateTime   @default(now())
 
   @@unique([tenantId, userId])
+}
+
+/// A member's assistant on Telegram (opt-in), via the one Castor bot.
+/// Created with a pairing code shown in the portal; linked once the member
+/// sends that code to the bot.
+model TelegramLink {
+  id               String    @id @default(cuid())
+  member           Member    @relation(fields: [memberId], references: [id], onDelete: Cascade)
+  memberId         String    @unique
+  /// SHA-256 of the pending pairing code; cleared once linked
+  pairingCodeHash  String?   @unique
+  pairingExpiresAt DateTime?
+  /// Telegram user id (private chats only), set once linked
+  telegramUserId   BigInt?   @unique
+  telegramUsername String?
+  /// The assistant conversation messages go to; /new starts another
+  sessionId        String?
+  linkedAt         DateTime?
+  createdAt        DateTime  @default(now())
+  updatedAt        DateTime  @updatedAt
 }
 
 model ServiceInstance {

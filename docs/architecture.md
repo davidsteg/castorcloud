@@ -38,6 +38,8 @@ Decisions taken (from Q&A):
                     └──────────────────────────────────────────────────────────┘
 ```
 
+**Data-plane nodes are Mac minis** (see `infra/node/macos/README.md`): each one is an independent Docker host (Colima) driven over SSH, with tenant data on per-tenant encrypted ZFS datasets (OpenZFS on macOS) whose size is the storage quota. There is no cluster: a tenant is placed on one node at provisioning (`apps/provisioner/src/placement.ts`) and its data stays there. `*.domain` points at the control plane, whose Traefik terminates TLS and forwards each tenant's service hosts to that tenant's node (a generated `tenant-<slug>.yml` route), so DNS never changes per tenant. Each node runs a small edge Traefik for its stacks; the portal and Authentik stay on the control plane. The local Docker host (LUKS volumes via `pc-cryptd`) remains for development (`LOCAL_NODE=off` disables it).
+
 ### Domains (critical for seamless iframes + mobile apps)
 All under one registrable domain (e.g. `brand.cloud`) so embeds are **same-site** (no third-party-cookie problems):
 - `brand.cloud` – marketing, signup
@@ -71,10 +73,16 @@ All under one registrable domain (e.g. `brand.cloud`) so embeds are **same-site*
 6. Tenant `status=active` → email + portal redirect.
 Also: `suspend`, `resume`, `update` (rolling image bump), `export`, `delete` (GDPR) jobs. Idempotent steps, state machine per tenant.
 
-### Hermes agent (phase 2, designed now)
+### Hermes agent (phase 5, built – see [assistant.md](assistant.md))
 - Per-customer agent container in the stack, using **Nous Research Hermes Agent** with an external LLM API.
 - Tools via **MCP servers** we write (read-mostly): `immich` (search photos by text/place/date/person), `paperless` (full-text search, fetch doc/OCR text, tags), `dawarich` (where was I on X, trips, visits), `airtrail` (flights, stats). Cross-source questions: "When did I fly to Lisbon and show me photos + the hotel invoice."
 - Chat UI inside the portal shell (streaming). Clear data-processing consent since data goes to an external LLM; redact/limit what's sent (only tool results, not bulk data).
+
+### Storage quotas
+- The booked storage (units of 100 GB, `packages/pricing/src/storage.ts`) **is** the size of the tenant's LUKS volume, so a full volume is a full quota: no per-app quota settings to keep in sync.
+- Hourly the provisioner records usage per tenant (total from `df`, per service from `du` over the data directories) for the portal's storage meter, which warns at 80% and 95%.
+- Upgrades grow the volume online. Downgrades shrink it offline (stack stopped for a few minutes: `e2fsck`, `resize2fs`, LUKS resize) and only when the data fits with 10% to spare; otherwise the volume keeps its size, the job is audited (`volume.shrink_held`) and the portal asks the customer to delete files or book more.
+- Customers change storage on the account page, which only offers sizes that fit their data. The Stripe billing portal can still lower the quantity; the provisioner guard above covers that case.
 
 ---
 
@@ -88,7 +96,7 @@ packages/stack-templates/ compose + env templates per service, pinned versions
 packages/sdk/           typed clients for Immich/Paperless/Dawarich/AirTrail APIs (dashboard + agent)
 infra/control-plane/    docker-compose: traefik, authentik, postgres, redis, portal, provisioner
 infra/node/             node bootstrap (docker, traefik, skin proxy, shared ML/tika/gotenberg)
-agent/                  (phase 2) hermes container + mcp servers
+agent/tools/            read-only MCP servers for the assistant (Hermes runs from its upstream image)
 ```
 
 ## Phases
@@ -96,7 +104,7 @@ agent/                  (phase 2) hermes container + mcp servers
 2. **Single stack by hand** – one working customer compose (all 4 services, OIDC, shared ML/tika), skin proxy + CSS; prove SSO-in-iframe works.
 3. **Provisioner** – automate phase 2 end to end (create/suspend/delete).
 4. **Portal shell** – nav, iframes + bridge, dashboard widgets, onboarding/QR, admin console. ← **MVP done**
-5. Hermes agent + MCP tools. 6. Stripe plans/quotas. 7. restic backups, monitoring (Prometheus/Grafana/Uptime Kuma), update pipeline.
+5. Hermes agent + MCP tools, LLM gateway, web chat, Telegram. ← **built** 6. Stripe plans/quotas. 7. restic backups, monitoring (Prometheus/Grafana/Uptime Kuma), update pipeline.
 
 ## Risks / notes
 - **Licenses**: Immich/Dawarich AGPL-3, Paperless GPL-3, AirTrail GPL-3 – offering them as SaaS is allowed, but any modified source must be published; keep license/attribution reachable (e.g. "About" page). Don't use their trademarks in the brand.

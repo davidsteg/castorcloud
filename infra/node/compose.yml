@@ -26,5 +26,42 @@ services:
       - --chromium-allow-list=file:///tmp/.*
     restart: unless-stopped
 
+  # ------------------------------------------------------------ assistant
+  # LLM gateway (LiteLLM): the only way out to the AI provider. One virtual key
+  # per tenant with a hard monthly budget; privacy settings in litellm/*.yaml.
+  # Joined to a tenant's shared network only when the assistant is booked.
+  llm-gateway:
+    container_name: pc-node-llm-gateway
+    image: ${LITELLM_IMAGE}
+    command: ["--config", "/etc/litellm/config.yaml", "--port", "4000"]
+    environment:
+      AI_MODEL: ${AI_MODEL:-openrouter/anthropic/claude-sonnet-4.5}
+      LLM_BASE_URL: ${LLM_BASE_URL:-}
+      LLM_API_KEY: ${LLM_API_KEY:-}
+      LITELLM_MASTER_KEY: ${LITELLM_MASTER_KEY:-}
+      LITELLM_DATABASE_URL: postgresql://litellm:${LITELLM_DB_PASSWORD:-litellm}@pc-node-llm-db:5432/litellm
+      LITELLM_LOG: ERROR
+    volumes:
+      - ./litellm/${AI_PROVIDER:-openrouter}.yaml:/etc/litellm/config.yaml:ro
+    # Admin API for the provisioner, the portal's usage meter and the Telegram
+    # bot. The control plane reaches it over the LAN: set LLM_GATEWAY_BIND to
+    # the node's LAN address (never a public one). Admin calls need the master key.
+    ports:
+      - "${LLM_GATEWAY_BIND:-127.0.0.1}:4000:4000"
+    depends_on: [llm-db]
+    restart: unless-stopped
+
+  llm-db:
+    container_name: pc-node-llm-db
+    image: ${LITELLM_DB_IMAGE}
+    environment:
+      POSTGRES_USER: litellm
+      POSTGRES_PASSWORD: ${LITELLM_DB_PASSWORD:-litellm}
+      POSTGRES_DB: litellm
+    volumes:
+      - llm-db:/var/lib/postgresql/data
+    restart: unless-stopped
+
 volumes:
   immich-model-cache:
+  llm-db:

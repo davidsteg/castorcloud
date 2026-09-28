@@ -1,0 +1,102 @@
+#!/bin/sh
+# Per-tenant encrypted ZFS datasets on a macOS node (OpenZFS on OS X).
+# Runs as root via sudo; the provisioner reaches it over SSH (see castor-ssh).
+#
+#   castor-zfs pool                                prints "pool <size-mb> <alloc-mb> <health>"
+#   castor-zfs create  <slug> <quota-mb> <dirs...> key on stdin; creates, unlocks, mounts (idempotent)
+#   castor-zfs open    <slug>                      key on stdin; unlocks + mounts (idempotent)
+#   castor-zfs quota   <slug> <quota-mb>           sets the quota (online, grows and shrinks)
+#   castor-zfs close   <slug>                      unmounts + locks
+#   castor-zfs destroy <slug>                      destroys the dataset and its snapshots
+#   castor-zfs status  <slug>                      "open <used-mb> <quota-mb> <quota-mb>" or "closed"/"missing"
+#   castor-zfs usage   <slug>                      "<dir> <used-mb>" per data directory
+#
+# Layout: dataset <pool>/t/<slug> (aes-256-gcm, own key) mounted at
+# /Volumes/<pool>/t/<slug>; the stack's volumes are directories under data/.
+# The key is 64 hex characters on stdin; zfs reads it directly, it never
+# touches the disk.
+set -eu
+PATH=/usr/local/zfs/bin:/usr/sbin:/usr/bin:/sbin:/bin
+POOL=${CASTOR_POOL:-castor}
+MB=1048576
+
+cmd=${1:?command}
+if [ "$cmd" = pool ]; then
+  zpool list -Hp -o size,alloc,health "$POOL" | awk -v mb=$MB '{ printf "pool %d %d %s\n", $1/mb, $2/mb, $3 }'
+  exit 0
+fi
+
+slug=${2:?slug}
+case "$slug" in ""|-*|*[!a-z0-9-]*) echo "invalid slug" >&2; exit 2;; esac
+ds="$POOL/t/$slug"
+mnt="/Volumes/$POOL/t/$slug"
+
+exists() { zfs list -H -o name "$ds" >/dev/null 2>&1; }
+prop() { zfs get -Hp -o value "$1" "$ds"; }
+unlocked() { [ "$(prop keystatus)" = available ]; }
+mounted() { [ "$(prop mounted)" = yes ]; }
+is_mb() { case "$1" in ""|*[!0-9]*) echo "invalid size" >&2; exit 2;; esac; }
+
+do_open() {
+  unlocked || zfs load-key "$ds"          # reads the key from stdin
+  mounted || zfs mount "$ds"
+}
+
+case "$cmd" in
+  create)
+    quota=${3:?quota-mb}; is_mb "$quota"; shift 3
+    if ! exists; then
+      zfs create \
+        -o encryption=aes-256-gcm -o keyformat=hex -o keylocation=prompt \
+        -o quota="${quota}M" -o mountpoint="$mnt" \
+        -o com.apple.browse=off "$ds"
+    fi
+    do_open
+    for d in "$@"; do
+      case "$d" in ""|.*|*/*|*[!a-z0-9-]*) echo "invalid dir: $d" >&2; exit 2;; esac
+      mkdir -p "$mnt/data/$d"
+    done
+    echo "open"
+    ;;
+  open)
+    exists || { echo "missing"; exit 3; }
+    do_open
+    echo "open"
+    ;;
+  quota)
+    quota=${3:?quota-mb}; is_mb "$quota"
+    exists || { echo "missing"; exit 3; }
+    # zfs refuses a quota below the space in use; the provisioner checks first.
+    zfs set quota="${quota}M" "$ds"
+    echo "quota ${quota}"
+    ;;
+  close)
+    if exists; then
+      if mounted; then zfs unmount "$ds"; fi
+      if unlocked; then zfs unload-key "$ds"; fi
+    fi
+    echo "closed"
+    ;;
+  destroy)
+    if exists; then
+      if mounted; then zfs unmount -f "$ds"; fi
+      zfs destroy -r "$ds"
+    fi
+    rmdir "$mnt" 2>/dev/null || true
+    echo "destroyed"
+    ;;
+  status)
+    if ! exists; then echo "missing"
+    elif mounted; then
+      used=$(prop used); quota=$(prop quota)
+      echo "open $((used / MB)) $((quota / MB)) $((quota / MB))"
+    else echo "closed"; fi
+    ;;
+  usage)
+    exists && mounted || { echo "closed"; exit 0; }
+    for d in "$mnt"/data/*/; do
+      [ -d "$d" ] && printf '%s %s\n' "$(basename "$d")" "$(du -sm "$d" | cut -f1)"
+    done
+    ;;
+  *) echo "unknown command: $cmd" >&2; exit 2;;
+esac

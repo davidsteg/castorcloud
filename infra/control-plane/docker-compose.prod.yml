@@ -1,0 +1,46 @@
+# Production overrides for the control plane (castorcloud.ch):
+#   docker compose -f infra/control-plane/docker-compose.yml \
+#     -f infra/control-plane/docker-compose.prod.yml --env-file .env up -d
+#
+# TLS: one wildcard certificate for BASE_DOMAIN and *.BASE_DOMAIN from Let's
+# Encrypt via Cloudflare DNS-01. It covers the portal, auth. and every
+# tenant's service hosts, including those forwarded to Mac nodes. Needs in .env:
+#   ACME_EMAIL         Let's Encrypt account e-mail
+#   CF_DNS_API_TOKEN   Cloudflare API token: Zone > DNS > Edit, for this zone only
+# Keep the Cloudflare records DNS-only (grey cloud): proxied requests are
+# capped at 100 MB, which breaks photo and video uploads.
+services:
+  traefik:
+    command:
+      - --providers.docker=true
+      - --providers.docker.exposedbydefault=false
+      - --providers.docker.network=pc-edge
+      - --providers.file.directory=/etc/traefik/dynamic
+      - --providers.file.watch=true
+      - --entrypoints.web.address=:80
+      - --entrypoints.web.http.redirections.entrypoint.to=websecure
+      - --entrypoints.web.http.redirections.entrypoint.scheme=https
+      - --entrypoints.websecure.address=:443
+      - --entrypoints.websecure.http.tls.certresolver=le
+      - --entrypoints.websecure.http.tls.domains[0].main=${BASE_DOMAIN}
+      - --entrypoints.websecure.http.tls.domains[0].sans=*.${BASE_DOMAIN}
+      - --certificatesresolvers.le.acme.email=${ACME_EMAIL:?ACME_EMAIL is required}
+      - --certificatesresolvers.le.acme.storage=/acme/acme.json
+      - --certificatesresolvers.le.acme.dnschallenge.provider=cloudflare
+      # Ask public resolvers, not the LAN's, whether the challenge record is live.
+      - --certificatesresolvers.le.acme.dnschallenge.resolvers=1.1.1.1:53,1.0.0.1:53
+    environment:
+      BASE_DOMAIN: ${BASE_DOMAIN}
+      CF_DNS_API_TOKEN: ${CF_DNS_API_TOKEN:?CF_DNS_API_TOKEN is required}
+    # No dashboard port in production.
+    ports: !override
+      - "80:80"
+      - "443:443"
+    # No dev certificates; tls.yml skips itself when CF_DNS_API_TOKEN is set.
+    volumes: !override
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+      - ./traefik/dynamic:/etc/traefik/dynamic:ro
+      - acme:/acme
+
+volumes:
+  acme:

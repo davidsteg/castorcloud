@@ -4,9 +4,11 @@
 #   cryptd create  <slug> <size-mb> <dirs...>  key on stdin; creates, opens, mounts
 #   cryptd open    <slug>                      key on stdin; opens + mounts (idempotent)
 #   cryptd grow    <slug> <size-mb>            key on stdin; online resize
+#   cryptd shrink  <slug> <size-mb>            key on stdin; offline resize (stack must be stopped)
 #   cryptd close   <slug>                      unmounts + locks
 #   cryptd destroy <slug>                      closes, wipes header, deletes file
-#   cryptd status  <slug>                      prints "open <used-mb> <size-mb>" or "closed"/"missing"
+#   cryptd status  <slug>                      prints "open <used-mb> <fs-size-mb> <volume-mb>" or "closed"/"missing"
+#   cryptd usage   <slug>                      prints "<dir> <used-mb>" per data directory
 #
 # Layout: /srv/pc/volumes/<slug>.luks  ->  mounted at /srv/pc/tenants/<slug>
 # The key is read from stdin into a tmpfs file that exists only inside this
@@ -77,6 +79,29 @@ case "$cmd" in
     fi
     echo "size ${size}"
     ;;
+  shrink)
+    size=${3:?size-mb}
+    read_key
+    [ -e "$img" ] || { echo "missing"; exit 3; }
+    cur=$(( $(stat -c %s "$img") / 1048576 ))
+    if [ "$size" -ge "$cur" ]; then echo "size ${cur}"; exit 0; fi
+    # Fails while anything still uses the volume: the caller stops the stack first.
+    if is_mounted; then umount "$mnt"; fi
+    is_open || cryptsetup open --type luks2 --key-file "$keyfile" "$img" "$map"
+    e2fsck -f -p "/dev/mapper/$map" >/dev/null
+    # Shrink the filesystem below the target first, leaving room for the LUKS
+    # header (16 MB by default). resize2fs refuses if the data doesn't fit, so
+    # nothing is truncated before the filesystem is known to be small enough.
+    resize2fs "/dev/mapper/$map" "$(( size - 64 ))M" >/dev/null 2>&1 || {
+      do_open; echo "does not fit in ${size} MB" >&2; exit 4;
+    }
+    cryptsetup close "$map"
+    truncate -s "${size}M" "$img"
+    cryptsetup open --type luks2 --key-file "$keyfile" "$img" "$map"
+    resize2fs "/dev/mapper/$map" >/dev/null 2>&1   # grow back to fill the device
+    do_open
+    echo "size ${size}"
+    ;;
   close)
     if is_mounted; then umount "$mnt"; fi
     if is_open; then cryptsetup close "$map"; fi
@@ -95,8 +120,15 @@ case "$cmd" in
   status)
     if [ ! -e "$img" ]; then echo "missing"
     elif is_mounted; then
-      df -Pm "$mnt" | awk 'NR==2 { print "open", $3, $2 }'  # -P: no line wrapping
+      vol=$(( $(stat -c %s "$img") / 1048576 ))
+      df -Pm "$mnt" | awk -v vol="$vol" 'NR==2 { print "open", $3, $2, vol }'  # -P: no line wrapping
     else echo "closed"; fi
+    ;;
+  usage)
+    is_mounted || { echo "closed"; exit 0; }
+    for d in "$mnt"/data/*/; do
+      [ -d "$d" ] && printf '%s %s\n' "$(basename "$d")" "$(du -sm "$d" | cut -f1)"
+    done
     ;;
   *) echo "unknown command: $cmd" >&2; exit 2;;
 esac
