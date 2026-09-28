@@ -1,0 +1,57 @@
+# yaml-language-server: $schema=https://goauthentik.io/blueprints/schema.json
+# A read-only service account for the monitor (docs/monitoring.md): it may
+# read the event log and user list, nothing else. Its API token is
+# MONITOR_AUTHENTIK_TOKEN, so the monitor never holds the bootstrap token.
+# Skipped entirely while MONITOR_AUTHENTIK_TOKEN is empty.
+version: 1
+metadata:
+  name: castor-monitor
+  labels:
+    blueprints.goauthentik.io/instantiate: "true"
+context:
+  token: !Env [PC_MONITOR_TOKEN, ""]
+entries:
+  - model: authentik_rbac.role
+    id: monitor-role
+    conditions: [!Context token]
+    identifiers:
+      name: castor-monitor
+    attrs:
+      # Global permissions of the role (the entry-level "permissions" key
+      # would only grant them on the role object itself).
+      permissions:
+        - authentik_events.view_event
+        - authentik_core.view_user
+
+  - model: authentik_core.group
+    id: monitor-group
+    conditions: [!Context token]
+    identifiers:
+      name: castor-monitor
+    attrs:
+      is_superuser: false
+      roles:
+        - !KeyOf monitor-role
+
+  - model: authentik_core.user
+    id: monitor-user
+    conditions: [!Context token]
+    identifiers:
+      username: castor-monitor
+    attrs:
+      name: Castor monitor
+      type: service_account
+      path: castor/service-accounts
+      groups:
+        - !KeyOf monitor-group
+
+  - model: authentik_core.token
+    conditions: [!Context token]
+    identifiers:
+      identifier: castor-monitor
+    attrs:
+      user: !KeyOf monitor-user
+      intent: api
+      expiring: false
+      key: !Context token
+      description: Read-only token for the Castor monitor
