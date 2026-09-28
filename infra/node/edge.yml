@@ -1,0 +1,45 @@
+# Edge proxy of a Mac mini node: public HTTPS for the tenant stacks on this
+# node (photos-<slug>, docs-<slug>, ...). Started by the provisioner over
+# ssh:// (SshNode.prepare); the portal and Authentik stay on the control plane.
+#
+# TLS: one wildcard certificate *.BASE_DOMAIN per node via ACME DNS-01.
+# The DNS provider's credentials come from .env.edge on the control plane
+# (see infra/node/macos/README.md); compose sends them as container env,
+# nothing is copied to the node's disk except Traefik's acme.json.
+name: pc-edge
+
+services:
+  traefik:
+    image: traefik:v3.6
+    command:
+      - --providers.docker=true
+      - --providers.docker.exposedbydefault=false
+      - --providers.docker.network=pc-edge
+      - --entrypoints.web.address=:80
+      - --entrypoints.web.http.redirections.entrypoint.to=websecure
+      - --entrypoints.web.http.redirections.entrypoint.scheme=https
+      - --entrypoints.websecure.address=:443
+      - --entrypoints.websecure.http.tls.certresolver=le
+      - --entrypoints.websecure.http.tls.domains[0].main=${BASE_DOMAIN}
+      - --entrypoints.websecure.http.tls.domains[0].sans=*.${BASE_DOMAIN}
+      - --certificatesresolvers.le.acme.email=${ACME_EMAIL}
+      - --certificatesresolvers.le.acme.storage=/acme/acme.json
+      - --certificatesresolvers.le.acme.dnschallenge.provider=${ACME_DNS_PROVIDER}
+    env_file:
+      - path: ../../.env.edge
+        required: false
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+      - acme:/acme
+    networks: [pc-edge]
+    restart: unless-stopped
+
+volumes:
+  acme:
+
+networks:
+  pc-edge:
+    external: true

@@ -7,6 +7,8 @@
     "worker": "cross-env NODE_EXTRA_CA_CERTS=../../.dev-certs/ca.crt tsx src/worker.ts",
     "e2e": "cross-env NODE_EXTRA_CA_CERTS=../../.dev-certs/ca.crt tsx src/e2e.ts",
     "delete-tenant": "tsx src/delete-tenant.ts",
+    "node": "tsx src/node-admin.ts",
+    "test": "node --test --experimental-strip-types src/*.test.ts",
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {

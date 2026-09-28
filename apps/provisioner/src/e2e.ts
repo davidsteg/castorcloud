@@ -11,8 +11,7 @@ const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../../.
 config({ path: path.join(root, ".env"), quiet: true });
 const { prisma } = await import("@pc/db");
 const { enqueueTenantJob } = await import("@pc/core");
-const { LocalNode } = await import("./node.ts");
-const { TenantVolume } = await import("./volume.ts");
+const { Nodes } = await import("./nodes.ts");
 
 const base = process.env.BASE_DOMAIN ?? "brand.localhost";
 const scheme = process.env.PUBLIC_SCHEME ?? "https";
@@ -55,7 +54,9 @@ const result = await waitFor(["ACTIVE", "FAILED"]);
 console.log(`status ${result} after ${Math.round((Date.now() - t0) / 1000)}s`);
 
 const key = await prisma.volumeKey.findUniqueOrThrow({ where: { tenantId: tenant.id } });
-const volume = new TenantVolume(new LocalNode(root), tenant.id, slug, key.wrappedKey);
+const placed = await prisma.tenant.findUniqueOrThrow({ where: { id: tenant.id }, include: { node: true } });
+const volume = new Nodes(root).driver(placed.node!).storage(tenant.id, slug, key.wrappedKey);
+console.log(`node: ${placed.node!.name}`);
 console.log("volume:", JSON.stringify(volume.status()));
 const secrets = await prisma.secret.findMany({ where: { tenantId: tenant.id } });
 console.log(`secrets: ${secrets.length} stored, encrypted: ${secrets.every((s) => s.ciphertext.startsWith("v1."))}`);

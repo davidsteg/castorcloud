@@ -1,0 +1,30 @@
+# Colima (Docker engine) on a Castor Cloud Mac node. Installed by
+# bootstrap.sh to ~castor/.colima/default/colima.yaml; CPU and memory are
+# filled in there (everything but what macOS and ZFS need).
+cpu: __CPU__
+memory: __MEMORY_GB__
+disk: 200            # images and container layers only; tenant data is on ZFS
+arch: aarch64
+vmType: vz           # Apple Virtualization.framework
+vzRosetta: true      # runs amd64-only images if an upstream has no arm64 build
+mountType: virtiofs
+mountInotify: false
+# Same paths inside the VM as on macOS, so bind mounts need no translation:
+#   /Volumes/castor       tenant datasets (castor-zfs)
+#   /Users/Shared/castor  templates, brand assets, CA bundle, immich.json
+mounts:
+  - location: /Volumes/__POOL__
+    writable: true
+  - location: /Users/Shared/castor
+    writable: true
+network:
+  address: true
+  # The VM gets its own address on the LAN (DHCP), so the edge Traefik's
+  # ports 80/443 are reachable directly: forward them on the router to it.
+  mode: bridged
+  interface: en0
+  dns: []
+runtime: docker
+autoActivate: true
+kubernetes:
+  enabled: false

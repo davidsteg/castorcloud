@@ -1,0 +1,65 @@
+#!/bin/sh
+# SSH gate for the provisioner's key on a macOS node. authorized_keys runs it
+# as a forced command, so the key can do exactly this and nothing else:
+#
+#   docker system dial-stdio      the Docker CLI's ssh:// transport (Colima's engine)
+#   castor-zfs <args...>          tenant datasets, via sudo (see castor-zfs)
+#   castor-put <path>             stdin -> $ROOT/<path> (tenant config files, mode 600)
+#   castor-rm tenants/<slug>      removes a tenant's config directory
+#   castor-untar <templates|brand|ca>   replaces $ROOT/files/<name> with a tar from stdin
+#   castor-info                   prints "info <macos-version> <memory-mb> <cpus>"
+set -euf  # -f: no globbing of the command words
+ROOT=/Users/Shared/castor
+BIN=/usr/local/castor/bin
+export PATH=/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin
+export DOCKER_HOST="unix://$HOME/.colima/default/docker.sock"
+
+# Newer Docker CLIs quote each word; arguments never contain quotes or spaces.
+set -- $(printf '%s' "${SSH_ORIGINAL_COMMAND:-}" | tr -d "'\"")
+for a in "$@"; do
+  case "$a" in *[!A-Za-z0-9._/=-]*) echo "castor-ssh: bad argument" >&2; exit 2;; esac
+done
+
+safe_path() {
+  case "$1" in ""|/*|*..*|*//*) echo "castor-ssh: bad path" >&2; exit 2;; esac
+}
+
+case "${1:-}" in
+  docker)
+    [ "$*" = "docker system dial-stdio" ] || { echo "castor-ssh: docker: only dial-stdio" >&2; exit 2; }
+    exec docker system dial-stdio
+    ;;
+  castor-zfs)
+    shift
+    exec sudo -n "$BIN/castor-zfs" "$@"
+    ;;
+  castor-put)
+    safe_path "${2:?path}"
+    umask 077
+    mkdir -p "$(dirname "$ROOT/$2")"
+    cat > "$ROOT/$2.tmp"
+    mv "$ROOT/$2.tmp" "$ROOT/$2"
+    ;;
+  castor-rm)
+    case "${2:-}" in tenants/[a-z0-9]*) safe_path "$2";; *) echo "castor-ssh: bad path" >&2; exit 2;; esac
+    rm -rf "${ROOT:?}/$2"
+    ;;
+  castor-untar)
+    case "${2:-}" in templates|brand|ca) ;; *) echo "castor-ssh: bad name" >&2; exit 2;; esac
+    mkdir -p "$ROOT/files"
+    rm -rf "$ROOT/files/$2.new"
+    mkdir "$ROOT/files/$2.new"
+    tar -x -f - -C "$ROOT/files/$2.new"
+    rm -rf "$ROOT/files/$2.old"
+    [ -e "$ROOT/files/$2" ] && mv "$ROOT/files/$2" "$ROOT/files/$2.old"
+    mv "$ROOT/files/$2.new" "$ROOT/files/$2"
+    rm -rf "$ROOT/files/$2.old"
+    ;;
+  castor-info)
+    echo "info $(sw_vers -productVersion) $(( $(sysctl -n hw.memsize) / 1048576 )) $(sysctl -n hw.ncpu)"
+    ;;
+  *)
+    echo "castor-ssh: not allowed: ${1:-<empty>}" >&2
+    exit 2
+    ;;
+esac

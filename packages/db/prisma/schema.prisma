@@ -54,16 +54,34 @@ enum JobStatus {
   FAILED
 }
 
+enum NodeKind {
+  LOCAL // the Docker host the provisioner runs on (development), LUKS volumes
+  MAC   // Mac mini: OpenZFS on macOS + Docker in Colima, driven over SSH
+}
+
 model Node {
-  id        String   @id @default(cuid())
-  name      String   @unique
+  id          String    @id @default(cuid())
+  name        String    @unique
+  kind        NodeKind  @default(MAC)
   /// "local" = the Docker host the provisioner runs on (development)
-  sshHost   String
-  sshUser   String   @default("deploy")
-  capacity  Int      // max tenant stacks on this node
-  enabled   Boolean  @default(true)
-  tenants   Tenant[]
-  createdAt DateTime @default(now())
+  sshHost     String
+  sshUser     String    @default("deploy")
+  /// ZFS pool holding the tenant datasets (MAC nodes)
+  zfsPool     String?
+  /// What tenant containers resolve auth.<domain> to (extra_hosts); null = the platform default
+  authHostIp  String?
+  capacity    Int       // max tenant stacks on this node
+  /// false = draining: keeps its tenants, gets no new ones
+  enabled     Boolean   @default(true)
+  // Measured by the provisioner (registration and health checks)
+  poolSizeMb  Int?
+  poolUsedMb  Int?
+  poolHealth  String?
+  memoryMb    Int?
+  lastSeenAt  DateTime?
+  lastError   String?
+  tenants     Tenant[]
+  createdAt   DateTime  @default(now())
 }
 
 model Tenant {
