@@ -76,6 +76,12 @@ Also: `suspend`, `resume`, `update` (rolling image bump), `export`, `delete` (GD
 - Tools via **MCP servers** we write (read-mostly): `immich` (search photos by text/place/date/person), `paperless` (full-text search, fetch doc/OCR text, tags), `dawarich` (where was I on X, trips, visits), `airtrail` (flights, stats). Cross-source questions: "When did I fly to Lisbon and show me photos + the hotel invoice."
 - Chat UI inside the portal shell (streaming). Clear data-processing consent since data goes to an external LLM; redact/limit what's sent (only tool results, not bulk data).
 
+### Storage quotas
+- The booked storage (units of 100 GB, `packages/pricing/src/storage.ts`) **is** the size of the tenant's LUKS volume, so a full volume is a full quota: no per-app quota settings to keep in sync.
+- Hourly the provisioner records usage per tenant (total from `df`, per service from `du` over the data directories) for the portal's storage meter, which warns at 80% and 95%.
+- Upgrades grow the volume online. Downgrades shrink it offline (stack stopped for a few minutes: `e2fsck`, `resize2fs`, LUKS resize) and only when the data fits with 10% to spare; otherwise the volume keeps its size, the job is audited (`volume.shrink_held`) and the portal asks the customer to delete files or book more.
+- Customers change storage on the account page, which only offers sizes that fit their data. The Stripe billing portal can still lower the quantity; the provisioner guard above covers that case.
+
 ---
 
 ## Repository layout (pnpm + Turborepo monorepo)

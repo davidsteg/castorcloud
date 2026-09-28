@@ -82,6 +82,15 @@ model Tenant {
   aiCreditChf          Int             @default(0)
   billingInterval      BillingInterval @default(MONTH)
 
+  // Storage, measured by the provisioner. The volume size is the hard quota.
+  /// Size of the encrypted volume in MB. Larger than the booking only while
+  /// a downgrade is held back because the data doesn't fit.
+  storageVolumeMb      Int?
+  storageUsedMb        Int?
+  /// Used MB per service: { photos, docs, places, flights, system }
+  storageByService     Json?
+  storageMeasuredAt    DateTime?
+
   // Billing
   stripeCustomerId     String?         @unique
   stripeSubscriptionId String?         @unique

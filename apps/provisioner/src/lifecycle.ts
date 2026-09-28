@@ -4,6 +4,7 @@ import { rmSync } from "node:fs";
 import path from "node:path";
 import { prisma, type Tenant } from "@pc/db";
 import { audit, newWrappedVolumeKey, openSecret, sealSecret } from "@pc/core";
+import { fitsStorage, storageQuotaMb } from "@pc/pricing";
 import type { Authentik } from "./authentik.ts";
 import type { NodeExec } from "./node.ts";
 import {
@@ -95,8 +96,8 @@ export class Lifecycle {
     }
     const volume = new TenantVolume(this.node, tenant.id, tenant.slug, tenant.volumeKey!.wrappedKey);
     volume.ensureOpen(tenant.storageUnits, ALL_VOLUMES.map((v) => `data/${v}`));
-    volume.grow(tenant.storageUnits);
     await audit("system", "volume.unlock", tenant.id, { reason: "apply" });
+    await this.resize(tenant, volume, report);
 
     // ------------------------------------------------------------ services
     await report("services", "starting containers");
@@ -137,6 +138,7 @@ export class Lifecycle {
 
     // --------------------------------------------------------------- ready
     await prisma.tenant.update({ where: { id: tenant.id }, data: { status: "ACTIVE" } });
+    await this.measure(tenant.id);
     await report("ready", "active");
   }
 
@@ -177,7 +179,53 @@ export class Lifecycle {
     await audit("system", "tenant.deleted", tenant.id, { slug: tenant.slug, cryptoShredded: true });
   }
 
+  /**
+   * Records the tenant's storage usage (total and per service). Read-only on
+   * the node, so it runs alongside lifecycle jobs; a closed volume is skipped.
+   */
+  async measure(tenantId: string) {
+    const tenant = await this.load(tenantId);
+    if (!tenant.volumeKey) return;
+    const volume = new TenantVolume(this.node, tenant.id, tenant.slug, tenant.volumeKey.wrappedKey);
+    const status = volume.status();
+    if (status.state !== "open") return;
+    await prisma.tenant.update({
+      where: { id: tenant.id },
+      data: {
+        storageUsedMb: status.usedMb,
+        storageVolumeMb: status.volumeMb,
+        storageByService: usageByService(volume.usage()),
+        storageMeasuredAt: new Date(),
+      },
+    });
+  }
+
   // ------------------------------------------------------------- helpers
+
+  /**
+   * Sizes the volume to the booking. Growing is online. Shrinking stops the
+   * stack for a moment (ext4 can't shrink while mounted) and only happens when
+   * the data fits with headroom; otherwise the volume keeps its size until the
+   * customer frees up space or books more, and the portal says so.
+   */
+  private async resize(tenant: Tenant, volume: TenantVolume, report: Reporter) {
+    const status = volume.status();
+    const targetMb = storageQuotaMb(tenant.storageUnits);
+    if (status.state !== "open" || status.volumeMb <= targetMb) {
+      volume.grow(tenant.storageUnits);
+      return;
+    }
+    if (!fitsStorage(status.usedMb, tenant.storageUnits)) {
+      await report("storage", `downgrade held back: ${status.usedMb} MB used, ${targetMb} MB booked`);
+      await audit("system", "volume.shrink_held", tenant.id, { usedMb: status.usedMb, volumeMb: status.volumeMb, targetMb });
+      return;
+    }
+    await report("storage", "shrinking volume");
+    this.compose(tenant, ["stop"], STACK_SERVICES);
+    volume.shrink(tenant.storageUnits);
+    await audit("system", "volume.shrunk", tenant.id, { fromMb: status.volumeMb, toMb: targetMb });
+  }
+
 
   /** Tenant secrets from the DB (encrypted at rest); missing ones are generated. */
   private async secrets(tenantId: string) {
@@ -220,4 +268,14 @@ export class Lifecycle {
     // 400 = an admin already exists (re-run)
     if (!res.ok && res.status !== 400) throw new Error(`immich admin sign-up failed: ${res.status}`);
   }
+}
+
+/** Maps data directories (compose volume names) to the service that owns them. */
+export function usageByService(byDir: Record<string, number>) {
+  const out: Record<ServiceKey | "system", number> = { photos: 0, docs: 0, places: 0, flights: 0, system: 0 };
+  for (const [dir, mb] of Object.entries(byDir)) {
+    const owner = STACK_SERVICES.find((s) => SERVICES[s].volumes.includes(dir)) ?? "system";
+    out[owner] += mb;
+  }
+  return out;
 }

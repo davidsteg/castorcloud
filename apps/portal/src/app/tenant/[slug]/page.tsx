@@ -1,11 +1,12 @@
 import Link from "next/link";
-import { SERVICES } from "@/lib/config";
+import { APP_LABEL, BASE_DOMAIN, PUBLIC_SCHEME, SERVICES } from "@/lib/config";
 import { requireTenantMember } from "@/lib/tenant";
+import { StorageMeter } from "@/components/StorageMeter";
 
 // Dashboard. Live widgets (recent photos, latest documents, today's route,
 // next flight) come later; for now: the services and the app setup.
 export default async function Dashboard({ params }: { params: Promise<{ slug: string }> }) {
-  const { enabledServices, t, tenant } = await requireTenantMember((await params).slug);
+  const { enabledServices, locale, member, t, tenant } = await requireTenantMember((await params).slug);
 
   return (
     <div className="page">
@@ -27,6 +28,18 @@ export default async function Dashboard({ params }: { params: Promise<{ slug: st
             <strong>{t.services.items[key as keyof typeof SERVICES].name}</strong>
           </Link>
         ))}
+      </div>
+
+      <div className="panel" style={{ marginTop: 24 }}>
+        <StorageMeter
+          tenant={tenant}
+          t={t}
+          action={member.role === "OWNER" && (
+            <a className="button secondary small" style={{ marginTop: 14 }} href={`${PUBLIC_SCHEME}://${APP_LABEL}.${BASE_DOMAIN}/${locale}/account`}>
+              {t.storage.manage}
+            </a>
+          )}
+        />
       </div>
     </div>
   );
