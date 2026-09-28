@@ -270,3 +270,32 @@ model StripeEvent {
   type      String
   createdAt DateTime @default(now())
 }
+
+enum AlertSeverity {
+  WARNING
+  CRITICAL
+}
+
+/// Operator alerts raised by the monitor (docs/monitoring.md). One row per
+/// condition key; a condition that clears and comes back reuses its row.
+/// `summary` is what the notification says (no personal data: it may go to
+/// Telegram); `details` is operator context that stays here.
+model Alert {
+  id          String        @id @default(cuid())
+  /// e.g. "node:mini-1:space", "service:acme:photos", "authentik:event:<pk>"
+  key         String        @unique
+  severity    AlertSeverity
+  summary     String
+  details     Json?
+  /// One-off events (a failed job, a security event) are sent once and never re-fire
+  once        Boolean       @default(false)
+  /// Consecutive checks that found the condition (debounce for flaky probes)
+  hits        Int           @default(0)
+  firstSeenAt DateTime      @default(now())
+  lastSeenAt  DateTime      @default(now())
+  /// Last notification sent for this alert; null = not sent (yet)
+  notifiedAt  DateTime?
+  resolvedAt  DateTime?
+
+  @@index([resolvedAt])
+}
