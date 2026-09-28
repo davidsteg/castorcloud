@@ -1,6 +1,7 @@
 #!/bin/sh
-# Per-tenant encrypted ZFS datasets on a macOS node (OpenZFS on OS X).
-# Runs as root via sudo; the provisioner reaches it over SSH (see castor-ssh).
+# Per-tenant encrypted ZFS datasets on a node: TrueNAS SCALE (OpenZFS on
+# Linux) or a Mac mini (OpenZFS on OS X). Runs as root via sudo; the
+# provisioner reaches it over SSH (see castor-ssh).
 #
 #   castor-zfs pool                                prints "pool <size-mb> <alloc-mb> <health>"
 #   castor-zfs create  <slug> <quota-mb> <dirs...> key on stdin; creates, unlocks, mounts (idempotent)
@@ -11,13 +12,23 @@
 #   castor-zfs status  <slug>                      "open <used-mb> <quota-mb> <quota-mb>" or "closed"/"missing"
 #   castor-zfs usage   <slug>                      "<dir> <used-mb>" per data directory
 #
-# Layout: dataset <pool>/t/<slug> (aes-256-gcm, own key) mounted at
-# /Volumes/<pool>/t/<slug>; the stack's volumes are directories under data/.
+# Layout: dataset $DATASET_ROOT/<slug> (aes-256-gcm, own key) mounted at
+# $MOUNT_ROOT/<slug>; the stack's volumes are directories under data/.
+#   TrueNAS: <pool>/castor/t/<slug>  at /mnt/<pool>/castor/t/<slug>
+#   macOS:   castor/t/<slug>         at /Volumes/castor/t/<slug>
 # The key is 64 hex characters on stdin; zfs reads it directly, it never
 # touches the disk.
+#
+# Settings come from castor.conf next to this script (root-owned, written by
+# the node's setup script); without it, the macOS defaults apply.
 set -eu
 PATH=/usr/local/zfs/bin:/usr/sbin:/usr/bin:/sbin:/bin
-POOL=${CASTOR_POOL:-castor}
+POOL=castor
+here=$(dirname "$0")
+# shellcheck source=/dev/null
+[ -f "$here/castor.conf" ] && . "$here/castor.conf"
+DATASET_ROOT=${DATASET_ROOT:-$POOL/t}
+MOUNT_ROOT=${MOUNT_ROOT:-/Volumes/$POOL/t}
 MB=1048576
 
 cmd=${1:?command}
@@ -28,8 +39,8 @@ fi
 
 slug=${2:?slug}
 case "$slug" in ""|-*|*[!a-z0-9-]*) echo "invalid slug" >&2; exit 2;; esac
-ds="$POOL/t/$slug"
-mnt="/Volumes/$POOL/t/$slug"
+ds="$DATASET_ROOT/$slug"
+mnt="$MOUNT_ROOT/$slug"
 
 exists() { zfs list -H -o name "$ds" >/dev/null 2>&1; }
 prop() { zfs get -Hp -o value "$1" "$ds"; }
@@ -46,10 +57,13 @@ case "$cmd" in
   create)
     quota=${3:?quota-mb}; is_mb "$quota"; shift 3
     if ! exists; then
+      # macOS: keep tenant data out of Finder.
+      mac_opts=""
+      [ "$(uname -s)" = Darwin ] && mac_opts="-o com.apple.browse=off"
+      # shellcheck disable=SC2086
       zfs create \
         -o encryption=aes-256-gcm -o keyformat=hex -o keylocation=prompt \
-        -o quota="${quota}M" -o mountpoint="$mnt" \
-        -o com.apple.browse=off "$ds"
+        -o quota="${quota}M" -o mountpoint="$mnt" $mac_opts "$ds"
     fi
     do_open
     for d in "$@"; do

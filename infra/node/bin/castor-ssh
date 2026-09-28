@@ -1,19 +1,30 @@
 #!/bin/sh
-# SSH gate for the provisioner's key on a macOS node. authorized_keys runs it
-# as a forced command, so the key can do exactly this and nothing else:
+# SSH gate for the provisioner's key on a node (TrueNAS SCALE or macOS).
+# authorized_keys runs it as a forced command, so the key can do exactly this
+# and nothing else:
 #
-#   docker system dial-stdio      the Docker CLI's ssh:// transport (Colima's engine)
+#   docker system dial-stdio      the Docker CLI's ssh:// transport
 #   castor-zfs <args...>          tenant datasets, via sudo (see castor-zfs)
 #   castor-put <path> [644]       stdin -> $ROOT/<path> (tenant config files, mode 600;
 #                                 644 for files unprivileged containers read)
 #   castor-rm tenants/<slug>[/<dir>]  removes a tenant's config directory (or part of it)
 #   castor-untar <templates|node|brand|ca>   replaces $ROOT/files/<name> with a tar from stdin
-#   castor-info                   prints "info <macos-version> <memory-mb> <cpus>"
+#   castor-info                   prints "info <os-version> <memory-mb> <cpus>"
+#
+# Settings come from castor.conf next to this script (root-owned); without
+# it, the macOS defaults apply:
+#   ROOT     where templates and tenant config files live
+#   DOCKER   how to run the Docker CLI (TrueNAS: "sudo -n /usr/bin/docker")
 set -euf  # -f: no globbing of the command words
+BIN=$(dirname "$0")
 ROOT=/Users/Shared/castor
-BIN=/usr/local/castor/bin
+DOCKER=docker
+# shellcheck source=/dev/null
+[ -f "$BIN/castor.conf" ] && . "$BIN/castor.conf"
 export PATH=/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin
-export DOCKER_HOST="unix://$HOME/.colima/default/docker.sock"
+# macOS: Colima's engine. TrueNAS: the system engine (castor.conf clears it).
+export DOCKER_HOST="${DOCKER_HOST-unix://$HOME/.colima/default/docker.sock}"
+[ -n "$DOCKER_HOST" ] || unset DOCKER_HOST
 
 # Newer Docker CLIs quote each word; arguments never contain quotes or spaces.
 set -- $(printf '%s' "${SSH_ORIGINAL_COMMAND:-}" | tr -d "'\"")
@@ -28,7 +39,8 @@ safe_path() {
 case "${1:-}" in
   docker)
     [ "$*" = "docker system dial-stdio" ] || { echo "castor-ssh: docker: only dial-stdio" >&2; exit 2; }
-    exec docker system dial-stdio
+    # shellcheck disable=SC2086  # DOCKER may be "sudo -n /usr/bin/docker"
+    exec $DOCKER system dial-stdio
     ;;
   castor-zfs)
     shift
@@ -58,7 +70,13 @@ case "${1:-}" in
     rm -rf "$ROOT/files/$2.old"
     ;;
   castor-info)
-    echo "info $(sw_vers -productVersion) $(( $(sysctl -n hw.memsize) / 1048576 )) $(sysctl -n hw.ncpu)"
+    if [ "$(uname -s)" = Darwin ]; then
+      echo "info macOS-$(sw_vers -productVersion) $(( $(sysctl -n hw.memsize) / 1048576 )) $(sysctl -n hw.ncpu)"
+    else
+      # TrueNAS SCALE keeps its version in /etc/version.
+      version=$(tr -d ' \n' 2>/dev/null < /etc/version || uname -r)
+      echo "info TrueNAS-${version:-unknown} $(( $(awk '/^MemTotal:/ { print $2 }' /proc/meminfo) / 1024 )) $(nproc)"
+    fi
     ;;
   *)
     echo "castor-ssh: not allowed: ${1:-<empty>}" >&2

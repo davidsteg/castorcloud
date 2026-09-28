@@ -56,7 +56,8 @@ enum JobStatus {
 
 enum NodeKind {
   LOCAL // the Docker host the provisioner runs on (development), LUKS volumes
-  MAC   // Mac mini: OpenZFS on macOS + Docker in Colima, driven over SSH
+  MAC     // Mac mini: OpenZFS on macOS + Docker in Colima, driven over SSH
+  TRUENAS // TrueNAS SCALE: native ZFS + the system Docker engine, driven over SSH
 }
 
 model Node {
@@ -66,12 +67,13 @@ model Node {
   /// "local" = the Docker host the provisioner runs on (development)
   sshHost     String
   sshUser     String    @default("deploy")
-  /// ZFS pool holding the tenant datasets (MAC nodes)
+  /// ZFS pool holding the tenant datasets (MAC and TRUENAS nodes)
   zfsPool     String?
   /// What tenant containers resolve auth.<domain> to (extra_hosts); null = the platform default
   authHostIp  String?
-  /// The Colima VM's LAN address: the control plane's Traefik forwards the
-  /// node's tenant hosts to its edge proxy there (port 80)
+  /// host[:port] of the node's edge proxy on the LAN (Mac: the Colima VM, port
+  /// 80; TrueNAS: the NAS, port 8480). The control plane's Traefik forwards the
+  /// node's tenant hosts there
   edgeHost    String?
   capacity    Int       // max tenant stacks on this node
   /// false = draining: keeps its tenants, gets no new ones

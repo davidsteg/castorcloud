@@ -9,7 +9,7 @@ export const POOL_OVERCOMMIT = 2;
 export const POOL_MAX_USED = 0.8;
 /** Idle RAM of one tenant stack (shared ML/tika/gotenberg not included). */
 export const STACK_MEMORY_MB = 3 * 1024;
-/** RAM kept for macOS, Colima and the node's shared services. */
+/** RAM kept for the host OS (macOS + Colima, or TrueNAS + its ZFS cache) and the node's shared services. */
 export const NODE_RESERVED_MEMORY_MB = 8 * 1024;
 /** A node that hasn't answered a health check for this long gets no tenants. */
 export const NODE_STALE_MS = 15 * 60 * 1000;
@@ -17,7 +17,7 @@ export const NODE_STALE_MS = 15 * 60 * 1000;
 export type PlacementNode = {
   id: string;
   name: string;
-  kind: "LOCAL" | "MAC";
+  kind: "LOCAL" | "MAC" | "TRUENAS";
   enabled: boolean;
   capacity: number;
   poolSizeMb: number | null;
@@ -53,7 +53,7 @@ function committedMb(node: PlacementNode) {
 
 /**
  * Picks the fitting node with the most free booked space (share of the pool),
- * so tenants spread out. Mac nodes win over the local development host.
+ * so tenants spread out. Remote nodes win over the local development host.
  */
 export function pickNode(nodes: PlacementNode[], storageUnits: number, now = new Date()): Placement {
   const reasons: string[] = [];
