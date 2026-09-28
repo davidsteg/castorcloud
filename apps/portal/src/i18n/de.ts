@@ -229,6 +229,9 @@ const de: Dictionary = {
     connect: "Nach der Anmeldung zeigen wir Ihnen in Ihrer Cloud Schritt für Schritt, wie Sie die Apps verbinden.",
   },
   setup: {
+    frameExpiredTitle: "Bitte erneut anmelden",
+    frameExpiredBody: "Diese App konnte nicht geöffnet werden. Ihre Anmeldung ist wahrscheinlich abgelaufen.",
+    signInAgain: "Erneut anmelden",
     nav: "Apps einrichten",
     home: "Übersicht",
     welcome: "Willkommen in Ihrer Cloud",
@@ -448,6 +451,8 @@ const de: Dictionary = {
     open: "Öffnen",
     billing: "Rechnungen & Abo",
     logout: "Abmelden",
+    logoutAll: "Auf allen Geräten abmelden",
+    logoutAllHint: "Meldet auch Ihre anderen Browser ab und trennt die Handy-Apps und Telegram. Sie müssen sie danach neu verbinden.",
     status: { PENDING: "Wartet auf Zahlung", PROVISIONING: "Wird eingerichtet", ACTIVE: "Aktiv", SUSPENDED: "Pausiert", DELETING: "Wird gelöscht", DELETED: "Gelöscht", FAILED: "Problem bei der Einrichtung" },
   },
   chat: {

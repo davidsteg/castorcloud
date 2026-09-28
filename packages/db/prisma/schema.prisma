@@ -45,6 +45,13 @@ enum JobKind {
   SUSPEND
   RESUME
   DELETE
+  REVOKE_ACCESS // process the tenant's pending AccessRevocations
+}
+
+enum RevocationScope {
+  WEB      // browser sessions in the apps (portal sign-out)
+  DEVICES  // also phone apps: app sessions and API keys ("sign out everywhere")
+  REMOVED  // member left the tenant: everything, including the assistant's key
 }
 
 enum JobStatus {
@@ -127,6 +134,7 @@ model Tenant {
   secrets              Secret[]
   volumeKey            VolumeKey?
   jobs                 Job[]
+  revocations          AccessRevocation[]
   createdAt            DateTime        @default(now())
   updatedAt            DateTime        @updatedAt
 }
@@ -138,6 +146,8 @@ model User {
   name         String?
   locale       String?
   isStaff      Boolean  @default(false) // access to the admin console
+  /// Portal sessions signed in before this are rejected ("sign out everywhere").
+  sessionsRevokedAt DateTime?
   memberships  Member[]
   createdAt    DateTime @default(now())
 }
@@ -225,6 +235,22 @@ model Job {
   log        String    @default("")
   createdAt  DateTime  @default(now())
   finishedAt DateTime?
+}
+
+/// Access to end in the tenant's apps for one person. Processed by the
+/// provisioner when the apps run (REVOKE_ACCESS job, or the next apply for a
+/// suspended tenant), then deleted. Keyed by e-mail and Authentik sub, not by
+/// user, because a removed member's user row may be gone.
+model AccessRevocation {
+  id        String          @id @default(cuid())
+  tenant    Tenant          @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  tenantId  String
+  email     String
+  sub       String
+  scope     RevocationScope
+  createdAt DateTime        @default(now())
+
+  @@index([tenantId])
 }
 
 /// Append-only record of security-relevant actions (key access, staff access,

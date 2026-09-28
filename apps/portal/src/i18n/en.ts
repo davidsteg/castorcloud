@@ -228,6 +228,9 @@ const en = {
     connect: "After signing in, your cloud shows you step by step how to connect the apps.",
   },
   setup: {
+    frameExpiredTitle: "Please sign in again",
+    frameExpiredBody: "This app couldn't open. Your sign-in has probably expired.",
+    signInAgain: "Sign in again",
     nav: "Set up apps",
     home: "Overview",
     welcome: "Welcome to your cloud",
@@ -447,6 +450,8 @@ const en = {
     open: "Open",
     billing: "Invoices & subscription",
     logout: "Log out",
+    logoutAll: "Log out on all devices",
+    logoutAllHint: "Also signs out your other browsers and disconnects the phone apps and Telegram. You'll need to connect them again.",
     status: { PENDING: "Waiting for payment", PROVISIONING: "Being set up", ACTIVE: "Active", SUSPENDED: "Suspended", DELETING: "Being deleted", DELETED: "Deleted", FAILED: "Setup problem" },
   },
   chat: {
