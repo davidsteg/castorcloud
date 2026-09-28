@@ -25,16 +25,19 @@ jobs:
       fail-fast: false
       matrix: &images
         include:
-          - name: portal
+          # Portal, worker, monitor and Telegram bot: one image, one container each.
+          - name: castor
+            image: castorcloud
             context: .
-            file: apps/portal/Dockerfile
-          - name: provisioner
-            context: .
-            file: apps/provisioner/Dockerfile
+            file: Dockerfile
+          # Runs per tenant on nodes.
           - name: assistant-tools
+            image: castorcloud-assistant-tools
             context: .
             file: agent/tools/Dockerfile
+          # Privileged LUKS helper on nodes; kept apart so nothing else runs privileged.
           - name: cryptd
+            image: castorcloud-cryptd
             context: infra/node/cryptd
             file: infra/node/cryptd/Dockerfile
     steps:
@@ -78,7 +81,7 @@ jobs:
       fail-fast: false
       matrix: *images
     env:
-      IMAGE: ghcr.io/${{ github.repository }}-${{ matrix.name }}
+      IMAGE: ghcr.io/${{ github.repository_owner }}/${{ matrix.image }}
       COSIGN_KEY_SET: ${{ secrets.COSIGN_PRIVATE_KEY != '' }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1

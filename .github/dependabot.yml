@@ -12,8 +12,7 @@ updates:
 
   - package-ecosystem: docker
     directories:
-      - /apps/portal
-      - /apps/provisioner
+      - /
       - /agent/tools
       - /infra/node/cryptd
     schedule:

@@ -21,17 +21,30 @@ results are shown in the job summary instead of the Security tab.
 
 | Image | Dockerfile |
 | --- | --- |
-| `ghcr.io/davidsteg/castorcloud-portal` | `apps/portal/Dockerfile` |
-| `ghcr.io/davidsteg/castorcloud-provisioner` | `apps/provisioner/Dockerfile` |
+| `ghcr.io/davidsteg/castorcloud` | `Dockerfile` |
 | `ghcr.io/davidsteg/castorcloud-assistant-tools` | `agent/tools/Dockerfile` |
 | `ghcr.io/davidsteg/castorcloud-cryptd` | `infra/node/cryptd/Dockerfile` |
+
+`castorcloud` holds all of Castor's own Node services. Run one container
+per service from it, each with only its own secrets and mounts:
+
+```sh
+docker run ghcr.io/davidsteg/castorcloud@sha256:<digest>            # portal (port 3000)
+docker run ghcr.io/davidsteg/castorcloud@sha256:<digest> worker     # also: monitor, telegram,
+                                                                    # node, backup, migrate
+```
+
+Only the worker gets the node SSH key (`/home/node/.ssh`, read-only) and
+the Traefik dynamic directory (`/app/infra/control-plane/traefik/dynamic`).
+The two node images stay separate: cryptd runs privileged and
+assistant-tools runs per tenant, so neither should carry the control plane.
 
 Pull requests build and scan (amd64). Pushes to `main` publish amd64 and
 arm64 images tagged with the full commit SHA and `main`, with an SBOM and
 build provenance attached. Deploy by digest or SHA tag, never `main`.
 Runtime images run as a non-root user and carry no npm.
 
-The portal bakes `BASE_DOMAIN` (default `castorcloud.ch`) into its client
+The castor image bakes `BASE_DOMAIN` (default `castorcloud.ch`) into its client
 bundle; everything else is read from the environment at run time.
 
 ### Signing
@@ -46,7 +59,7 @@ cosign generate-key-pair           # writes cosign.key and cosign.pub
 #   COSIGN_PRIVATE_KEY = contents of cosign.key
 #   COSIGN_PASSWORD    = the password you chose
 cosign verify --key cosign.pub --insecure-ignore-tlog \
-  ghcr.io/davidsteg/castorcloud-portal@sha256:<digest>
+  ghcr.io/davidsteg/castorcloud@sha256:<digest>
 ```
 
 Keep `cosign.key` offline; commit only `cosign.pub` if nodes should verify.
