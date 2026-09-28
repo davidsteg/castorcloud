@@ -76,7 +76,11 @@ provisioner writes `infra/control-plane/traefik/dynamic/tenant-<slug>.yml`
 (`photos-<slug>`, `docs-<slug>`, …) to its node's edge proxy. A new tenant
 needs no DNS change, and moving a tenant only rewrites its route.
 
-**Production setup (Cloudflare):** in the castorcloud.ch zone, add `A`
+**Production setup (Cloudflare):** castorcloud.ch is registered at Hostpoint,
+and its DNS runs on Cloudflare. Add the domain as a site in Cloudflare (the free
+plan is enough), then in the Hostpoint control panel replace the domain's
+nameservers with the two that Cloudflare shows. The switch can take a few hours.
+Then, in the castorcloud.ch zone on Cloudflare, add `A`
 records for `castorcloud.ch` and `*.castorcloud.ch` pointing to the site's public
 IP, and set them to **DNS only** (grey cloud). Proxied requests are capped
 at 100 MB, which breaks video uploads. On the router, forward 80 and 443 to the
