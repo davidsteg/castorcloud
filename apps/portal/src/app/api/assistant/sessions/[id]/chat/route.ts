@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { SESSION_ID_RE, memberAssistant } from "@/lib/assistant";
+import { SESSION_ID_RE, memberAssistant, sameOrigin } from "@/lib/assistant";
 import { chatEvents, type ChatEvent } from "@pc/core";
 
 export const dynamic = "force-dynamic";
@@ -8,6 +8,7 @@ const MAX_INPUT = 4000;
 
 /** Sends a message; answers with the reply as newline-delimited JSON events. */
 export async function POST(req: Request, { params }: { params: Promise<{ id: string }> }) {
+  if (!sameOrigin(req)) return NextResponse.json({ error: "forbidden" }, { status: 403 });
   const { id } = await params;
   const assistant = await memberAssistant();
   if (!assistant || !SESSION_ID_RE.test(id)) return NextResponse.json({ error: "not found" }, { status: 404 });

@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { SESSION_ID_RE, memberAssistant } from "@/lib/assistant";
+import { SESSION_ID_RE, memberAssistant, sameOrigin } from "@/lib/assistant";
 
 export const dynamic = "force-dynamic";
 
@@ -21,7 +21,8 @@ export async function GET(_req: Request, { params }: { params: Promise<{ id: str
 }
 
 /** Deletes a conversation (the assistant's long-term memory is kept). */
-export async function DELETE(_req: Request, { params }: { params: Promise<{ id: string }> }) {
+export async function DELETE(req: Request, { params }: { params: Promise<{ id: string }> }) {
+  if (!sameOrigin(req)) return NextResponse.json({ error: "forbidden" }, { status: 403 });
   const { id } = await params;
   const assistant = await memberAssistant();
   if (!assistant || !SESSION_ID_RE.test(id)) return NextResponse.json({ error: "not found" }, { status: 404 });

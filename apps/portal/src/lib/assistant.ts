@@ -20,6 +20,19 @@ async function secret(tenantId: string, key: string) {
   return row ? openSecret(tenantId, key, row.ciphertext) : undefined;
 }
 
+/**
+ * Rejects cross-origin writes. Every tenant and service host shares the
+ * registrable domain, so SameSite cookies alone don't stop another host from
+ * posting here with the member's session.
+ */
+export function sameOrigin(req: Request) {
+  try {
+    return new URL(req.headers.get("origin") ?? "").host === req.headers.get("host");
+  } catch {
+    return false; // no or opaque ("null") origin
+  }
+}
+
 export type Assistant = NonNullable<Awaited<ReturnType<typeof memberAssistant>>>;
 
 /**

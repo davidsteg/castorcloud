@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { memberAssistant } from "@/lib/assistant";
+import { memberAssistant, sameOrigin } from "@/lib/assistant";
 
 export const dynamic = "force-dynamic";
 
@@ -20,7 +20,8 @@ export async function GET() {
 }
 
 /** Starts a new conversation. */
-export async function POST() {
+export async function POST(req: Request) {
+  if (!sameOrigin(req)) return NextResponse.json({ error: "forbidden" }, { status: 403 });
   const assistant = await memberAssistant();
   if (!assistant) return NextResponse.json({ error: "not found" }, { status: 404 });
   // No title: Hermes titles must be unique and it names sessions itself.
