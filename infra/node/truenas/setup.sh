@@ -47,6 +47,8 @@ done
 step "castor-zfs and the SSH gate in $BIN"
 mkdir -p "$BIN" "$BASE/node" "$BASE/home"
 install -o root -g root -m 755 "$HERE/../bin/castor-zfs" "$HERE/../bin/castor-ssh" "$BIN/"
+# Backups (snapshots, send/receive), once that helper is in the repo.
+[ ! -f "$HERE/../bin/castor-snap" ] || install -o root -g root -m 755 "$HERE/../bin/castor-snap" "$BIN/"
 # Root-owned: the castor user can't change where the helpers point.
 cat > "$BIN/castor.conf" <<CONF
 # Written by infra/node/truenas/setup.sh. Read by castor-ssh and castor-zfs.
@@ -60,7 +62,7 @@ CONF
 chown root:root "$BIN" "$BIN/castor.conf"
 chmod 755 "$BIN"; chmod 644 "$BIN/castor.conf"
 
-step "user $USER_NAME (SSH key restricted to the gate, sudo for castor-zfs and docker)"
+step "user $USER_NAME (SSH key restricted to the gate, sudo for the helpers and docker)"
 # Values go to python as arguments, never into code, so a key comment with
 # quotes can't break anything.
 user=$(python3 - "$BIN" "$BASE" "$pubkey" <<'PY'
@@ -72,7 +74,7 @@ print(json.dumps({
     "shell": "/usr/bin/bash",  # castor-ssh runs as a forced command; nothing else is reachable
     "password_disabled": True,
     "sshpubkey": f'command="{bin_dir}/castor-ssh",restrict {pubkey}',
-    "sudo_commands_nopasswd": [f"{bin_dir}/castor-zfs", "/usr/bin/docker"],
+    "sudo_commands_nopasswd": [f"{bin_dir}/castor-zfs", f"{bin_dir}/castor-snap", "/usr/bin/docker"],
 }))
 PY
 )
