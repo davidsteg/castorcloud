@@ -117,9 +117,30 @@ model Member {
   user      User       @relation(fields: [userId], references: [id], onDelete: Cascade)
   userId    String
   role      MemberRole @default(MEMBER)
+  telegram  TelegramLink?
   createdAt DateTime   @default(now())
 
   @@unique([tenantId, userId])
+}
+
+/// A member's assistant on Telegram (opt-in), via the one Castor bot.
+/// Created with a pairing code shown in the portal; linked once the member
+/// sends that code to the bot.
+model TelegramLink {
+  id               String    @id @default(cuid())
+  member           Member    @relation(fields: [memberId], references: [id], onDelete: Cascade)
+  memberId         String    @unique
+  /// SHA-256 of the pending pairing code; cleared once linked
+  pairingCodeHash  String?   @unique
+  pairingExpiresAt DateTime?
+  /// Telegram user id (private chats only), set once linked
+  telegramUserId   BigInt?   @unique
+  telegramUsername String?
+  /// The assistant conversation messages go to; /new starts another
+  sessionId        String?
+  linkedAt         DateTime?
+  createdAt        DateTime  @default(now())
+  updatedAt        DateTime  @updatedAt
 }
 
 model ServiceInstance {

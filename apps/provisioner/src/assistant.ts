@@ -21,7 +21,7 @@ export type AssistantMember = {
 };
 
 /** Per-member secrets, stored encrypted in the Secret table like all others. */
-export const memberKeyName = (memberId: string) => `ASSISTANT_KEY_${memberId}`;
+export { assistantKeyName as memberKeyName } from "@pc/core";
 export const memberToolsTokenName = (memberId: string) => `ASSISTANT_TOOLS_${memberId}`;
 export const isMemberSecret = (key: string) => /^ASSISTANT_(KEY|TOOLS)_/.test(key);
 
