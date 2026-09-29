@@ -24,7 +24,7 @@ const de: Dictionary = {
       "Fotos, Dokumente, Orte und Flüge – in einer privaten Cloud, die Ihnen gehört. Keine Werbung, kein Tracking, kein KI-Training mit Ihren Daten.",
     cta: "Angebot zusammenstellen",
     secondary: "So schützen wir Ihre Daten",
-    trust: ["Rechenzentren in der Schweiz", "Schweizer Datenschutzgesetz (revDSG)", "100 % Open Source", "Verschlüsselt gespeichert"],
+    trust: ["Server in der Schweiz", "Schweizer Datenschutzgesetz (revDSG)", "100 % Open Source", "Verschlüsselt gespeichert"],
   },
   services: {
     title: "Alles, was Google für Sie tut. Ohne Google.",
@@ -61,11 +61,11 @@ const de: Dictionary = {
   swiss: {
     title: "Schweizer Hosting. Ehrlich bei der Sicherheit.",
     lead:
-      "Ihre Daten bleiben in Schweizer Rechenzentren und unterstehen Schweizer Recht. Wir sagen Ihnen genau, was wir schützen – und wo die Grenzen sind.",
+      "Ihre Daten bleiben in der Schweiz und unterstehen Schweizer Recht. Während der Beta liegen sie in unserem eigenen Homelab. Wir sagen Ihnen genau, was wir schützen – und wo die Grenzen sind.",
     points: [
       {
         title: "Gespeichert in der Schweiz",
-        text: "Server und verschlüsselte Backups in Schweizer Rechenzentren. Ihre Daten verlassen das Land nicht.",
+        text: "Server und verschlüsselte Backups in der Schweiz: während der Beta in unserem eigenen Homelab, später auf einer grösseren Infrastruktur. Ihre Daten verlassen das Land nicht.",
       },
       {
         title: "Pro Kunde verschlüsselt",
@@ -359,7 +359,7 @@ const de: Dictionary = {
       },
       {
         q: "Wo genau sind meine Daten gespeichert?",
-        a: "In Rechenzentren in der Schweiz, inklusive der verschlüsselten Backups. Zahlungen wickelt Stripe ab; die Anmeldung mit Google ist optional.",
+        a: "In der Schweiz, inklusive der verschlüsselten Backups. Während der Beta auf unseren eigenen Servern in einem Homelab; wenn wir wachsen, ziehen wir auf eine grössere Infrastruktur in der Schweiz um. Zahlungen wickelt Stripe ab; die Anmeldung mit Google ist optional.",
       },
       {
         q: "Kann ich meine Daten mitnehmen?",
@@ -495,18 +495,20 @@ const de: Dictionary = {
   },
   beta: {
     tag: "Beta",
-    banner: "Castor Cloud ist in der Beta-Phase. Neue Clouds werden auf Bewerbung eröffnet, und es kann sich noch einiges ändern.",
-    more: "Was das bedeutet",
-    title: "Castor Cloud ist in der Beta-Phase",
-    lead: "Wir öffnen Castor Cloud Schritt für Schritt für eine begrenzte Zahl von Haushalten. Das bedeutet das für Sie.",
+    banner: "Beta aus dem freundlichen Homelab nebenan: Castor Cloud läuft vorerst auf unseren eigenen Servern in der Schweiz und zieht auf eine grössere Infrastruktur um, sobald mehr Leute dabei sind.",
+    more: "So funktioniert die Beta",
+    title: "Das freundliche Homelab aus Ihrer Nachbarschaft",
+    lead: "Während der Beta läuft Castor Cloud in unserem Homelab: auf eigenen Servern in der Schweiz, nicht in einem Rechenzentrum. Wir sagen das offen, denn Sie sollen wissen, wo Ihre Daten liegen. Wenn mehr Leute dazukommen, ziehen wir auf eine grössere Infrastruktur um.",
     points: [
+      { title: "Wo Ihre Cloud läuft", text: "Auf unseren eigenen Servern in einem Homelab in der Schweiz, mit verschlüsseltem Speicher für jede Kundin und jeden Kunden und verschlüsselten Backups auf einem separaten Gerät. Das ist sorgfältig aufgebaut, aber kein Rechenzentrum: ein Standort, ohne redundante Strom- und Internetleitungen." },
+      { title: "Wir wachsen mit Ihnen", text: "Wenn die Zahl der Nutzerinnen und Nutzer wächst, ziehen wir Castor Cloud auf eine grössere Infrastruktur in der Schweiz um. Wir informieren Sie im Voraus und kümmern uns um den Umzug; Ihre Adresse bleibt gleich." },
+      { title: "Unterbrüche sind möglich", text: "Ein Stromausfall, eine Internetstörung oder Wartungsarbeiten können Ihre Cloud eine Weile unerreichbar machen. Während der Beta versprechen wir keine Verfügbarkeit. Behalten Sie eine eigene Kopie von allem, was Sie nicht verlieren dürfen." },
       { title: "Eröffnung auf Bewerbung", text: "Sie wählen Ihr Angebot und bewerben sich. Wir prüfen jede Bewerbung persönlich und antworten per E-Mail. Sie bezahlen erst, wenn wir sie angenommen haben." },
       { title: "Änderungen sind möglich", text: "Funktionen, Apps und Preise können sich während der Beta noch ändern. Über alles, was Ihr Abonnement betrifft, informieren wir Sie im Voraus." },
-      { title: "Unterbrüche sind möglich", text: "Ihre Daten sind verschlüsselt und gesichert, aber während wir den Betrieb aufbauen, kann es Wartungsfenster und Ausfälle geben. Behalten Sie eine eigene Kopie von allem, was Sie nicht verlieren dürfen." },
       { title: "Ihr Feedback zählt", text: "Sagen Sie uns, was funktioniert und was nicht. Mit der Beta machen wir Castor Cloud gut." },
     ],
-    signupNotice: "Castor Cloud ist in der Beta-Phase: Neue Clouds werden auf Bewerbung eröffnet. Senden Sie jetzt Ihre Bewerbung; wir prüfen sie und antworten per E-Mail. Sie bezahlen erst, wenn sie angenommen ist.",
-    accept: "Ich verstehe, dass Castor Cloud in der Beta-Phase ist: Es kann Unterbrüche und Änderungen geben, und ich behalte eine eigene Kopie von Daten, die ich nicht verlieren darf.",
+    signupNotice: "Castor Cloud ist in der Beta-Phase und läuft vorerst in unserem Homelab in der Schweiz, nicht in einem Rechenzentrum. Neue Clouds werden auf Bewerbung eröffnet: Senden Sie jetzt Ihre Bewerbung, wir prüfen sie und antworten per E-Mail. Sie bezahlen erst, wenn sie angenommen ist.",
+    accept: "Ich verstehe, dass Castor Cloud in der Beta-Phase ist und vorerst in einem Homelab läuft: Es kann Unterbrüche und Änderungen geben, und ich behalte eine eigene Kopie von Daten, die ich nicht verlieren darf.",
   },
   apply: {
     note: "Wofür möchten Sie Castor Cloud nutzen? (freiwillig)",
@@ -546,7 +548,7 @@ const de: Dictionary = {
     appliedSubject: "Wir haben Ihre Bewerbung erhalten",
     appliedBody: "Danke für Ihre Bewerbung bei Castor Cloud. Wir haben Ihre Bewerbung für {name} ({address}) erhalten und prüfen sie persönlich. Wir antworten per E-Mail, meist innert weniger Tage.",
     approvedSubject: "Ihre Bewerbung bei Castor Cloud wurde angenommen",
-    approvedBody: "Gute Nachrichten: Ihre Bewerbung für {name} ({address}) wurde angenommen.\n\nSchliessen Sie die Zahlung ab, damit wir Ihre Cloud einrichten:\n{link}\n\nCastor Cloud ist in der Beta-Phase: Funktionen können sich noch ändern, und es kann Unterbrüche geben. Behalten Sie eine eigene Kopie von allem, was Sie nicht verlieren dürfen.",
+    approvedBody: "Gute Nachrichten: Ihre Bewerbung für {name} ({address}) wurde angenommen.\n\nSchliessen Sie die Zahlung ab, damit wir Ihre Cloud einrichten:\n{link}\n\nCastor Cloud ist in der Beta-Phase und läuft vorerst in unserem Homelab in der Schweiz: Funktionen können sich noch ändern, und es kann Unterbrüche geben. Behalten Sie eine eigene Kopie von allem, was Sie nicht verlieren dürfen.",
     rejectedSubject: "Ihre Bewerbung bei Castor Cloud",
     rejectedBody: "Danke für Ihr Interesse an Castor Cloud. Leider können wir für {name} während der Beta-Phase im Moment keine Cloud eröffnen. Wir haben Ihre Bewerbung gelöscht; Sie können sich gerne später erneut bewerben.",
     newsletterSubject: "Bitte bestätigen Sie Ihr Newsletter-Abonnement",
