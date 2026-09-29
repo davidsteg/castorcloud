@@ -23,7 +23,7 @@ const en = {
       "Photos, documents, places and flights – in one private cloud that belongs to you. No ads, no tracking, no training AI on your data.",
     cta: "Build your plan",
     secondary: "How we protect your data",
-    trust: ["Data centres in Switzerland", "Swiss data protection law (nFADP)", "100% open source", "Encrypted at rest"],
+    trust: ["Servers in Switzerland", "Swiss data protection law (nFADP)", "100% open source", "Encrypted at rest"],
   },
   services: {
     title: "Everything Google does for you. Without Google.",
@@ -60,11 +60,11 @@ const en = {
   swiss: {
     title: "Swiss hosting. Honest about security.",
     lead:
-      "Your data stays in Swiss data centres and is subject to Swiss law. We tell you exactly what we protect – and where the limits are.",
+      "Your data stays in Switzerland and is subject to Swiss law. During the beta it lives in our own homelab. We tell you exactly what we protect – and where the limits are.",
     points: [
       {
         title: "Stored in Switzerland",
-        text: "Servers and encrypted backups in Swiss data centres. Your data does not leave the country.",
+        text: "Servers and encrypted backups in Switzerland: during the beta in our own homelab, later on bigger infrastructure. Your data does not leave the country.",
       },
       {
         title: "Encrypted per customer",
@@ -358,7 +358,7 @@ const en = {
       },
       {
         q: "Where exactly is my data stored?",
-        a: "In data centres in Switzerland, including the encrypted backups. Payments are processed by Stripe; logging in with Google is optional.",
+        a: "In Switzerland, including the encrypted backups. During the beta it runs on our own servers in a homelab; as we grow, we move to bigger infrastructure in Switzerland. Payments are processed by Stripe; logging in with Google is optional.",
       },
       {
         q: "Can I take my data with me?",
@@ -494,18 +494,20 @@ const en = {
   },
   beta: {
     tag: "Beta",
-    banner: "Castor Cloud is in beta. New clouds are opened by application, and things may still change.",
-    more: "What this means",
-    title: "Castor Cloud is in beta",
-    lead: "We are opening Castor Cloud step by step, to a limited number of households. Here is what that means for you.",
+    banner: "Beta from the friendly homelab next door: for now Castor Cloud runs on our own servers in Switzerland, and it moves to bigger infrastructure as more people join.",
+    more: "How the beta works",
+    title: "The friendly homelab from your neighbourhood",
+    lead: "During the beta, Castor Cloud runs in our homelab: our own servers in Switzerland, not a data centre. We say so openly, because you should know where your data lives. As more people join, we move to bigger infrastructure.",
     points: [
+      { title: "Where your cloud runs", text: "On our own servers in a homelab in Switzerland, with encrypted storage for every customer and encrypted backups on a separate machine. It is a careful setup, but it is not a data centre: one location, without redundant power or internet lines." },
+      { title: "Growing with you", text: "When the number of users grows, we move Castor Cloud to bigger infrastructure in Switzerland. We tell you in advance and take care of the move; your address stays the same." },
+      { title: "Interruptions are possible", text: "A power cut, an internet outage or maintenance can make your cloud unreachable for a while. We don't promise any uptime during the beta. Keep your own copy of anything you can't afford to lose." },
       { title: "Opened by application", text: "You choose your plan and apply. We review every application by hand and reply by e-mail. You only pay once we have approved it." },
       { title: "Things may change", text: "Features, apps and prices may still change during the beta. We tell you in advance about anything that affects your subscription." },
-      { title: "Interruptions are possible", text: "Your data is encrypted and backed up, but there may be maintenance windows and outages while we build up operations. Keep your own copy of anything you can't afford to lose." },
       { title: "Your feedback counts", text: "Tell us what works and what doesn't. The beta is how we make Castor Cloud good." },
     ],
-    signupNotice: "Castor Cloud is in beta: new clouds are opened by application. Send your application now; we review it and reply by e-mail. You only pay once it is approved.",
-    accept: "I understand that Castor Cloud is in beta: there may be interruptions and changes, and I keep my own copy of data I can't afford to lose.",
+    signupNotice: "Castor Cloud is in beta and, for now, runs in our homelab in Switzerland rather than in a data centre. New clouds are opened by application: send yours now, we review it and reply by e-mail. You only pay once it is approved.",
+    accept: "I understand that Castor Cloud is in beta and runs in a homelab for now: there may be interruptions and changes, and I keep my own copy of data I can't afford to lose.",
   },
   apply: {
     note: "What would you like to use Castor Cloud for? (optional)",
@@ -545,7 +547,7 @@ const en = {
     appliedSubject: "We have received your application",
     appliedBody: "Thank you for applying for Castor Cloud. We have received your application for {name} ({address}) and will review it by hand. We will reply by e-mail, usually within a few days.",
     approvedSubject: "Your Castor Cloud application was approved",
-    approvedBody: "Good news: your application for {name} ({address}) was approved.\n\nComplete the payment to set up your cloud:\n{link}\n\nCastor Cloud is in beta: features may still change, and there may be interruptions. Keep your own copy of anything you can't afford to lose.",
+    approvedBody: "Good news: your application for {name} ({address}) was approved.\n\nComplete the payment to set up your cloud:\n{link}\n\nCastor Cloud is in beta and runs in our homelab in Switzerland for now: features may still change, and there may be interruptions. Keep your own copy of anything you can't afford to lose.",
     rejectedSubject: "Your Castor Cloud application",
     rejectedBody: "Thank you for your interest in Castor Cloud. Unfortunately we can't open a cloud for {name} during the beta at the moment. We have deleted your application; you are welcome to apply again later.",
     newsletterSubject: "Please confirm your newsletter subscription",

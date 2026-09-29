@@ -4,8 +4,12 @@
 
 While `BETA` is on (the default), every page of the public site shows a
 banner linking to `/<locale>/beta`, which explains what the beta means:
-clouds are opened by application, features and prices may change, and
-interruptions are possible. The signup page repeats it, and the applicant
+the platform runs in our homelab in Switzerland ("the friendly homelab from
+your neighbourhood"), not a data centre, and moves to bigger infrastructure
+as the number of users grows; clouds are opened by application; features and
+prices may change; and interruptions are possible, with no uptime promised.
+The site's hosting claims say "in Switzerland", not "data centres", for the
+same reason. When the platform moves, update those texts in `i18n/`. The signup page repeats it, and the applicant
 must tick a second box acknowledging it. `BETA=off` removes all of this and
 signups go straight to payment, as before.
 
