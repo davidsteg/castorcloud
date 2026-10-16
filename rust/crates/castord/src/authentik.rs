@@ -1,6 +1,6 @@
 //! The Authentik API, as `apps/provisioner/src/authentik.ts` uses it. Only
 //! what castord's job kinds need so far: removing a tenant's groups and
-//! applications. Every call is idempotent (look up, then act).
+//! applications, and ending a user's sessions. Every call is idempotent (look up, then act).
 
 use serde_json::Value;
 use zeroize::Zeroizing;
@@ -79,6 +79,45 @@ impl Authentik {
         Ok(self.find_one(path, query).await?.and_then(|v| pk(&v)))
     }
 
+    pub async fn find_user_pk_by_email(&self, email: &str) -> Result<Option<i64>, String> {
+        let user = self.find_one("/core/users/", &[("email", email)]).await?;
+        Ok(user.and_then(|u| u.get("pk").and_then(Value::as_i64)))
+    }
+
+    /// Signs the user out of Authentik in every browser and drops their refresh tokens.
+    pub async fn end_user_sessions(&self, user_pk: i64) -> Result<(), String> {
+        let user = self
+            .request(Method::Get, &format!("/core/users/{user_pk}/"), None)
+            .await?
+            .ok_or("Authentik: empty user")?;
+        let username = user
+            .get("username")
+            .and_then(Value::as_str)
+            .ok_or("Authentik: user without username")?;
+        let path = format!(
+            "/core/authenticated_sessions/?user__username={}&page_size=1000",
+            crate::llm::encode(username)
+        );
+        for s in results(self.request(Method::Get, &path, None).await?) {
+            if let Some(uuid) = s.get("uuid").and_then(Value::as_str) {
+                self.request(
+                    Method::Delete,
+                    &format!("/core/authenticated_sessions/{}/", segment(uuid)?),
+                    None,
+                )
+                .await?;
+            }
+        }
+        let path = format!("/oauth2/refresh_tokens/?user={user_pk}&page_size=1000");
+        for t in results(self.request(Method::Get, &path, None).await?) {
+            if let Some(id) = t.get("id").and_then(Value::as_i64) {
+                self.request(Method::Delete, &format!("/oauth2/refresh_tokens/{id}/"), None)
+                    .await?;
+            }
+        }
+        Ok(())
+    }
+
     pub async fn delete_group(&self, name: &str) -> Result<(), String> {
         if let Some(pk) = self.find_pk("/core/groups/", &[("name", name)]).await? {
             self.request(Method::Delete, &format!("/core/groups/{}/", segment(&pk)?), None)
@@ -147,6 +186,11 @@ impl Authentik {
         }
         Ok(())
     }
+}
+
+fn results(page: Option<Value>) -> Vec<Value> {
+    page.and_then(|p| p.get("results").and_then(Value::as_array).cloned())
+        .unwrap_or_default()
 }
 
 fn pk(v: &Value) -> Option<String> {

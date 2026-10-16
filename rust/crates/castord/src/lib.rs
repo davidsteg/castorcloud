@@ -12,6 +12,7 @@ pub mod http;
 pub mod llm;
 pub mod node;
 pub mod queue;
+pub mod revoke;
 pub mod storage;
 pub mod suspend;
 pub mod valid;
@@ -57,6 +58,18 @@ pub struct JobCx {
 }
 
 impl JobCx {
+    /// A step the portal's progress page shows, and a log line for it.
+    pub async fn report(&self, job: &Job, step: &str, message: &str) -> Result<(), String> {
+        sqlx::query(r#"UPDATE "Job" SET step = $2 WHERE id = $1"#)
+            .bind(&job.id)
+            .bind(step)
+            .execute(&self.db)
+            .await
+            .map_err(|e| e.to_string())?;
+        self.log(job, &format!("{step}: {message}")).await;
+        Ok(())
+    }
+
     /// A line in the job's log (the portal's progress page shows it).
     pub async fn log(&self, job: &Job, line: &str) {
         eprintln!("[{} {}] {line}", job.kind, job.tenant_id);

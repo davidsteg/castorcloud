@@ -51,7 +51,7 @@ static binary per platform with a short, audited dependency list
 4. `castord` with the job claim loop, taking job kinds over one by one;
    the TypeScript worker only claims the kinds it still owns. The loop is
    in place (`rust/crates/castord`, tested against the same Postgres schema).
-   `SUSPEND` and `DELETE` have Rust handlers; `CASTORD_KINDS` in `.env`
+   `SUSPEND`, `DELETE` and `REVOKE_ACCESS` have Rust handlers; `CASTORD_KINDS` in `.env`
    decides which worker runs it. The monitor raises `platform:queue` when a job
    kind has no live worker, so a kind can't be left unrun between the two.
 5. Monitoring, clients and admin CLIs; then the TypeScript provisioner is

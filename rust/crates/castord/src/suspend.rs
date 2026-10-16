@@ -71,7 +71,8 @@ impl Handler for Suspend {
 
         if let Some(node_id) = &t.node_id {
             let node = Node::new(&NodeRow::load(db, node_id).await?, &c.root, c.exec.clone())?;
-            node.docker(compose_args(&node, &t.slug, &["stop"]), false).await?;
+            node.docker(compose_args(&node, &t.slug, &ALL_PROFILES, &["stop"]), false)
+                .await?;
             if t.has_volume_key {
                 TenantStorage::new(&node, &t.slug)?.close().await?;
                 audit(
@@ -162,8 +163,8 @@ async fn stop_stacks(c: &Control, cx: &JobCx, t: &Tenant) -> Result<(), String> 
     Ok(())
 }
 
-/// `docker compose` for the tenant's stack (Lifecycle.compose), every profile.
-pub fn compose_args(node: &Node, slug: &str, args: &[&str]) -> Vec<String> {
+/// `docker compose` for the tenant's stack (Lifecycle.compose) with these profiles.
+pub fn compose_args(node: &Node, slug: &str, profiles: &[&str], args: &[&str]) -> Vec<String> {
     let dir = node.config_dir(slug);
     let mut out = strings(&[
         "compose",
@@ -179,9 +180,9 @@ pub fn compose_args(node: &Node, slug: &str, args: &[&str]) -> Vec<String> {
         "--env-file",
         &format!("{dir}/tenant.env"),
     ]);
-    for p in ALL_PROFILES {
+    for p in profiles {
         out.push("--profile".into());
-        out.push(p.into());
+        out.push((*p).into());
     }
     out.extend(strings(args));
     out

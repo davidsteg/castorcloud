@@ -17,7 +17,7 @@ use serde_json::json;
 use crate::db::audit;
 use crate::node::{Node, NodeRow};
 use crate::storage::{StacksStorage, TenantStorage};
-use crate::suspend::{STACKS_EDGE, compose_args, remove_file, strings};
+use crate::suspend::{ALL_PROFILES, STACKS_EDGE, compose_args, remove_file, strings};
 use crate::{Control, Handler, Job, JobCx, valid};
 
 /// The node's shared services, joined to each tenant's shared network (lifecycle.ts).
@@ -92,7 +92,7 @@ impl Handler for Delete {
             node.docker(strings(&["network", "disconnect", "-f", &llm_net, LLM_GATEWAY]), true)
                 .await?;
             node.docker(
-                compose_args(&node, slug, &["down", "--volumes", "--remove-orphans"]),
+                compose_args(&node, slug, &ALL_PROFILES, &["down", "--volumes", "--remove-orphans"]),
                 false,
             )
             .await?;

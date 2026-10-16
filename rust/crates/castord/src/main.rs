@@ -26,6 +26,7 @@ fn handlers(c: &Arc<Control>) -> Vec<Arc<dyn Handler>> {
     vec![
         Arc::new(castord::suspend::Suspend(c.clone())),
         Arc::new(castord::delete::Delete(c.clone())),
+        Arc::new(castord::revoke::RevokeAccess(c.clone())),
     ]
 }
 
