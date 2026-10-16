@@ -1,0 +1,37 @@
+{
+  "comment": "Sealed by rust/crates/crypto with fixed test-only keys; opened by packages/core/src/crypto.test.ts. Regenerate: CASTOR_WRITE_FIXTURES=1 cargo test -p castor-crypto",
+  "secrets_key": "000102030405060708090a0b0c0d0e0f101112131415161718191a1b1c1d1e1f",
+  "volume_kek": "f0e0d0c0b0a090807060504030201000ffeeddccbbaa99887766554433221100",
+  "secrets": [
+    {
+      "tenant": "cm0tenant1",
+      "name": "DB_PASSWORD",
+      "value": "hunter2",
+      "sealed": "v1.HdJluh24xktM8tMD.wHQgcRCOWhW4M1SCEuTFDQ.BrgK4umFXw"
+    },
+    {
+      "tenant": "cm0tenant1",
+      "name": "EMPTY",
+      "value": "",
+      "sealed": "v1.lEbHKXxChghNRSMV.OZJuqZd1G3stUucFf03anw."
+    },
+    {
+      "tenant": "cm0tenant2",
+      "name": "OIDC_CLIENT_SECRET",
+      "value": "Grüezi 🏔 – ✓",
+      "sealed": "v1.v61lyZuzX32D5dSv.7Nl2KpFZL5qVMMJ7fI5Z5g.FoOADcbVpIPXsqgn6jC4u4BJRDk"
+    }
+  ],
+  "volumes": [
+    {
+      "tenant": "cm0tenant1",
+      "wrapped": "v1.QwiqWhQLAAnALppe.CboiL_7wJa8CW6uhaCMEXA.p4rATJXBhkxG-fASUelAO3xfa-sfD6Aylq3nx5Ipp4HWRJJPCufabeD66QBAxK12r_adn6KyRRbyveu9VN0myA",
+      "dek_hex": "d5de30f734d98c82a9f5ad5da81941f405aa9fe1d02a8590fa88153413ea2701e227833d776e06b98500359947dbebddc47143260e27e7f90fecb966999c0cc9"
+    },
+    {
+      "tenant": "cm0tenant2",
+      "wrapped": "v1.qZ5bj83N_Fxfz44d.IL8xCzryMbrI64vsbLHhTQ.Q9EdQc5_TIpcuBhT4XHfxqJIibMgnY9Jn-bVJ5WXbkBKQ0RLAgbFW0FraRbFWnSa_rB94Ji-SNYSrlXeC3CseA",
+      "dek_hex": "cd477414ab002c7ee162a1d610ed01a997714e1b5df6fec69efd0c6962712a443cd237aee6314196ef7a92b250a02c10f00098555e82683bdcf49161026c888e"
+    }
+  ]
+}
