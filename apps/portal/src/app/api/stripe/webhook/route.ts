@@ -79,9 +79,15 @@ async function handle(event: Stripe.Event) {
           storageUnits: booked.storageUnits,
           extraMembers: booked.extraMembers,
           aiCreditChf: booked.aiCreditChf,
+          stackMemoryUnits: booked.stacks.memoryUnits,
+          stackCpuUnits: booked.stacks.cpuUnits,
+          stackStorageUnits: booked.stacks.storageUnits,
         },
       });
       const changed = await syncServices(tenant.id, booked.services);
+      const stacksChanged = booked.stacks.memoryUnits !== tenant.stackMemoryUnits
+        || booked.stacks.cpuUnits !== tenant.stackCpuUnits
+        || booked.stacks.storageUnits !== tenant.stackStorageUnits;
 
       if (sub.status === "active" && tenant.status === "SUSPENDED") {
         await prisma.tenant.update({ where: { id: tenant.id }, data: { deleteAfter: null } });
@@ -91,6 +97,9 @@ async function handle(event: Stripe.Event) {
         (changed || booked.storageUnits !== tenant.storageUnits || booked.aiCreditChf !== tenant.aiCreditChf)
       ) {
         await enqueueTenantJob(tenant.id, "UPDATE");
+      } else if (tenant.status === "ACTIVE" && stacksChanged) {
+        // Custom stacks only (an UPDATE is followed by a STACKS job anyway).
+        await enqueueTenantJob(tenant.id, "STACKS");
       }
       return;
     }
@@ -118,14 +127,18 @@ function bookedConfig(sub: Stripe.Subscription) {
   let storageUnits = 1;
   let extraMembers = 0;
   let aiCreditChf = 0;
+  const stacks = { memoryUnits: 0, cpuUnits: 0, storageUnits: 0 };
   for (const item of sub.items.data) {
     const key = itemKeyFromLookup(item.price.lookup_key);
     if (key === "credit") aiCreditChf = item.quantity ?? 0;
+    else if (key === "stackram") stacks.memoryUnits = item.quantity ?? 0;
+    else if (key === "stackcpu") stacks.cpuUnits = item.quantity ?? 0;
+    else if (key === "stackdisk") stacks.storageUnits = item.quantity ?? 0;
     else if (key === "storage") storageUnits = item.quantity ?? 1;
     else if (key === "member") extraMembers = item.quantity ?? 0;
     else if (key && (SERVICE_KEYS as string[]).includes(key)) services.push(key);
   }
-  return { services, storageUnits, extraMembers, aiCreditChf };
+  return { services, storageUnits, extraMembers, aiCreditChf, stacks };
 }
 
 /** Enables booked services, disables the rest. Returns whether anything changed. */

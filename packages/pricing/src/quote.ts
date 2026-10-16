@@ -10,9 +10,13 @@
 //  - The AI credit is passed through to the AI provider: never discounted.
 import {
   AI_CREDIT_TIERS_CHF, AI_CREDIT_UNIT_RP, BASE, MAX_EXTRA_MEMBERS, MAX_STORAGE_UNITS, MEMBER,
-  OSS_SHARE, SERVICES, STORAGE, STRIPE_FEES, VAT_RATE, YEARLY_MONTHS_CHARGED,
+  OSS_SHARE, SERVICES, STACK_CPU, STACK_MEMORY, STACK_STORAGE, STORAGE, STRIPE_FEES, VAT_RATE, YEARLY_MONTHS_CHARGED,
   type CatalogItem, type OssProject, type ServiceKey,
 } from "./catalog.ts";
+import { NO_STACK_UNITS, type StackUnits } from "./stacks.ts";
+
+/** Most a tenant can book for its custom stacks, summed over all of them. */
+export const MAX_STACK_UNITS: StackUnits = { memoryUnits: 256, cpuUnits: 64, storageUnits: 200 };
 
 export type Interval = "month" | "year";
 
@@ -23,6 +27,8 @@ export type Config = {
   interval: Interval;
   /** Monthly AI credit in CHF (one of AI_CREDIT_TIERS_CHF), 0 without assistant. */
   aiCreditChf: number;
+  /** Resources reserved by the tenant's custom stacks (docs/stacks.md). */
+  stacks: StackUnits;
 };
 
 export type LineItem = { key: string; quantity: number; unitRp: number; totalRp: number };
@@ -65,6 +71,11 @@ export function normalize(input: Partial<Config>): Config {
     extraMembers: clamp(input.extraMembers, 0, MAX_EXTRA_MEMBERS),
     interval: input.interval === "year" ? "year" : "month",
     aiCreditChf,
+    stacks: {
+      memoryUnits: clamp(input.stacks?.memoryUnits ?? 0, 0, MAX_STACK_UNITS.memoryUnits),
+      cpuUnits: clamp(input.stacks?.cpuUnits ?? 0, 0, MAX_STACK_UNITS.cpuUnits),
+      storageUnits: clamp(input.stacks?.storageUnits ?? NO_STACK_UNITS.storageUnits, 0, MAX_STACK_UNITS.storageUnits),
+    },
   };
 }
 
@@ -78,6 +89,10 @@ export function quote(input: Partial<Config>): Quote {
     ...config.services.map((s) => [SERVICES[s], 1] as [CatalogItem, number]),
   ];
   if (config.extraMembers > 0) items.push([MEMBER, config.extraMembers]);
+  // Stack resources: pure infrastructure, so no donation share (project null).
+  if (config.stacks.memoryUnits > 0) items.push([STACK_MEMORY, config.stacks.memoryUnits]);
+  if (config.stacks.cpuUnits > 0) items.push([STACK_CPU, config.stacks.cpuUnits]);
+  if (config.stacks.storageUnits > 0) items.push([STACK_STORAGE, config.stacks.storageUnits]);
 
   const lines: LineItem[] = items.map(([item, quantity]) => ({
     key: item.key,

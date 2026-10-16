@@ -76,3 +76,19 @@ export const SERVICE_KEYS = Object.keys(SERVICES) as ServiceKey[];
  */
 export const AI_CREDIT_TIERS_CHF = [5, 10, 20, 50] as const;
 export const AI_CREDIT_UNIT_RP = 100;
+
+// ------------------------------------------------------------ custom stacks
+// Apps the customer installs themselves (docs/stacks.md) are priced by the
+// resources they reserve: every container's memory and CPU limit, and the
+// stack's storage. The booking is the sum over all of the tenant's stacks.
+
+/** Per 256 MB of reserved memory. */
+export const STACK_MEMORY: CatalogItem = { key: "stackram", priceRp: 50, costRp: 15, project: null };
+/** Per 0.25 vCPU of reserved CPU. */
+export const STACK_CPU: CatalogItem = { key: "stackcpu", priceRp: 100, costRp: 30, project: null };
+/** Per 10 GB of encrypted stack storage (incl. its backup). */
+export const STACK_STORAGE: CatalogItem = { key: "stackdisk", priceRp: 40, costRp: 10, project: null };
+
+export const STACK_MEMORY_UNIT_MB = 256;
+export const STACK_CPU_UNIT = 0.25;
+export const STACK_STORAGE_UNIT_GB = 10;

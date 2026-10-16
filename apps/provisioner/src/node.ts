@@ -8,8 +8,9 @@ import { chmodSync, existsSync, mkdirSync, rmSync, writeFileSync } from "node:fs
 import path from "node:path";
 import type { TenantStorage } from "./storage.ts";
 import { TenantVolume } from "./volume.ts";
-import { ZfsDataset, type HostExec } from "./zfs.ts";
+import { StacksDataset, ZfsDataset, type HostExec } from "./zfs.ts";
 import { nodeLayout, parseEdge, type RemoteKind } from "./layout.ts";
+import { prepareStacksNode } from "./stacks-node.ts";
 
 export interface NodeExec {
   readonly name: string;
@@ -183,6 +184,10 @@ export type SshNodeConfig = {
    * since the TrueNAS UI has 80 and 443).
    */
   edgeHost?: string;
+  /** STACKS: runs customers' own stacks only (stacks-node.ts prepares it). */
+  role?: "TENANTS" | "STACKS";
+  /** STACKS: where the control plane connects from (the edge lets nothing else in). */
+  controlPlaneIps?: string[];
 };
 
 /**
@@ -199,6 +204,8 @@ export class SshNode implements NodeExec, HostExec {
   readonly authHostIp?: string;
   readonly edgeUrl?: string;
   readonly gatewayBind?: string;
+  readonly role: "TENANTS" | "STACKS";
+  readonly controlPlaneIps: string[];
   private readonly target: string;
   private readonly layout: ReturnType<typeof nodeLayout>;
   private readonly edgePort: number;
@@ -210,6 +217,8 @@ export class SshNode implements NodeExec, HostExec {
     if (!/^[A-Za-z0-9_-]+$/.test(cfg.pool)) throw new Error(`invalid pool name: ${cfg.pool}`);
     this.name = cfg.name;
     this.target = cfg.target;
+    this.role = cfg.role ?? "TENANTS";
+    this.controlPlaneIps = cfg.controlPlaneIps ?? [];
     this.layout = nodeLayout(cfg.kind, cfg.pool);
     this.authHostIp = cfg.authHostIp;
     const edge = cfg.edgeHost === undefined ? undefined : parseEdge(cfg.edgeHost);
@@ -229,6 +238,25 @@ export class SshNode implements NodeExec, HostExec {
 
   docker(args: string[], opts: DockerOpts = {}) {
     return run("docker", args, { ...opts, env: { ...opts.env, DOCKER_HOST: `ssh://${this.target}`, DOCKER_CONTEXT: "" } });
+  }
+
+  /** Like docker(), for binary output (docker cp ... -). */
+  dockerBuffer(args: string[]): Buffer {
+    try {
+      return execFileSync("docker", args, {
+        stdio: ["ignore", "pipe", "pipe"],
+        env: { ...process.env, DOCKER_HOST: `ssh://${this.target}`, DOCKER_CONTEXT: "" },
+        maxBuffer: 8 * 1024 * 1024,
+      });
+    } catch (err) {
+      const e = err as { stderr?: Buffer; message?: string };
+      throw new Error(`docker ${args.slice(0, 3).join(" ")} … failed: ${(e.stderr?.toString() || e.message || "").trim().slice(-2000)}`);
+    }
+  }
+
+  /** Removes rendered files of a tenant on the control plane (e.g. stacks/<name>). */
+  removeLocalConfig(slug: string, dir: string) {
+    this.config.remove(slug, dir);
   }
 
   host(args: string[], opts: { input?: Buffer; allowFail?: boolean } = {}) {
@@ -264,7 +292,19 @@ export class SshNode implements NodeExec, HostExec {
   }
 
   storage(tenantId: string, slug: string, wrappedKey: string) {
+    if (this.role === "STACKS") throw new Error(`${this.name} is a stacks node: no tenant data here`);
     return new ZfsDataset(this, tenantId, slug, wrappedKey, this.layout.mountRoot);
+  }
+
+  /** A tenant's custom-stack data (STACKS nodes only). */
+  stacksStorage(tenantId: string, slug: string, wrappedKey: string) {
+    if (this.role !== "STACKS") throw new Error(`${this.name} is not a stacks node`);
+    return new StacksDataset(this, tenantId, slug, wrappedKey, this.layout.stacksMountRoot);
+  }
+
+  /** Edge port on the LAN (the stacks edge publishes the same one). */
+  get edgePortNumber() {
+    return this.edgePort;
   }
 
   /** Pool size/usage/health and host facts, for registration and health checks. */
@@ -289,6 +329,10 @@ export class SshNode implements NodeExec, HostExec {
    * Only ca-bundle.pem leaves the control plane, never a CA key.
    */
   prepare() {
+    if (this.role === "STACKS") {
+      prepareStacksNode(this, this.root);
+      return;
+    }
     const caDir = process.env.CA_DIR ?? path.join(this.root, ".dev-certs");
     const sync = (name: "templates" | "node" | "brand" | "ca", dir: string, files = ["."]) => {
       if (!existsSync(dir)) throw new Error(`${dir} missing`);

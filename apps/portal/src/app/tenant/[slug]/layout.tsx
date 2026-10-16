@@ -3,6 +3,7 @@ import { requireTenantMember } from "@/lib/tenant";
 import { ServiceWorker } from "@/components/ServiceWorker";
 import { ShellNav, type ShellNavItem } from "@/components/ShellNav";
 import { signOutBrowser } from "@/lib/signout";
+import { stacksEnabled } from "@/lib/stacks";
 
 export default async function TenantLayout({
   children,
@@ -20,6 +21,7 @@ export default async function TenantLayout({
       .filter(([key]) => enabledServices.includes(key))
       .map(([key, s]) => ({ href: `/${key}`, label: t.services.items[key as keyof typeof SERVICES].name, icon: s.icon })),
     ...(enabledServices.includes("assistant") ? [{ href: "/assistant", label: t.chat.title, icon: "✦" }] : []),
+    ...(stacksEnabled() ? [{ href: "/stacks", label: t.stacks.nav, icon: "◇" }] : []),
     { href: "/apps", label: t.setup.nav, icon: "▯" },
   ];
 

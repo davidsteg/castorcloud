@@ -83,3 +83,21 @@ test("the AI budget is the credit net of VAT and payment fees", () => {
     assert.ok(aiBudgetChf(chf) * 100 <= q.breakdown.aiCreditRp);
   }
 });
+
+test("stack resources are priced per unit, without a donation share", () => {
+  const plain = quote({ services: ["photos"], storageUnits: 1 });
+  const q = quote({ services: ["photos"], storageUnits: 1, stacks: { memoryUnits: 4, cpuUnits: 2, storageUnits: 1 } });
+  // 4 x 0.50 + 2 x 1.00 + 1 x 0.40
+  assert.equal(q.monthlyRp - plain.monthlyRp, 440);
+  assert.equal(q.breakdown.openSourceRp, plain.breakdown.openSourceRp);
+  assert.ok(q.breakdown.operationsRp > plain.breakdown.operationsRp, "must not sell stack resources at a loss");
+  assert.deepEqual(q.lines.filter((l) => l.key.startsWith("stack")).map((l) => [l.key, l.quantity]), [
+    ["stackram", 4], ["stackcpu", 2], ["stackdisk", 1],
+  ]);
+  assert.equal(plain.lines.some((l) => l.key.startsWith("stack")), false);
+});
+
+test("stack units are clamped", () => {
+  const q = quote({ services: ["photos"], stacks: { memoryUnits: 1e6, cpuUnits: -2, storageUnits: 3.4 } });
+  assert.deepEqual(q.config.stacks, { memoryUnits: 256, cpuUnits: 0, storageUnits: 3 });
+});

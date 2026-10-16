@@ -1,0 +1,40 @@
+# Edge proxy of a STACKS node (customers' own stacks, docs/stacks.md).
+# Started by the provisioner over ssh:// (stacks.ts). Unlike the tenant
+# nodes' edge (edge.yml) it has no Docker socket and no Docker provider:
+# container labels come from images we don't control, so a stack could
+# otherwise claim another stack's host name. Routes are files the
+# provisioner copies into the routes volume (one per stack, plus
+# castor.yml with the allowlist middleware that only lets the control plane
+# in). The proxy joins each stack's <project>-edge network, where only that
+# stack's web service is.
+name: pc-stacks-edge
+
+services:
+  traefik:
+    image: traefik:v3.6
+    command:
+      - --providers.file.directory=/routes
+      - --providers.file.watch=true
+      - --entrypoints.web.address=:80
+      # The client address comes from the control plane's X-Forwarded-For.
+      - --entrypoints.web.forwardedHeaders.trustedIPs=${CONTROL_PLANE_IPS:?CONTROL_PLANE_IPS is required}
+      - --ping=false
+      - --log.level=WARN
+    ports:
+      - "${EDGE_PORT:-80}:80"
+    volumes:
+      - routes:/routes
+    read_only: true
+    tmpfs: [/tmp]
+    cap_drop: [ALL]
+    cap_add: [NET_BIND_SERVICE]
+    security_opt: ["no-new-privileges:true"]
+    networks: [pc-stacks-edge]
+    restart: unless-stopped
+
+volumes:
+  routes:
+
+networks:
+  pc-stacks-edge:
+    name: pc-stacks-edge

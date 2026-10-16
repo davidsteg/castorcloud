@@ -3,7 +3,7 @@
 import { useMemo, useState } from "react";
 import {
   AI_CREDIT_TIERS_CHF, DEFAULT_AI_CREDIT_CHF, MAX_EXTRA_MEMBERS, MAX_STORAGE_UNITS, OSS_PROJECTS, SERVICES,
-  SERVICE_KEYS, STORAGE_UNIT_GB, BASE, STORAGE, MEMBER, formatChf, quote,
+  SERVICE_KEYS, STORAGE_UNIT_GB, BASE, STORAGE, MEMBER, NO_STACK_UNITS, formatChf, quote,
   type Config, type OssProject, type ServiceKey,
 } from "@pc/pricing";
 import { fill, type Dictionary, type Locale } from "@/i18n";
@@ -25,7 +25,7 @@ function storageLabel(units: number) {
 
 export function PricingCalculator({ locale, t, initial }: { locale: Locale; t: Dictionary; initial?: Config }) {
   const [config, setConfig] = useState<Config>(
-    initial ?? { services: ["photos", "docs"], storageUnits: 2, extraMembers: 0, interval: "month", aiCreditChf: 0 },
+    initial ?? { services: ["photos", "docs"], storageUnits: 2, extraMembers: 0, interval: "month", aiCreditChf: 0, stacks: NO_STACK_UNITS },
   );
   const q = useMemo(() => quote(config), [config]);
   const p = t.pricing;

@@ -13,3 +13,6 @@ dist/
 
 # Per-tenant routes to Mac nodes, written by the provisioner
 infra/control-plane/traefik/dynamic/tenant-*.yml
+
+# Per-tenant routes to custom stacks, written by the provisioner
+infra/control-plane/traefik/dynamic/stacks-*.yml

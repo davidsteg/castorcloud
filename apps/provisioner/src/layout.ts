@@ -8,12 +8,13 @@ export type RemoteKind = "MAC" | "TRUENAS";
  * defaults in infra/node/bin/castor-*.
  *   root       templates and tenant config files (castor-ssh's ROOT)
  *   mountRoot  where tenant datasets are mounted (castor-zfs's MOUNT_ROOT)
+ *   stacksMountRoot  where custom-stack datasets are mounted (STACKS nodes, castor-zfs's STACKS_MOUNT_ROOT)
  */
 export function nodeLayout(kind: RemoteKind, pool: string) {
   return kind === "TRUENAS"
-    ? { root: `/mnt/${pool}/castor/node`, mountRoot: `/mnt/${pool}/castor/t` }
+    ? { root: `/mnt/${pool}/castor/node`, mountRoot: `/mnt/${pool}/castor/t`, stacksMountRoot: `/mnt/${pool}/castor/s` }
     // macOS: both are mounted into Colima's VM at the same paths.
-    : { root: "/Users/Shared/castor", mountRoot: `/Volumes/${pool}/t` };
+    : { root: "/Users/Shared/castor", mountRoot: `/Volumes/${pool}/t`, stacksMountRoot: `/Volumes/${pool}/s` };
 }
 
 /** "10.0.0.5:8480" -> where the control plane reaches the node's edge proxy. */

@@ -14,6 +14,7 @@ public security page (`/[locale]/security`) must never promise more than this.
 | Another customer reads my data | Yes | Separate stack, private networks, separate DBs, separate OIDC apps restricted to the tenant group |
 | Another household member reads my data through the assistant | Yes | One Hermes profile, API key and tools token per member; the tools use that member's own read-only credentials (or Paperless' visibility rules). See [assistant.md](assistant.md) |
 | The AI provider keeps or trains on my data | By contract + config | Zero-data-retention, no-training routing enforced by the gateway; only the question and short excerpts leave the stack, never images |
+| A customer's own app (custom stack) attacks other customers, the nodes or the control plane | Yes, by isolation | Separate STACKS nodes without tenant data, userns-remap + gVisor, all capabilities but a few dropped, internal networks, egress only to listed hosts via a proxy that refuses private addresses, sign-in in front, own domain. See [stacks.md](stacks.md) |
 | Network eavesdropping | Yes | TLS everywhere; OIDC over HTTPS only |
 | Our staff reading data in routine operations | Organisational + audit | No standing access; break-glass requires two people, is written to `AuditLog`, customer is informed |
 | Root on a running node reading mounted data | **No** | The services (search, face recognition, OCR) must process data in clear while running. Only confidential computing (AMD SEV-SNP) could narrow this — possible future premium tier |

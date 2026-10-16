@@ -20,3 +20,16 @@ export function writeTenantRoute(slug: string, content: string) {
 export function removeTenantRoute(slug: string) {
   rmSync(file(slug), { force: true });
 }
+
+/** The tenant's custom stacks (stacks.ts): stacks-<slug>.yml. */
+const stacksFile = (slug: string) => path.join(dir(), `stacks-${slug}.yml`);
+
+export function writeStacksRoute(slug: string, content: string) {
+  const tmp = `${stacksFile(slug)}.tmp`;
+  writeFileSync(tmp, content, { mode: 0o644 });
+  renameSync(tmp, stacksFile(slug));
+}
+
+export function removeStacksRoute(slug: string) {
+  rmSync(stacksFile(slug), { force: true });
+}

@@ -5,7 +5,10 @@
 import path from "node:path";
 import { config } from "dotenv";
 import Stripe from "stripe";
-import { AI_CREDIT_UNIT_RP, BASE, CURRENCY, MEMBER, SERVICES, STORAGE, YEARLY_MONTHS_CHARGED, type CatalogItem } from "@pc/pricing";
+import {
+  AI_CREDIT_UNIT_RP, BASE, CURRENCY, MEMBER, SERVICES, STACK_CPU, STACK_MEMORY, STACK_STORAGE, STORAGE, YEARLY_MONTHS_CHARGED,
+  type CatalogItem,
+} from "@pc/pricing";
 
 config({ path: path.resolve(import.meta.dirname, "../../../.env"), quiet: true });
 const key = process.env.STRIPE_SECRET_KEY;
@@ -25,6 +28,9 @@ const NAMES: Record<string, string> = {
   flights: "Flights",
   assistant: "Assistant",
   credit: "AI credit (CHF 1 per month)",
+  stackram: "Own apps: memory (per 256 MB)",
+  stackcpu: "Own apps: CPU (per 0.25 vCPU)",
+  stackdisk: "Own apps: storage (per 10 GB)",
 };
 
 type SyncItem = Pick<CatalogItem, "key" | "priceRp"> & { yearlyRp?: number };
@@ -41,7 +47,7 @@ async function ensureProduct(item: SyncItem) {
   }
 }
 
-for (const item of [BASE, STORAGE, MEMBER, ...Object.values(SERVICES), CREDIT] as SyncItem[]) {
+for (const item of [BASE, STORAGE, MEMBER, ...Object.values(SERVICES), CREDIT, STACK_MEMORY, STACK_CPU, STACK_STORAGE] as SyncItem[]) {
   const product = await ensureProduct(item);
   for (const interval of ["month", "year"] as const) {
     const lookup = `pc_${item.key}_${interval}`;

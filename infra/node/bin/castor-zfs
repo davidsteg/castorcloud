@@ -12,6 +12,19 @@
 #   castor-zfs status  <slug>                      "open <used-mb> <quota-mb> <quota-mb>" or "closed"/"missing"
 #   castor-zfs usage   <slug>                      "<dir> <used-mb>" per data directory
 #
+# Custom stacks (STACKS nodes only, docs/stacks.md): one encrypted dataset per
+# tenant whose quota is the booked stack storage, and one child per stack
+# (inherits the key) with the stack's own quota.
+#   castor-zfs stacks-open    <slug> <quota-mb>    key on stdin; creates or unlocks + mounts, sets the quota
+#   castor-zfs stacks-close   <slug>               unmounts + locks
+#   castor-zfs stacks-destroy <slug>               destroys it with every stack's data
+#   castor-zfs stacks-status  <slug>               like status
+#   castor-zfs stack-create   <slug> <stack> <quota-mb> <dir>=<uid>.<gid>...
+#                                                  child dataset; each data directory owned
+#                                                  by the (userns-mapped) container user
+#   castor-zfs stack-destroy  <slug> <stack>       destroys one stack's data
+#   castor-zfs stack-usage    <slug>               "<stack> <used-mb>" per stack
+#
 # Layout: dataset $DATASET_ROOT/<slug> (aes-256-gcm, own key) mounted at
 # $MOUNT_ROOT/<slug>; the stack's volumes are directories under data/.
 #   TrueNAS: <pool>/castor/t/<slug>  at /mnt/<pool>/castor/t/<slug>
@@ -29,6 +42,9 @@ here=$(dirname "$0")
 [ -f "$here/castor.conf" ] && . "$here/castor.conf"
 DATASET_ROOT=${DATASET_ROOT:-$POOL/t}
 MOUNT_ROOT=${MOUNT_ROOT:-/Volumes/$POOL/t}
+# Stacks live next to the tenant datasets: .../t -> .../s
+STACKS_DATASET_ROOT=${STACKS_DATASET_ROOT:-${DATASET_ROOT%/t}/s}
+STACKS_MOUNT_ROOT=${STACKS_MOUNT_ROOT:-${MOUNT_ROOT%/t}/s}
 MB=1048576
 
 cmd=${1:?command}
@@ -39,14 +55,24 @@ fi
 
 slug=${2:?slug}
 case "$slug" in ""|-*|*[!a-z0-9-]*) echo "invalid slug" >&2; exit 2;; esac
-ds="$DATASET_ROOT/$slug"
-mnt="$MOUNT_ROOT/$slug"
+case "$cmd" in
+  stacks-*|stack-*)
+    ds="$STACKS_DATASET_ROOT/$slug"
+    mnt="$STACKS_MOUNT_ROOT/$slug"
+    ;;
+  *)
+    ds="$DATASET_ROOT/$slug"
+    mnt="$MOUNT_ROOT/$slug"
+    ;;
+esac
 
 exists() { zfs list -H -o name "$ds" >/dev/null 2>&1; }
 prop() { zfs get -Hp -o value "$1" "$ds"; }
 unlocked() { [ "$(prop keystatus)" = available ]; }
 mounted() { [ "$(prop mounted)" = yes ]; }
 is_mb() { case "$1" in ""|*[!0-9]*) echo "invalid size" >&2; exit 2;; esac; }
+# For stacks: quota=0 would mean "no quota" in ZFS.
+is_quota() { is_mb "$1"; [ "$1" -gt 0 ] || { echo "quota must be above 0" >&2; exit 2; }; }
 
 do_open() {
   unlocked || zfs load-key "$ds"          # reads the key from stdin
@@ -105,6 +131,101 @@ case "$cmd" in
       used=$(prop used); quota=$(prop quota)
       echo "open $((used / MB)) $((quota / MB)) $((quota / MB))"
     else echo "closed"; fi
+    ;;
+  stacks-open)
+    quota=${3:?quota-mb}; is_quota "$quota"
+    zfs list -H -o name "$STACKS_DATASET_ROOT" >/dev/null 2>&1 || zfs create -p "$STACKS_DATASET_ROOT"
+    if ! exists; then
+      mac_opts=""
+      [ "$(uname -s)" = Darwin ] && mac_opts="-o com.apple.browse=off"
+      # shellcheck disable=SC2086
+      zfs create \
+        -o encryption=aes-256-gcm -o keyformat=hex -o keylocation=prompt \
+        -o quota="${quota}M" -o mountpoint="$mnt" $mac_opts "$ds"
+    fi
+    do_open
+    # Mount the stacks below too (children inherit the key, but not the mount after a load-key).
+    zfs list -H -o name -r -d 1 "$ds" | while read -r child; do
+      if [ "$child" != "$ds" ] && [ "$(zfs get -H -o value mounted "$child")" != yes ]; then zfs mount "$child"; fi
+    done
+    # The quota may only go below what is used if zfs agrees; the provisioner checks first.
+    [ "$(prop quota)" = "$((quota * MB))" ] || zfs set quota="${quota}M" "$ds"
+    echo "open"
+    ;;
+  stacks-close)
+    if exists; then
+      zfs list -H -o name -r -d 1 "$ds" | sort -r | while read -r child; do
+        if [ "$(zfs get -H -o value mounted "$child")" = yes ]; then zfs unmount "$child"; fi
+      done
+      if unlocked; then zfs unload-key "$ds"; fi
+    fi
+    echo "closed"
+    ;;
+  stacks-destroy)
+    if exists; then
+      zfs unmount -f "$ds" 2>/dev/null || true
+      zfs destroy -r "$ds"
+    fi
+    # Only the empty mountpoint directories are left.
+    if [ -d "$mnt" ]; then find "$mnt" -depth -type d -empty -delete 2>/dev/null || true; fi
+    echo "destroyed"
+    ;;
+  stacks-status)
+    if ! exists; then echo "missing"
+    elif mounted; then
+      used=$(prop used); quota=$(prop quota)
+      echo "open $((used / MB)) $((quota / MB)) $((quota / MB))"
+    else echo "closed"; fi
+    ;;
+  stack-create)
+    stack=${3:?stack}; quota=${4:?quota-mb}; is_quota "$quota"; shift 4
+    case "$stack" in [a-z][a-z0-9]*) ;; *) echo "invalid stack" >&2; exit 2;; esac
+    case "$stack" in *[!a-z0-9]*) echo "invalid stack" >&2; exit 2;; esac
+    exists && mounted || { echo "stacks dataset not open" >&2; exit 3; }
+    child="$ds/$stack"
+    if ! zfs list -H -o name "$child" >/dev/null 2>&1; then
+      zfs create -o quota="${quota}M" "$child"   # mountpoint and key are inherited
+    else
+      zfs set quota="${quota}M" "$child"
+    fi
+    if [ "$(zfs get -H -o value mounted "$child")" != yes ]; then zfs mount "$child"; fi
+    # Owned by root, not writable by the containers: only data/<dir> is.
+    mkdir -p "$mnt/$stack/data"
+    chown 0:0 "$mnt/$stack" "$mnt/$stack/data"
+    chmod 755 "$mnt/$stack" "$mnt/$stack/data"
+    for spec in "$@"; do
+      d=${spec%%=*}; ids=${spec#*=}
+      case "$d" in ""|.*|*/*|*[!a-z0-9-]*) echo "invalid dir: $d" >&2; exit 2;; esac
+      # uid.gid: the SSH gate allows no colons.
+      case "$ids" in [0-9]*.[0-9]*) ;; *) echo "invalid owner: $ids" >&2; exit 2;; esac
+      case "$ids" in *[!0-9.]*|*.*.*) echo "invalid owner: $ids" >&2; exit 2;; esac
+      uid=${ids%%.*}; gid=${ids#*.}
+      # Never hand a directory to a host system account (userns maps containers far above).
+      if [ "$uid" -lt 65536 ] || [ "$gid" -lt 65536 ]; then echo "owner below the userns range: $ids" >&2; exit 2; fi
+      # -h: never follow a link a container may have put there.
+      if [ -L "$mnt/$stack/data/$d" ]; then echo "refusing symlink: $d" >&2; exit 2; fi
+      mkdir -p "$mnt/$stack/data/$d"
+      chown -h "$uid:$gid" "$mnt/$stack/data/$d"
+      chmod 750 "$mnt/$stack/data/$d"
+    done
+    echo "open"
+    ;;
+  stack-destroy)
+    stack=${3:?stack}
+    case "$stack" in ""|*[!a-z0-9]*) echo "invalid stack" >&2; exit 2;; esac
+    child="$ds/$stack"
+    if zfs list -H -o name "$child" >/dev/null 2>&1; then
+      zfs unmount -f "$child" 2>/dev/null || true
+      zfs destroy -r "$child"
+    fi
+    rmdir "$mnt/$stack" 2>/dev/null || true
+    echo "destroyed"
+    ;;
+  stack-usage)
+    exists && mounted || { echo "closed"; exit 0; }
+    zfs list -Hp -o name,used -r -d 1 "$ds" | while read -r name used; do
+      if [ "$name" != "$ds" ]; then printf '%s %s\n' "${name##*/}" "$((used / MB))"; fi
+    done
     ;;
   usage)
     exists && mounted || { echo "closed"; exit 0; }

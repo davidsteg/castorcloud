@@ -12,13 +12,14 @@
     "staff": "tsx src/staff-admin.ts",
     "telegram": "cross-env NODE_EXTRA_CA_CERTS=../../.dev-certs/ca.crt tsx src/telegram.ts",
     "monitor": "cross-env NODE_EXTRA_CA_CERTS=../../.dev-certs/ca.crt tsx src/monitor.ts",
-    "test": "node --test --experimental-strip-types src/*.test.ts",
+    "test": "node --test --experimental-strip-types src/*.test.ts ../../infra/node/egress/proxy.test.mjs",
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
     "@pc/core": "^0.0.0",
     "@pc/db": "^0.0.0",
     "@pc/pricing": "^0.0.0",
+    "@pc/stacks": "^0.0.0",
     "bullmq": "^5.81.5",
     "dotenv": "^17.2.0",
     "nodemailer": "^10.0.12"

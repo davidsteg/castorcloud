@@ -178,4 +178,67 @@ export class Authentik {
 
     return { providerPk: provider.pk, issuer: `${this.baseUrl}/application/o/${opts.slug}/` };
   }
+
+  // ---------------------------------------------------------- custom stacks
+  // Custom stacks get no OIDC client: Authentik's embedded outpost signs
+  // people in in front of them (Traefik forward auth, "forward_single" mode,
+  // one provider per stack host), and only the tenant's group gets through.
+
+  private async embeddedOutpost() {
+    return this.mustFind<{ pk: string; providers: number[] }>("embedded outpost", "/outposts/instances/", {
+      managed__iexact: "goauthentik.io/outposts/embedded",
+    });
+  }
+
+  /** Creates or updates the forward-auth provider and application of one stack host. */
+  async ensureProxyApp(opts: {
+    slug: string;
+    name: string;
+    externalHost: string;
+    allowedGroupPk: string;
+    defaults: Awaited<ReturnType<Authentik["providerDefaults"]>>;
+  }) {
+    const providerBody = {
+      name: opts.slug,
+      mode: "forward_single",
+      external_host: opts.externalHost,
+      authorization_flow: opts.defaults.authorization_flow,
+      invalidation_flow: opts.defaults.invalidation_flow,
+      // The app sees who is signed in (X-authentik-*), never a token it could replay elsewhere.
+      intercept_header_auth: false,
+      basic_auth_enabled: false,
+      access_token_validity: "hours=12",
+    };
+    const existing = await this.findOne<{ pk: number }>("/providers/proxy/", { name: opts.slug });
+    const provider = existing
+      ? await this.request<{ pk: number }>("PATCH", `/providers/proxy/${existing.pk}/`, providerBody)
+      : await this.request<{ pk: number }>("POST", "/providers/proxy/", providerBody);
+
+    const appBody = { name: opts.name, slug: opts.slug, provider: provider.pk, meta_launch_url: opts.externalHost };
+    const app = (await this.findOne<{ pk: string }>("/core/applications/", { slug: opts.slug, superuser_full_list: "true" }))
+      ?? (await this.request<{ pk: string }>("POST", "/core/applications/", appBody));
+    await this.request("PATCH", `/core/applications/${opts.slug}/`, appBody);
+    const binding = await this.findOne<Pk>("/policies/bindings/", { target: app.pk, group: opts.allowedGroupPk });
+    if (!binding) {
+      await this.request("POST", "/policies/bindings/", { target: app.pk, group: opts.allowedGroupPk, order: 0, enabled: true });
+    }
+
+    const outpost = await this.embeddedOutpost();
+    if (!outpost.providers.includes(provider.pk)) {
+      await this.request("PATCH", `/outposts/instances/${outpost.pk}/`, { providers: [...outpost.providers, provider.pk] });
+    }
+  }
+
+  async deleteProxyApp(slug: string) {
+    const provider = await this.findOne<{ pk: number }>("/providers/proxy/", { name: slug });
+    if (provider) {
+      const outpost = await this.embeddedOutpost();
+      if (outpost.providers.includes(provider.pk)) {
+        await this.request("PATCH", `/outposts/instances/${outpost.pk}/`, { providers: outpost.providers.filter((p) => p !== provider.pk) });
+      }
+    }
+    const app = await this.findOne<{ slug: string }>("/core/applications/", { slug, superuser_full_list: "true" });
+    if (app) await this.request("DELETE", `/core/applications/${slug}/`);
+    if (provider) await this.request("DELETE", `/providers/proxy/${provider.pk}/`);
+  }
 }
