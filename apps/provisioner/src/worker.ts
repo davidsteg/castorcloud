@@ -17,7 +17,7 @@ const { Lifecycle } = await import("./lifecycle.ts");
 const { LlmGateway } = await import("./llm.ts");
 const { Nodes } = await import("./nodes.ts");
 const { Backups, backupSettings } = await import("./backup.ts");
-const { Stacks } = await import("./stacks.ts");
+const { Stacks, storeDefinitionsAsJson } = await import("./stacks.ts");
 const { parseEnvFile } = await import("./tenant.ts");
 const { workerKinds } = await import("./kinds.ts");
 type TenantJob = import("@pc/core").TenantJob;
@@ -54,6 +54,8 @@ const stacks = stacksDomain
     })
   : undefined;
 if (!stacks) console.warn("STACKS_DOMAIN is not set: custom stacks are OFF");
+// castord reads stack definitions as JSON only.
+await storeDefinitionsAsJson();
 const lifecycle = new Lifecycle((id) => nodes.forTenant(id), ak, platform, parseEnvFile(readFileSync(versionsFile, "utf8")), versionsFile, assistant, stacks);
 
 /** After the tenant's own stack: its custom stacks, in their own job (a stacks node outage never fails the tenant's). */

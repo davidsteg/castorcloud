@@ -4,8 +4,7 @@
 //!   ssh    TrueNAS SCALE or a Mac mini: Docker over ssh://, and castor-*
 //!          commands through the node's castor-ssh gate.
 //!
-//! Preparing a STACKS node stays with the TypeScript worker until the STACKS
-//! job kind moves here.
+//! A STACKS node runs customers' own stacks only; stacks::edge prepares it.
 
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
@@ -57,13 +56,22 @@ pub struct NodeRow {
     pub auth_host_ip: Option<String>,
     #[sqlx(rename = "edgeHost")]
     pub edge_host: Option<String>,
+    /// STACKS: where the control plane connects from, comma-separated.
+    #[sqlx(rename = "controlPlaneIps")]
+    pub control_plane_ips: Option<String>,
+    /// STACKS: the host uid root in a container maps to (userns-remap).
+    #[sqlx(rename = "uidBase")]
+    pub uid_base: Option<i32>,
+    /// STACKS: "runsc" (gVisor) when the node has it, else "runc".
+    #[sqlx(rename = "stackRuntime")]
+    pub stack_runtime: Option<String>,
 }
 
 impl NodeRow {
     pub async fn load(db: &PgPool, id: &str) -> Result<Self, String> {
         sqlx::query_as::<_, NodeRow>(
             r#"SELECT id, name, kind::text AS kind, role::text AS role, "sshHost", "sshUser", "zfsPool",
-                      "authHostIp", "edgeHost"
+                      "authHostIp", "edgeHost", "controlPlaneIps", "uidBase", "stackRuntime"
                FROM "Node" WHERE id = $1"#,
         )
         .bind(id)
@@ -83,6 +91,20 @@ pub struct Edge {
 }
 
 /// "10.0.0.5:8480" or "10.0.0.5" (port 80).
+/// ssh to `target` (user@host) running one forced command's words: castor-ssh
+/// and castor-backup split on spaces and allow only these.
+pub fn ssh_cmd(target: &str, args: Vec<String>) -> Result<Cmd, String> {
+    if !valid::ssh_target(target) {
+        return Err(format!("invalid ssh target: {target}"));
+    }
+    if let Some(bad) = args.iter().find(|a| !valid::ssh_word(a)) {
+        return Err(format!("argument not allowed over ssh: {bad}"));
+    }
+    let mut all = vec!["-o".into(), "BatchMode=yes".into(), "-T".into(), target.to_owned()];
+    all.extend(args);
+    Ok(Cmd::new("ssh", all))
+}
+
 pub fn parse_edge(edge_host: &str) -> Result<Edge, String> {
     let bad = || format!("invalid edge host: {edge_host}");
     let (host, port) = match edge_host.split_once(':') {
@@ -117,6 +139,8 @@ pub struct Node {
     pub auth_host_ip: Option<String>,
     /// Unset for the local node, whose stacks sit on the control plane Traefik's network.
     pub edge: Option<Edge>,
+    /// STACKS: the only addresses its edge proxy lets in.
+    pub control_plane_ips: Vec<String>,
     place: Place,
     /// The repository on the control plane (templates, .tenants/).
     root: PathBuf,
@@ -168,6 +192,15 @@ impl Node {
             role,
             auth_host_ip: row.auth_host_ip.clone().filter(|_| place != Place::Local),
             edge,
+            control_plane_ips: row
+                .control_plane_ips
+                .as_deref()
+                .unwrap_or("")
+                .split(',')
+                .map(str::trim)
+                .filter(|s| !s.is_empty())
+                .map(str::to_owned)
+                .collect(),
             place,
             root: root.to_owned(),
             exec,
@@ -213,20 +246,45 @@ impl Node {
         }
     }
 
+    /// Like docker(), for binary output (docker cp ... -).
+    pub async fn docker_bytes(&self, args: Vec<String>) -> Result<Vec<u8>, String> {
+        let mut cmd = Cmd::new("docker", args);
+        if let Place::Ssh { target, .. } = &self.place {
+            cmd.env.push(("DOCKER_HOST", format!("ssh://{target}")));
+            cmd.env.push(("DOCKER_CONTEXT", String::new()));
+        }
+        self.exec.run_bytes(cmd).await
+    }
+
+    /// Edge port on the LAN (the stacks edge publishes the same one).
+    pub fn edge_port(&self) -> u16 {
+        self.edge.as_ref().map_or(80, |e| e.port)
+    }
+
+    /// The repository on the control plane.
+    pub fn root(&self) -> &Path {
+        &self.root
+    }
+
     /// A castor-* command on the node's host, through the castor-ssh gate.
     pub async fn host(&self, args: Vec<String>, input: Option<Zeroizing<Vec<u8>>>) -> Result<String, String> {
+        let mut cmd = self.host_cmd(args)?;
+        cmd.input = input;
+        self.exec.run(cmd).await
+    }
+
+    /// The ssh command `host` runs, for a pipe between two hosts.
+    pub fn host_cmd(&self, args: Vec<String>) -> Result<Cmd, String> {
         let Place::Ssh { target, .. } = &self.place else {
             return Err(format!("{} has no host commands", self.name));
         };
-        // castor-ssh splits on spaces and allows only these words.
-        if let Some(bad) = args.iter().find(|a| !valid::ssh_word(a)) {
-            return Err(format!("argument not allowed over ssh: {bad}"));
-        }
-        let mut all = vec!["-o".into(), "BatchMode=yes".into(), "-T".into(), target.clone()];
-        all.extend(args);
-        let mut cmd = Cmd::new("ssh", all);
-        cmd.input = input;
-        self.exec.run(cmd).await
+        ssh_cmd(target, args)
+    }
+
+    /// `from`'s stdout into a castor-* command on this host.
+    pub async fn pipe_into(&self, from: Cmd, args: Vec<String>) -> Result<u64, String> {
+        let to = self.host_cmd(args)?;
+        self.exec.pipe(from, to).await
     }
 
     /// Where castor-zfs mounts tenant datasets, and custom-stack datasets; None on the local node.
@@ -386,12 +444,7 @@ impl Node {
                 )
                 .await?;
             }
-            Place::Ssh { .. } if self.role == Role::Stacks => {
-                return Err(format!(
-                    "{}: stacks nodes are prepared by the TypeScript worker",
-                    self.name
-                ));
-            }
+            Place::Ssh { .. } if self.role == Role::Stacks => return crate::stacks::edge::prepare(self).await,
             Place::Ssh { .. } => {
                 let ca = ca_dir.to_string_lossy().into_owned();
                 self.sync("templates", &root("packages/stack-templates"), &["."])
@@ -417,7 +470,7 @@ impl Node {
                 {
                     self.docker(s(&["network", "create", "pc-edge"]), false).await?;
                 }
-                let port = self.edge.as_ref().map_or(80, |e| e.port);
+                let port = self.edge_port();
                 let up = vec![
                     "compose".into(),
                     "-p".into(),
@@ -473,6 +526,16 @@ impl Node {
         let dir = self.root.join(".tenants").join(slug);
         match std::fs::remove_dir_all(&dir) {
             Err(e) if e.kind() != std::io::ErrorKind::NotFound => Err(format!("{}: {e}", dir.display())),
+            _ => Ok(()),
+        }
+    }
+
+    /// Removes rendered files of a tenant on the control plane (stacks/<name>).
+    pub fn remove_local_config(&self, slug: &str, dir: &str) -> Result<(), String> {
+        check(slug, dir)?;
+        let path = self.root.join(".tenants").join(slug).join(dir);
+        match std::fs::remove_dir_all(&path) {
+            Err(e) if e.kind() != std::io::ErrorKind::NotFound => Err(format!("{}: {e}", path.display())),
             _ => Ok(()),
         }
     }

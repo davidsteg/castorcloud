@@ -74,7 +74,7 @@ impl Handler for Delete {
         set_status(cx, &t.id, "DELETING").await?;
 
         // Custom stacks first: their dataset key derives from the volume key deleted below.
-        if c.stacks {
+        if c.stacks.is_some() {
             delete_stacks(c, cx, &t).await?;
         }
 
@@ -219,7 +219,7 @@ async fn delete_stacks(c: &Control, cx: &JobCx, t: &Tenant) -> Result<(), String
 }
 
 /// The pinned images of a stack (`images`: service -> reference), each once.
-fn images(json: Option<&str>) -> Result<Vec<String>, String> {
+pub(crate) fn images(json: Option<&str>) -> Result<Vec<String>, String> {
     let Some(text) = json else { return Ok(Vec::new()) };
     let v: serde_json::Value = serde_json::from_str(text).map_err(|e| format!("stack images: {e}"))?;
     let mut out: Vec<String> = Vec::new();

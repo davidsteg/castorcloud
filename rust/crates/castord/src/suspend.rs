@@ -20,8 +20,7 @@ use crate::{Control, Handler, Job, JobCx, valid};
 
 /// Compose profiles: one per stack service, plus the assistant (ALL_PROFILES in lifecycle.ts).
 pub const ALL_PROFILES: [&str; 5] = ["photos", "docs", "places", "flights", "assistant"];
-/// The stacks node's edge proxy (STACKS_EDGE in stacks-node.ts).
-pub const STACKS_EDGE: &str = "pc-stacks-edge-traefik-1";
+pub use crate::stacks::edge::STACKS_EDGE;
 
 pub struct Suspend(pub Arc<Control>);
 
@@ -65,8 +64,8 @@ impl Handler for Suspend {
             return Err(format!("invalid tenant slug {:?}", t.slug));
         }
 
-        if c.stacks {
-            stop_stacks(c, cx, &t).await?;
+        if c.stacks.is_some() {
+            stop_stacks(c, cx, &t.id, &t.slug, t.stacks_node_id.as_deref(), t.has_volume_key).await?;
         }
 
         if let Some(node_id) = &t.node_id {
@@ -115,18 +114,26 @@ impl Handler for Suspend {
     }
 }
 
-async fn stop_stacks(c: &Control, cx: &JobCx, t: &Tenant) -> Result<(), String> {
+/// Every custom stack stops and the stacks dataset is locked (Stacks.stopAll).
+pub(crate) async fn stop_stacks(
+    c: &Control,
+    cx: &JobCx,
+    tenant_id: &str,
+    slug: &str,
+    stacks_node_id: Option<&str>,
+    has_volume_key: bool,
+) -> Result<(), String> {
     let db = &cx.db;
-    remove_file(&c.traefik_dir.join(format!("stacks-{}.yml", t.slug)))?;
-    let Some(node_id) = &t.stacks_node_id else {
+    remove_file(&c.traefik_dir.join(format!("stacks-{slug}.yml")))?;
+    let Some(node_id) = stacks_node_id else {
         return Ok(());
     };
     let node = Node::new(&NodeRow::load(db, node_id).await?, &c.root, c.exec.clone())?;
-    let storage = StacksStorage::new(&node, &t.slug)?;
+    let storage = StacksStorage::new(&node, slug)?;
     let stacks = sqlx::query_as::<_, Stack>(
         r#"SELECT id, name, status::text AS status FROM "Stack" WHERE "tenantId" = $1 ORDER BY "createdAt", id"#,
     )
-    .bind(&t.id)
+    .bind(tenant_id)
     .fetch_all(db)
     .await
     .map_err(|e| e.to_string())?;
@@ -134,7 +141,7 @@ async fn stop_stacks(c: &Control, cx: &JobCx, t: &Tenant) -> Result<(), String> 
         if !valid::stack_name(&s.name) {
             return Err(format!("invalid stack name {:?}", s.name));
         }
-        let project = format!("pc-s-{}--{}", t.slug, s.name);
+        let project = format!("pc-s-{}--{}", slug, s.name);
         node.docker(strings(&["compose", "-p", &project, "stop"]), true).await?;
         let route = format!("/routes/{project}.yml");
         node.docker(strings(&["exec", STACKS_EDGE, "rm", "-f", &route]), true)
@@ -149,13 +156,13 @@ async fn stop_stacks(c: &Control, cx: &JobCx, t: &Tenant) -> Result<(), String> 
             .map_err(|e| e.to_string())?;
         }
     }
-    if t.has_volume_key && matches!(storage.status().await?, Status::Open { .. }) {
+    if has_volume_key && matches!(storage.status().await?, Status::Open { .. }) {
         storage.close().await?;
         audit(
             db,
             "system",
             "stacks.lock",
-            Some(&t.id),
+            Some(tenant_id),
             Some(json!({ "reason": "suspend" })),
         )
         .await?;

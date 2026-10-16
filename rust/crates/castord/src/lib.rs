@@ -16,7 +16,9 @@ pub mod node;
 pub mod placement;
 pub mod queue;
 pub mod render;
+pub mod restore;
 pub mod revoke;
+pub mod stacks;
 pub mod storage;
 pub mod suspend;
 pub mod valid;
@@ -52,8 +54,10 @@ pub struct Control {
     /// Unset without LITELLM_MASTER_KEY, as in the TypeScript worker.
     pub llm: Option<llm::Gateway>,
     pub authentik: authentik::Authentik,
-    /// Custom stacks are on (STACKS_DOMAIN is set).
-    pub stacks: bool,
+    /// Custom stacks are on when STACKS_DOMAIN is set.
+    pub stacks: Option<stacks::Platform>,
+    /// user@host of the backup box, for RESTORE (BACKUP_TARGET).
+    pub backup_target: Option<String>,
     pub platform: render::Platform,
     /// packages/stack-templates/versions.env: image versions of every stack.
     pub versions: render::Vars,

@@ -4,7 +4,7 @@
 use std::process::Stdio;
 use std::time::Duration;
 
-use tokio::io::AsyncWriteExt;
+use tokio::io::{AsyncReadExt, AsyncWriteExt};
 use zeroize::Zeroizing;
 
 /// One command. `input` goes to stdin (keys) and is wiped afterwards.
@@ -41,6 +41,16 @@ pub trait Exec: Send + Sync {
     async fn run_bytes(&self, cmd: Cmd) -> Result<Vec<u8>, String> {
         self.run(cmd).await.map(String::into_bytes)
     }
+
+    /// `from`'s stdout into `to`'s stdin (a ZFS stream between two hosts,
+    /// which never passes through memory whole). The bytes moved.
+    async fn pipe(&self, from: Cmd, to: Cmd) -> Result<u64, String> {
+        Err(format!(
+            "{} | {}: piping is not supported here",
+            from.label(),
+            to.label()
+        ))
+    }
 }
 
 /// No command may outlive a job's lease.
@@ -49,6 +59,8 @@ const ERR_TAIL: usize = 2000;
 const MAX_OUTPUT: usize = 32 * 1024 * 1024;
 /// The templates, brand assets and CA bundle sent to a node (node.ts allows the same).
 const MAX_BYTES: usize = 256 * 1024 * 1024;
+/// A full ZFS send can take hours; the job's lease is renewed meanwhile.
+const PIPE_TIMEOUT: Duration = Duration::from_secs(24 * 60 * 60);
 
 pub struct Real;
 
@@ -71,6 +83,111 @@ impl Exec for Real {
         }
         Ok(out)
     }
+
+    async fn pipe(&self, from: Cmd, to: Cmd) -> Result<u64, String> {
+        pipe(from, to).await
+    }
+}
+
+fn spawn(cmd: &Cmd, stdin: Stdio) -> Result<tokio::process::Child, String> {
+    tokio::process::Command::new(cmd.program)
+        .args(&cmd.args)
+        .envs(cmd.env.iter().map(|(k, v)| (*k, v.as_str())))
+        .stdin(stdin)
+        .stdout(Stdio::piped())
+        .stderr(Stdio::piped())
+        .kill_on_drop(true)
+        .spawn()
+        .map_err(|e| format!("{} failed: {e}", cmd.label()))
+}
+
+/// The end of a child's stderr, read to the end so it never blocks on it.
+fn stderr_tail(child: &mut tokio::process::Child) -> tokio::task::JoinHandle<String> {
+    let stderr = child.stderr.take();
+    tokio::spawn(async move {
+        let Some(mut stderr) = stderr else {
+            return String::new();
+        };
+        let mut kept: Vec<u8> = Vec::new();
+        let mut buf = [0u8; 8192];
+        while let Ok(n) = stderr.read(&mut buf).await {
+            if n == 0 {
+                break;
+            }
+            kept.extend_from_slice(&buf[..n]);
+            if kept.len() > 2 * ERR_TAIL {
+                kept.drain(..kept.len() - ERR_TAIL);
+            }
+        }
+        tail(String::from_utf8_lossy(&kept).trim(), ERR_TAIL).to_owned()
+    })
+}
+
+/// When either side fails, both are stopped: zfs receive rejects a half
+/// stream, and a sender with no reader would only wait.
+async fn pipe(from: Cmd, to: Cmd) -> Result<u64, String> {
+    let (from_label, to_label) = (from.label(), to.label());
+    let mut src = spawn(&from, Stdio::null())?;
+    let mut dst = spawn(&to, Stdio::piped())?;
+    let (src_err, dst_err) = (stderr_tail(&mut src), stderr_tail(&mut dst));
+    let (Some(mut out), Some(mut inp)) = (src.stdout.take(), dst.stdin.take()) else {
+        return Err(format!("{from_label} | {to_label}: no pipe"));
+    };
+    let copy = async move {
+        let mut moved = 0u64;
+        let mut buf = vec![0u8; 256 * 1024];
+        loop {
+            let n = out.read(&mut buf).await.map_err(|e| (true, e))?;
+            if n == 0 {
+                break;
+            }
+            inp.write_all(&buf[..n]).await.map_err(|e| (false, e))?;
+            moved += n as u64;
+        }
+        // Closing stdin tells the receiver the stream is complete.
+        drop(inp);
+        Ok::<u64, (bool, std::io::Error)>(moved)
+    };
+    let result = tokio::time::timeout(PIPE_TIMEOUT, async {
+        let copied = copy.await;
+        if copied.is_err() {
+            let _ = src.start_kill();
+            let _ = dst.start_kill();
+        }
+        let src_status = src.wait().await;
+        let dst_status = dst.wait().await;
+        (copied, src_status, dst_status)
+    })
+    .await;
+    let (src_msg, dst_msg) = (src_err.await.unwrap_or_default(), dst_err.await.unwrap_or_default());
+    let Ok((copied, src_status, dst_status)) = result else {
+        return Err(format!(
+            "{from_label} | {to_label} failed: timed out after {} h",
+            PIPE_TIMEOUT.as_secs() / 3600
+        ));
+    };
+    let failed = |label: &str, status: std::io::Result<std::process::ExitStatus>, msg: &str| match status {
+        Ok(s) if s.success() => None,
+        Ok(s) => Some(format!(
+            "{label} failed: {}",
+            if msg.is_empty() { s.to_string() } else { msg.to_owned() }
+        )),
+        Err(e) => Some(format!("{label} failed: {e}")),
+    };
+    let src_failed = failed(&from_label, src_status, &src_msg);
+    let dst_failed = failed(&to_label, dst_status, &dst_msg);
+    // A receiver that died first breaks the pipe, and the sender is then killed:
+    // its error is the cause.
+    let writing_broke = matches!(copied, Err((false, _)));
+    let first = if writing_broke {
+        dst_failed.or(src_failed)
+    } else {
+        src_failed.or(dst_failed)
+    };
+    if let Some(msg) = first {
+        return Err(msg);
+    }
+    copied.map_err(|(_, e)| format!("{from_label} | {to_label} failed: {e}"))
 }
 
 /// Stdin is written while stdout is read, so neither side can block the
@@ -144,6 +261,28 @@ mod tests {
         let mut echo = Cmd::new("cat", vec![]);
         echo.input = Some(Zeroizing::new(vec![b'x'; 4 * 1024 * 1024]));
         assert_eq!(Real.run_bytes(echo).await.unwrap().len(), 4 * 1024 * 1024);
+    }
+
+    #[tokio::test]
+    async fn pipes_and_stops_both_sides() {
+        let from = Cmd::new("sh", vec!["-c".into(), "head -c 3000000 /dev/zero".into()]);
+        let to = Cmd::new("sh", vec!["-c".into(), "wc -c >/dev/null".into()]);
+        assert_eq!(Real.pipe(from, to).await.unwrap(), 3_000_000);
+        let from = Cmd::new("sh", vec!["-c".into(), "cat /dev/zero".into()]);
+        let to = Cmd::new(
+            "sh",
+            vec!["-c".into(), "head -c 10 >/dev/null; echo full >&2; exit 4".into()],
+        );
+        assert_eq!(
+            Real.pipe(from, to).await.unwrap_err(),
+            "sh -c head -c 10 >/dev/null; echo full >&2; exit 4 … failed: full"
+        );
+        let from = Cmd::new("sh", vec!["-c".into(), "echo half; echo gone >&2; exit 2".into()]);
+        let to = Cmd::new("sh", vec!["-c".into(), "cat >/dev/null".into()]);
+        assert_eq!(
+            Real.pipe(from, to).await.unwrap_err(),
+            "sh -c echo half; echo gone >&2; exit 2 … failed: gone"
+        );
     }
 
     #[test]

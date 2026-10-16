@@ -419,17 +419,30 @@ function parseCastor(c: Collector, v: unknown, services: string[]) {
   return { web, egress, storageGb };
 }
 
-/** Parses a customer's compose subset (YAML or JSON). Throws SpecError with every problem found. */
-export function parseStack(source: string): StackSpec {
+function parseDocument(source: string): unknown {
   if (Buffer.byteLength(source) > LIMITS.sourceBytes) throw new SpecError([`stack definition is larger than ${LIMITS.sourceBytes / 1024} KB`]);
-  let doc: unknown;
   try {
     // No custom tags, a hard alias limit (no "billion laughs"), duplicate keys are errors.
-    doc = parseYaml(source, { schema: "core", maxAliasCount: 20, uniqueKeys: true, prettyErrors: false });
+    return parseYaml(source, { schema: "core", maxAliasCount: 20, uniqueKeys: true, prettyErrors: false });
   } catch (err) {
     throw new SpecError([`not valid YAML: ${(err as Error).message.split("\n")[0].slice(0, 200)}`]);
   }
-  return checkStack(doc);
+}
+
+/** Parses a customer's compose subset (YAML or JSON). Throws SpecError with every problem found. */
+export function parseStack(source: string): StackSpec {
+  return checkStack(parseDocument(source));
+}
+
+/**
+ * What is stored for a stack: the parsed document as JSON, and the spec it
+ * checks to as stored. castord reads only this JSON and has no YAML parser,
+ * so the document it checks and runs is exactly the one checked here.
+ */
+export function storedDefinition(source: string): { definition: string; spec: StackSpec } {
+  const definition = JSON.stringify(parseDocument(source)) ?? "null";
+  if (Buffer.byteLength(definition) > LIMITS.sourceBytes) throw new SpecError([`stack definition is larger than ${LIMITS.sourceBytes / 1024} KB`]);
+  return { definition, spec: checkStack(JSON.parse(definition)) };
 }
 
 /** Validates an already parsed document (also used to re-check stored specs). */

@@ -27,6 +27,7 @@ fn node(kind: &str, edge: Option<&str>, fake: std::sync::Arc<Fake>) -> Node {
         zfs_pool: Some("tank".into()),
         edge_host: edge.map(str::to_owned),
         auth_host_ip: Some("10.0.0.1".into()),
+        ..Default::default()
     };
     Node::new(&row, &repo(), fake).unwrap()
 }

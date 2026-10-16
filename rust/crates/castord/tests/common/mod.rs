@@ -67,6 +67,20 @@ impl Exec for Fake {
         }
         Ok(String::new())
     }
+
+    /// Recorded as "<from> | <to>"; a rule's answer is the bytes moved.
+    async fn pipe(&self, from: Cmd, to: Cmd) -> Result<u64, String> {
+        let line = |c: &Cmd| format!("{} {}", c.program, c.args.join(" "));
+        let line = format!("{} | {}", line(&from), line(&to));
+        self.calls.lock().unwrap().push(line.clone());
+        self.inputs.lock().unwrap().push(None);
+        for (needle, answer) in &self.rules {
+            if line.contains(needle) {
+                return answer.map(|a| a.parse().unwrap()).map_err(str::to_owned);
+            }
+        }
+        Ok(0)
+    }
 }
 
 /// An HTTP API answering `answer(method, path)` -> (status, body); records
@@ -261,7 +275,12 @@ pub fn control(exec: Arc<Fake>, traefik: &Path, llm: Option<&str>, authentik: &s
         keys: keys(),
         llm: llm.map(|u| castord::llm::Gateway::new(u, Zeroizing::new("master".into()), http.clone())),
         authentik: castord::authentik::Authentik::new(authentik, Zeroizing::new("ak".into()), http.clone()),
-        stacks: true,
+        stacks: Some(castord::stacks::Platform {
+            domain: "stacks.test".into(),
+            scheme: "http".into(),
+            cert_resolver: None,
+        }),
+        backup_target: Some("backup@box.test".into()),
         platform: platform(),
         versions: castord::render::parse_env_file(include_str!("../../../../../packages/stack-templates/versions.env")),
         versions_file: PathBuf::from("/repo/packages/stack-templates/versions.env"),
