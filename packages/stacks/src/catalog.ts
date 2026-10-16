@@ -25,6 +25,8 @@ export const CATALOG: CatalogApp[] = [
 services:
   app:
     image: corentinth/it-tools:2024.10.22-7ca5933@sha256:8b8128748339583ca951af03dfe02a9a4d7363f61a216226fc28030731a5a61f
+    # nginx: the root filesystem is read-only.
+    tmpfs: [/var/cache/nginx]
     mem_limit: 128m
     cpus: 0.25
 x-castor:

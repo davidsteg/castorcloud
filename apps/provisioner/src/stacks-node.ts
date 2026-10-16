@@ -3,7 +3,7 @@
 // are files we copy into the proxy's routes volume, and it joins each stack's
 // edge network, where only that stack's web service is.
 import path from "node:path";
-import { nodeMiddlewares } from "@pc/stacks";
+import { EDGE_NETWORK_RE, nodeMiddlewares } from "@pc/stacks";
 import type { SshNode } from "./node.ts";
 
 /** Container name of the stacks edge proxy (compose project pc-stacks-edge, service traefik). */
@@ -23,6 +23,18 @@ export type StacksFacts = {
 };
 
 /** What the node's Docker engine offers (registration and health checks). */
+/**
+ * Refuses a node whose Docker no longer isolates stacks: userns-remap must be
+ * on, and a node registered with gVisor must still have it (never silently
+ * fall back to runc).
+ */
+export function checkStacksNode(node: Pick<SshNode, "docker" | "name">, row?: { stackRuntime: string | null }) {
+  const facts = stacksFacts(node);
+  if (!facts.userns) throw new Error(`${node.name}: Docker runs without userns-remap; refusing to run stacks`);
+  if (row?.stackRuntime === "runsc" && !facts.runsc) throw new Error(`${node.name}: the gVisor runtime (runsc) is gone; refusing to run stacks`);
+  return facts;
+}
+
 export function stacksFacts(node: Pick<SshNode, "docker">): StacksFacts {
   const info = JSON.parse(node.docker(["info", "--format", "{{json .}}"])) as {
     SecurityOptions?: string[];
@@ -92,9 +104,7 @@ export function disconnectEdge(node: Pick<SshNode, "docker">, network: string) {
  */
 export function prepareStacksNode(node: SshNode, root: string) {
   if (!node.controlPlaneIps.length) throw new Error(`${node.name}: stacks node without control-plane addresses`);
-  const facts = stacksFacts(node);
-  // Checked at registration too; a node whose Docker lost userns-remap gets no stacks.
-  if (!facts.userns) throw new Error(`${node.name}: Docker runs without userns-remap; refusing to run stacks`);
+  checkStacksNode(node);
   node.docker(["build", "-q", "-t", EGRESS_IMAGE, path.join(root, "infra/node/egress")]);
   node.docker([
     "compose", "-p", "pc-stacks-edge",
@@ -103,5 +113,5 @@ export function prepareStacksNode(node: SshNode, root: string) {
   ], { env: { EDGE_PORT: String(node.edgePortNumber), CONTROL_PLANE_IPS: node.controlPlaneIps.join(",") } });
   putRoute(node, "castor", nodeMiddlewares(node.controlPlaneIps));
   const networks = node.docker(["network", "ls", "--filter", "name=^pc-s-", "--format", "{{.Name}}"]).split("\n").map((l) => l.trim());
-  for (const n of networks) if (/^pc-s-[a-z0-9-]+-edge$/.test(n)) connectEdge(node, n);
+  for (const n of networks) if (EDGE_NETWORK_RE.test(n)) connectEdge(node, n);
 }

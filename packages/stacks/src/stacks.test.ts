@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import { test } from "node:test";
 import { CATALOG } from "./catalog.ts";
 import { digestFor, parseImageRef, pinned } from "./image.ts";
-import { controlPlaneRoutes, nodeRoute, renderCompose, stackNames } from "./render.ts";
+import { EDGE_NETWORK_RE, controlPlaneRoutes, nodeRoute, renderCompose, stackNames } from "./render.ts";
 import { SpecError, parseMemory, parseStack, secretNames, specUnits } from "./spec.ts";
 
 const DIGEST = `sha256:${"a".repeat(64)}`;
@@ -142,7 +142,7 @@ x-castor:
   assert.deepEqual(secretNames(spec), ["db"]);
   const out = renderCompose(spec, ctx) as { name: string; services: Record<string, Record<string, unknown>>; networks: Record<string, Record<string, unknown>> };
   const app = out.services.app;
-  assert.equal(out.name, "pc-s-muster-links");
+  assert.equal(out.name, "pc-s-muster--links");
   assert.deepEqual(app.cap_drop, ["ALL"]);
   assert.deepEqual(app.security_opt, ["no-new-privileges:true"]);
   assert.equal(app.mem_limit, "256m");
@@ -152,7 +152,9 @@ x-castor:
   assert.deepEqual(app.command, ["sh", "-c", "echo $$HOME"]);
   assert.deepEqual(app.environment, { PASSWORD: "s3cr3t", ORIGIN: ctx.origin, PRICE: "5$$", REF: "$${HOME}" });
   assert.deepEqual(app.volumes, [{ type: "bind", source: `${ctx.dataDir}/data`, target: "/data", read_only: false, bind: { create_host_path: false } }]);
-  assert.deepEqual(app.networks, { app: {}, edge: { aliases: ["pc-s-muster-links-web"] } });
+  assert.deepEqual(app.networks, { app: {}, edge: { aliases: ["web.pc-s-muster--links"] } });
+  assert.equal(app.read_only, true);
+  assert.deepEqual(app.tmpfs, ["/tmp:size=64m", "/run:size=64m", "/var/tmp:size=64m"]);
   assert.equal(out.networks.app.internal, true);
   assert.equal(out.networks.edge.internal, true);
   assert.equal(out.networks.out, undefined, "no way out without egress hosts");
@@ -181,10 +183,27 @@ test("render refuses unpinned images", () => {
 test("routes: the node only accepts the control plane, the control plane signs in first", () => {
   const node = nodeRoute({ slug: "muster", stack: "links", host: "links-muster.castorapps.ch", port: 9090 });
   assert.match(node, /middlewares: \[castor-control-plane\]/);
-  assert.match(node, /http:\/\/pc-s-muster-links-web:9090/);
+  assert.match(node, /http:\/\/web\.pc-s-muster--links:9090/);
   const cp = controlPlaneRoutes({ slug: "muster", stacks: [{ stack: "links", host: "links-muster.castorapps.ch" }], edgeUrl: "http://10.0.0.40", stacksDomain: "castorapps.ch", certResolver: "le" });
   assert.match(cp, /middlewares: \[castor-stack-strip@file, castor-stack-auth@file\]/);
   assert.match(cp, /PathPrefix\(`\/outpost\.goauthentik\.io\/`\)/);
   assert.match(cp, /certResolver: le/);
-  assert.equal(stackNames("muster", "links").authSlug, "stack-muster-links");
+  assert.equal(stackNames("muster", "links").authSlug, "stack-muster--links");
+});
+
+test("names can't reach another tenant's stack", () => {
+  // slug "a-b" + stack "c" and slug "a" + stack "bc" never share a name.
+  assert.notEqual(stackNames("a-b", "c").project, stackNames("a", "bc").project);
+  assert.ok(EDGE_NETWORK_RE.test(stackNames("a-b", "c").edgeNetwork));
+  assert.ok(!EDGE_NETWORK_RE.test("pc-s-a-b-c-edge"));
+  for (const name of ["pc-s-x", "castor-x", "web.pc-s-x"]) {
+    assert.throws(() => parseStack(minimal.replaceAll("app", name)), SpecError, name);
+  }
+});
+
+test("the root filesystem stays read-only", () => {
+  assert.throws(() => parseStack(minimal.replace("    image:", "    read_only: false\n    image:")), /always read-only/);
+  const spec = parseStack(minimal.replace("    image:", "    tmpfs: [/var/cache/nginx]\n    image:"));
+  assert.deepEqual(spec.services.app.tmpfs, ["/var/cache/nginx"]);
+  assert.throws(() => parseStack(minimal.replace("    image:", "    tmpfs: [/a, /b, /c, /d, /e]\n    image:")), /up to 4/);
 });

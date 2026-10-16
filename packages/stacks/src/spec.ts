@@ -23,7 +23,8 @@ export type ServiceSpec = {
   workingDir?: string;
   /** "uid", "uid:gid", "name" or "name:group" inside the image; default: the image's user. */
   user?: string;
-  readOnly: boolean;
+  /** Extra writable in-memory paths (the root filesystem is always read-only). */
+  tmpfs: string[];
   volumes: MountSpec[];
   memoryMb: number;
   cpus: number;
@@ -61,6 +62,7 @@ export const LIMITS = {
   argBytes: 4096,
   args: 64,
   egressHosts: 20,
+  tmpfs: 4,
   memoryMb: { min: 64, max: 16384 },
   cpus: { min: 0.05, max: 8 },
   storageGb: { min: 0, max: 2000 },
@@ -85,6 +87,8 @@ export const RESERVED_STACK_NAMES = new Set([
 
 /** Names we use inside every stack (the egress proxy). */
 const RESERVED_SERVICE_NAMES = new Set(["castor-egress", "castor"]);
+/** Our own name prefixes on the node: a service must never look like one. */
+const RESERVED_SERVICE_PREFIXES = ["pc-", "castor-"];
 
 /** Set by the renderer; a stack can't override them (e.g. to point at another proxy). */
 export const RESERVED_ENV = new Set(["HTTP_PROXY", "HTTPS_PROXY", "NO_PROXY", "http_proxy", "https_proxy", "no_proxy", "ALL_PROXY", "all_proxy"]);
@@ -308,7 +312,7 @@ function parseService(c: Collector, name: string, v: unknown): ServiceSpec | nul
   const where = `services.${name}`;
   if (!isObj(v)) { c.add(where, "must be a map"); return null; }
   onlyKeys(c, where, v, [
-    "image", "command", "entrypoint", "environment", "working_dir", "user", "read_only", "volumes",
+    "image", "command", "entrypoint", "environment", "working_dir", "user", "read_only", "tmpfs", "volumes",
     "mem_limit", "cpus", "deploy", "healthcheck", "depends_on", "restart",
   ], SERVICE_HINTS);
 
@@ -333,7 +337,21 @@ function parseService(c: Collector, name: string, v: unknown): ServiceSpec | nul
     else user = u;
   }
 
-  if (v.read_only !== undefined && typeof v.read_only !== "boolean") c.add(`${where}.read_only`, "must be true or false");
+  if (v.read_only !== undefined && v.read_only !== true) {
+    c.add(`${where}.read_only`, "the root filesystem is always read-only; put writable paths on a volume or under tmpfs:");
+  }
+  const tmpfs: string[] = [];
+  if (v.tmpfs !== undefined) {
+    const list = typeof v.tmpfs === "string" ? [v.tmpfs] : v.tmpfs;
+    if (!Array.isArray(list) || !list.every((p) => typeof p === "string") || list.length > LIMITS.tmpfs) {
+      c.add(`${where}.tmpfs`, `must be a list of up to ${LIMITS.tmpfs} container paths`);
+    } else {
+      for (const p of list as string[]) {
+        checkTarget(c, `${where}.tmpfs`, p);
+        tmpfs.push(p.replace(/\/+$/, ""));
+      }
+    }
+  }
   if (v.restart !== undefined && typeof v.restart !== "string") c.add(`${where}.restart`, "must be a string");
 
   let dependsOn: string[] = [];
@@ -354,7 +372,7 @@ function parseService(c: Collector, name: string, v: unknown): ServiceSpec | nul
     environment: parseEnvironment(c, `${where}.environment`, v.environment),
     workingDir,
     user,
-    readOnly: v.read_only === true,
+    tmpfs,
     volumes: parseMounts(c, `${where}.volumes`, v.volumes),
     ...parseResources(c, where, v),
     healthcheck: parseHealth(c, `${where}.healthcheck`, v.healthcheck),
@@ -430,7 +448,7 @@ export function checkStack(doc: unknown): StackSpec {
     const names = Object.keys(doc.services);
     if (names.length > LIMITS.services) c.add("services", `at most ${LIMITS.services} services`);
     for (const name of names) {
-      if (!NAME_RE.test(name) || name.endsWith("-") || RESERVED_SERVICE_NAMES.has(name)) { c.add("services", `invalid service name "${name.slice(0, 40)}"`); continue; }
+      if (!NAME_RE.test(name) || name.endsWith("-") || RESERVED_SERVICE_NAMES.has(name) || RESERVED_SERVICE_PREFIXES.some((p) => name.startsWith(p))) { c.add("services", `invalid service name "${name.slice(0, 40)}"`); continue; }
       const svc = parseService(c, name, doc.services[name]);
       if (svc) services[name] = svc;
     }

@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { coveredStacks, parseIds, resolveUser, untarFile } from "./stacks.ts";
+import { coveredStacks, parseIds, resolveUser, uncoveredVolumes, untarFile } from "./stacks.ts";
 import { stacksDatasetKey, datasetKey } from "./zfs.ts";
 import { tarFile } from "./stacks-node.ts";
 
@@ -35,4 +35,10 @@ test("the stacks dataset key differs from the tenant dataset key", () => {
   const a = stacksDatasetKey(volumeKey).toString();
   assert.match(a, /^[0-9a-f]{64}\n$/);
   assert.notEqual(a, datasetKey(volumeKey).toString());
+});
+
+test("an image VOLUME needs a mount or tmpfs over it", () => {
+  assert.deepEqual(uncoveredVolumes(["/data", "/var/lib/x/"], ["/data", "/tmp"]), ["/var/lib/x"]);
+  assert.deepEqual(uncoveredVolumes(["/srv/app/data"], ["/srv/app"]), []);
+  assert.deepEqual(uncoveredVolumes(["/database"], ["/data"]), ["/database"]);
 });

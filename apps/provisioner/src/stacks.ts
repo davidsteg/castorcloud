@@ -9,13 +9,13 @@ import { prisma, type Node, type Stack, type Tenant } from "@pc/db";
 import { audit, openSecret, sealSecret } from "@pc/core";
 import { addUnits, fitsUnits, NO_STACK_UNITS, stackStorageMb, type StackUnits } from "@pc/pricing";
 import {
-  STACK_NAME_RE, controlPlaneRoutes, digestFor, nodeRoute, parseImageRef, parseStack, pinned, renderCompose,
+  DEFAULT_TMPFS, STACK_NAME_RE, controlPlaneRoutes, digestFor, nodeRoute, parseImageRef, parseStack, pinned, renderCompose,
   secretNames, specUnits, stackHost, stackNames, type StackSpec,
 } from "@pc/stacks";
 import type { Authentik } from "./authentik.ts";
 import type { SshNode } from "./node.ts";
 import { removeStacksRoute, writeStacksRoute } from "./routes.ts";
-import { EGRESS_IMAGE, connectEdge, disconnectEdge, putRoute, removeRoute } from "./stacks-node.ts";
+import { EGRESS_IMAGE, checkStacksNode, connectEdge, disconnectEdge, putRoute, removeRoute } from "./stacks-node.ts";
 import type { StacksDataset } from "./zfs.ts";
 
 export type StacksPlatform = {
@@ -95,6 +95,22 @@ export function resolveUser(user: string, files?: { passwd: string; group: strin
   if (gid === undefined) throw new Error(`group "${g}" is not in the image's /etc/group; set user: to numbers`);
   if (uid > MAX_CONTAINER_ID || gid > MAX_CONTAINER_ID) throw new Error(`user ${uid}:${gid} is outside the allowed range (0-${MAX_CONTAINER_ID})`);
   return { uid, gid };
+}
+
+/** Image VOLUME paths no mount covers (a mount at or above the path covers it). */
+export function uncoveredVolumes(declared: string[], mounts: string[]): string[] {
+  const norm = (p: string) => p.replace(/\/+$/, "") || "/";
+  const within = (path: string, mount: string) => path === mount || mount === "/" || path.startsWith(`${mount}/`);
+  return declared.map(norm).filter((v) => !mounts.map(norm).some((m) => within(v, m)));
+}
+
+/** The images a stack last ran with (service -> pinned reference). */
+const imagesOf = (stack: Stack): Record<string, string> =>
+  stack.images && typeof stack.images === "object" && !Array.isArray(stack.images) ? (stack.images as Record<string, string>) : {};
+
+/** Drops pinned images; Docker keeps any another stack still runs. */
+function removeImages(node: SshNode, images: string[]) {
+  for (const image of new Set(images)) node.docker(["image", "rm", image], { allowFail: true });
 }
 
 const needsNames = (user: string) => user.split(":").some((p) => p !== "" && !/^[0-9]+$/.test(p));
@@ -221,7 +237,7 @@ export class Stacks {
     const info = JSON.parse(node.docker(["image", "inspect", "--format", "{{json .}}", ref.canonical])) as {
       RepoDigests?: string[];
       Size?: number;
-      Config?: { User?: string };
+      Config?: { User?: string; Volumes?: Record<string, unknown> | null };
     };
     if ((info.Size ?? 0) > MAX_IMAGE_BYTES) {
       node.docker(["image", "rm", ref.canonical], { allowFail: true });
@@ -229,13 +245,14 @@ export class Stacks {
     }
     const digest = ref.digest ?? digestFor(ref, info.RepoDigests ?? []);
     if (!digest) throw new Error(`no digest for ${ref.canonical}`);
-    return { image: pinned(ref, digest), user: info.Config?.User ?? "" };
+    return { image: pinned(ref, digest), user: info.Config?.User ?? "", volumes: Object.keys(info.Config?.Volumes ?? {}) };
   }
 
   /** /etc/passwd and /etc/group of an image, read without running it. */
   private imageIds(node: SshNode, image: string) {
     const name = `pc-s-ids-${randomBytes(4).toString("hex")}`;
-    node.docker(["create", "--name", name, "--network", "none", image]);
+    // Never started; the entrypoint only keeps `create` from failing on images without a CMD.
+    node.docker(["create", "--name", name, "--network", "none", "--entrypoint", "/nonexistent", image]);
     try {
       const read = (file: string) => {
         try {
@@ -264,6 +281,9 @@ export class Stacks {
     for (const [name, svc] of Object.entries(spec.services)) {
       const pulled = this.pull(node, svc.image);
       images[name] = pulled.image;
+      // Docker would back an image's VOLUME with an anonymous volume: writable, outside the quota.
+      const open = uncoveredVolumes(pulled.volumes, [...svc.volumes.map((m) => m.target), ...svc.tmpfs, ...DEFAULT_TMPFS]);
+      if (open.length) throw new Error(`${name}: the image declares ${open.join(", ")}; mount a volume or a tmpfs there`);
       const user = svc.user ?? pulled.user;
       if (!svc.volumes.length) continue;
       const ids = resolveUser(user, needsNames(user) ? this.imageIds(node, pulled.image) : undefined);
@@ -275,6 +295,9 @@ export class Stacks {
       if (!storage) throw new Error("stacks dataset not open");
       storage.createStack(stack.name, spec.storageGb * 1024, owners);
     }
+
+    // The node is checked again right before anything runs: no stack ever starts without userns-remap or below its registered sandbox.
+    checkStacksNode(node, row);
 
     await this.ak.ensureProxyApp({
       slug: n.authSlug,
@@ -303,6 +326,8 @@ export class Stacks {
       where: { id: stack.id },
       data: { status: "RUNNING", error: null, images, deployedAt: new Date() },
     });
+    // Old versions take disk outside every quota.
+    removeImages(node, Object.values(imagesOf(stack)).filter((i) => !Object.values(images).includes(i)));
     await audit("system", "stack.deployed", tenant.id, { stack: stack.name, images, node: row.name });
   }
 
@@ -320,6 +345,7 @@ export class Stacks {
     removeRoute(node, n.project);
     disconnectEdge(node, n.edgeNetwork);
     node.docker(["compose", "-p", n.project, "down", "--volumes", "--remove-orphans"], { allowFail: true });
+    removeImages(node, Object.values(imagesOf(stack)));
     if (stack.storageGb > 0 && tenant.volumeKey) this.storage(node, tenant).destroyStack(stack.name);
     node.removeLocalConfig(tenant.slug, `stacks/${stack.name}`);
     await this.ak.deleteProxyApp(n.authSlug);
@@ -376,6 +402,7 @@ export class Stacks {
         removeRoute(node, n.project);
         disconnectEdge(node, n.edgeNetwork);
         node.docker(["compose", "-p", n.project, "down", "--volumes", "--remove-orphans"], { allowFail: true });
+        removeImages(node, Object.values(imagesOf(s)));
       }
       if (tenant.volumeKey) this.storage(node, tenant).destroy();
     }

@@ -2,7 +2,10 @@
 # tenant's stacks-<slug>.yml (written by the provisioner) puts these two
 # middlewares on every stack host:
 #   castor-stack-strip  drops identity headers a client might send itself,
-#                       so a stack only ever sees the ones Authentik set
+#                       so a stack only ever sees the ones Authentik set.
+#                       Every -/_ spelling: CGI-style servers (Django, PHP,
+#                       Rails) read X_authentik_username as the same header.
+#                       Generated; keep the list complete when adding one.
 #   castor-stack-auth   Authentik's embedded outpost decides: signed in and in
 #                       the tenant's group, or off to the login page
 http:
@@ -11,17 +14,73 @@ http:
       headers:
         customRequestHeaders:
           X-authentik-username: ""
+          X-authentik_username: ""
+          X_authentik-username: ""
+          X_authentik_username: ""
           X-authentik-groups: ""
+          X-authentik_groups: ""
+          X_authentik-groups: ""
+          X_authentik_groups: ""
           X-authentik-entitlements: ""
+          X-authentik_entitlements: ""
+          X_authentik-entitlements: ""
+          X_authentik_entitlements: ""
           X-authentik-email: ""
+          X-authentik_email: ""
+          X_authentik-email: ""
+          X_authentik_email: ""
           X-authentik-name: ""
+          X-authentik_name: ""
+          X_authentik-name: ""
+          X_authentik_name: ""
           X-authentik-uid: ""
+          X-authentik_uid: ""
+          X_authentik-uid: ""
+          X_authentik_uid: ""
           X-authentik-jwt: ""
+          X-authentik_jwt: ""
+          X_authentik-jwt: ""
+          X_authentik_jwt: ""
           X-authentik-meta-jwks: ""
+          X-authentik-meta_jwks: ""
+          X-authentik_meta-jwks: ""
+          X-authentik_meta_jwks: ""
+          X_authentik-meta-jwks: ""
+          X_authentik-meta_jwks: ""
+          X_authentik_meta-jwks: ""
+          X_authentik_meta_jwks: ""
           X-authentik-meta-outpost: ""
+          X-authentik-meta_outpost: ""
+          X-authentik_meta-outpost: ""
+          X-authentik_meta_outpost: ""
+          X_authentik-meta-outpost: ""
+          X_authentik-meta_outpost: ""
+          X_authentik_meta-outpost: ""
+          X_authentik_meta_outpost: ""
           X-authentik-meta-provider: ""
+          X-authentik-meta_provider: ""
+          X-authentik_meta-provider: ""
+          X-authentik_meta_provider: ""
+          X_authentik-meta-provider: ""
+          X_authentik-meta_provider: ""
+          X_authentik_meta-provider: ""
+          X_authentik_meta_provider: ""
           X-authentik-meta-app: ""
+          X-authentik-meta_app: ""
+          X-authentik_meta-app: ""
+          X-authentik_meta_app: ""
+          X_authentik-meta-app: ""
+          X_authentik-meta_app: ""
+          X_authentik_meta-app: ""
+          X_authentik_meta_app: ""
           X-authentik-meta-version: ""
+          X-authentik-meta_version: ""
+          X-authentik_meta-version: ""
+          X-authentik_meta_version: ""
+          X_authentik-meta-version: ""
+          X_authentik-meta_version: ""
+          X_authentik_meta-version: ""
+          X_authentik_meta_version: ""
     castor-stack-auth:
       forwardAuth:
         address: http://authentik-server:9000/outpost.goauthentik.io/auth/traefik

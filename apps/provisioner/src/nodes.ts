@@ -5,7 +5,7 @@ import { audit, enqueueTenantJob } from "@pc/core";
 import { LocalNode, SshNode, type NodeExec } from "./node.ts";
 import type { StackUnits } from "@pc/pricing";
 import { pickNode, pickStacksNode } from "./placement.ts";
-import { stacksFacts } from "./stacks-node.ts";
+import { checkStacksNode } from "./stacks-node.ts";
 
 export class Nodes {
   private readonly drivers = new Map<string, NodeExec>();
@@ -92,14 +92,13 @@ export class Nodes {
       });
       const facts = ssh.probe();
       // A stacks node is measured by its Docker engine (on a Mac: the VM), and must still run with userns-remap.
-      const stacks = row.role === "STACKS" ? stacksFacts(ssh) : null;
-      if (stacks && !stacks.userns) throw new Error("Docker runs without userns-remap: no stacks are placed here until it's back");
+      // The runtime chosen at registration is never downgraded here: a lost runsc is an error.
+      const stacks = row.role === "STACKS" ? checkStacksNode(ssh, row) : null;
       return await prisma.node.update({
         where: { id: row.id },
         data: {
           poolSizeMb: facts.poolSizeMb, poolUsedMb: facts.poolUsedMb, poolHealth: facts.poolHealth,
           memoryMb: stacks?.memoryMb ?? facts.memoryMb, cpus: stacks?.cpus ?? facts.cpus,
-          ...(stacks ? { stackRuntime: stacks.runsc ? "runsc" : "runc" } : {}),
           lastSeenAt: new Date(), lastError: null,
         },
       });

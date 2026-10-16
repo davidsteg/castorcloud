@@ -18,7 +18,7 @@ nodes and the control plane.
  STACKS node (separate machine, no tenant data)        pc-stacks-edge Traefik (no Docker socket)
    Docker with userns-remap, gVisor (runsc)              │ ipAllowList: the control plane only
                                                           ▼ <project>-edge (internal; only the web service)
-   pc-s-<slug>-<app>:  services on <project> (internal: no way out)
+   pc-s-<slug>--<app>: services on <project> (internal: no way out)
                        castor-egress on <project> + <project>-out: HTTPS/HTTP to listed hosts only
    ZFS: <pool>/s/<slug>        encrypted (key derived from the tenant's volume key), quota = booked storage
         <pool>/s/<slug>/<app>  per-app quota; data/<volume> owned by the container user (userns-mapped)
@@ -40,7 +40,7 @@ nodes and the control plane.
 A small subset of Docker Compose, parsed and validated by `packages/stacks`
 (`spec.ts`). It's an allowlist: any key not listed is refused with a reason,
 never ignored. Per service: `image`, `command`, `entrypoint`, `environment`,
-`working_dir`, `user`, `read_only`, `volumes` (named only), `mem_limit` /
+`working_dir`, `user`, `tmpfs` (up to 4 paths), `volumes` (named only), `mem_limit` /
 `cpus` (or `deploy.resources.limits`; both required), `healthcheck`,
 `depends_on`. Top level: `services`, `volumes` (names only), and
 
@@ -68,7 +68,12 @@ Every container: `cap_drop: ALL` plus `CHOWN DAC_OVERRIDE FOWNER SETGID
 SETUID NET_BIND_SERVICE KILL`, `no-new-privileges`, memory = swap limit, CPU
 limit, `pids_limit: 512`, logs capped at 3 x 10 MB, `runtime: runsc` when the
 node has gVisor, image pinned to the digest pulled at deploy, bind mounts only
-into the stack's own dataset (`create_host_path: false`). Networks:
+into the stack's own dataset (`create_host_path: false`), and a read-only
+root filesystem with 64 MB tmpfs on `/tmp`, `/run`, `/var/tmp` and the
+service's `tmpfs:` paths (`read_only: false` is refused: the writable layer
+would sit outside every quota). An image whose `VOLUME` isn't covered by a
+volume or tmpfs is refused for the same reason. Old image versions are removed
+after a redeploy and with the stack. Networks:
 `<project>` internal (no gateway), `<project>-edge` internal (the web service
 and the node's edge proxy), `<project>-out` only for the egress proxy.
 
@@ -81,16 +86,22 @@ it; data directories are owned by that uid plus the node's userns base.
 
 - **Node**: STACKS nodes hold no tenant data (`Node.role`; placement never
   mixes them). Registration refuses a node whose Docker has no userns-remap,
-  and needs gVisor unless `--no-gvisor` is passed (audited).
+  and needs gVisor unless `--no-gvisor` is passed (audited). Both are checked
+  again before every deploy and on every probe; a node that lost either gets
+  an error, never a quiet fallback to runc.
 - **Tenants on the same node**: separate internal networks; the edge proxy
-  reaches each web service only by its unique alias on that stack's own edge
-  network. The edge proxy has no Docker provider, because labels baked into an
+  reaches each web service only by its alias `web.<project>` on that stack's
+  own edge network. Service names can't contain a dot or start with `pc-` /
+  `castor-`, and `--` separates slug and stack in every name, so no stack can
+  take another's alias, network or router. The edge proxy has no Docker provider, because labels baked into an
   image could otherwise claim another stack's host name.
 - **Bypassing sign-in**: the node's edge accepts requests from the control
   plane's address only (ipAllowList on every route), so another container or a
   LAN device can't skip Authentik.
 - **Spoofed identity**: the control plane removes `X-authentik-*` headers sent
-  by the client before forward auth adds the real ones.
+  by the client, in every `-`/`_` spelling (CGI-style apps read
+  `X_authentik_username` as the same header), before forward auth adds the
+  real ones.
 - **LAN and control plane**: the egress proxy (`infra/node/egress`) resolves
   each name itself, refuses private, loopback, link-local, CGNAT, multicast and
   documentation ranges, and connects to the address it checked (no DNS
@@ -138,7 +149,10 @@ it; data directories are owned by that uid plus the node's userns base.
 - Monitoring of stack health (failed stacks are visible to the owner).
 - Builds from a customer's GitHub repository (waits for GitHub login), private
   registries.
-- Verify on a real Mac: userns-remap and gVisor under Colima, ownership of
+- Known residual: containers resolve names through Docker's DNS, so a stack
+  could leak small amounts of data through DNS queries even without egress.
+- Verify on a real Mac: the stacks edge sees the control plane's real source
+  address (the ipAllowList depends on it), userns-remap and gVisor under Colima, ownership of
   directories on virtiofs as seen from the remapped containers, Traefik's file
   watch on the routes volume, Authentik's forward auth on a second domain.
 - Catalog apps: IT Tools, linkding (signs in via Authentik's header), Actual
