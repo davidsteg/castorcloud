@@ -16,3 +16,7 @@ infra/control-plane/traefik/dynamic/tenant-*.yml
 
 # Per-tenant routes to custom stacks, written by the provisioner
 infra/control-plane/traefik/dynamic/stacks-*.yml
+# Rust build output
+rust/target/
+# Node helpers built from rust/crates/node (CI artifact or cargo build)
+infra/node/bin/castor-node

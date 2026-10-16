@@ -358,7 +358,7 @@ const fr: Dictionary = {
       },
       {
         q: "Où exactement mes données sont-elles stockées ?",
-        a: "En Suisse, y compris les sauvegardes chiffrées. Pendant la bêta, sur nos propres serveurs dans un homelab ; en grandissant, nous passerons à une infrastructure plus grande en Suisse. Les paiements sont traités par Stripe ; la connexion avec Google est facultative.",
+        a: "En Suisse, y compris les sauvegardes chiffrées. Pendant la bêta, sur nos propres serveurs dans un homelab ; en grandissant, nous passerons à une infrastructure plus grande en Suisse. Les paiements sont traités par Stripe ; la connexion avec Google ou GitHub est facultative.",
       },
       {
         q: "Puis-je récupérer mes données ?",
@@ -408,7 +408,7 @@ const fr: Dictionary = {
       },
       {
         title: "Tiers",
-        text: "Paiements : Stripe (les données de carte ne nous parviennent jamais). Connexion facultative avec Google : Google sait que vous vous connectez. L’assistant facultatif envoie votre question et les extraits pertinents à un fournisseur d’IA – seulement si vous le réservez.",
+        text: "Paiements : Stripe (les données de carte ne nous parviennent jamais). Connexion facultative avec Google ou GitHub : le fournisseur sait que vous vous connectez. Dépôts GitHub connectés en option : nous lisons uniquement ceux que vous partagez. L’assistant facultatif envoie votre question et les extraits pertinents à un fournisseur d’IA – seulement si vous le réservez.",
       },
     ],
   },
@@ -425,7 +425,7 @@ const fr: Dictionary = {
     accept: "J’accepte les CG et la politique de protection des données.",
     pay: "Continuer vers le paiement",
     payDev: "Créer (développement : sans paiement)",
-    signInFirst: "Veuillez d’abord vous connecter – avec Google ou votre adresse e-mail.",
+    signInFirst: "Veuillez d’abord vous connecter – avec Google, GitHub ou votre adresse e-mail.",
     signIn: "Se connecter ou s’inscrire",
     change: "Modifier",
   },
@@ -442,6 +442,21 @@ const fr: Dictionary = {
     changeSubmit: "Modifier",
     changeOwnerOnly: "Seule la personne propriétaire de ce cloud peut modifier son stockage.",
     manage: "Gérer le stockage",
+  },
+  github: {
+    title: "Dépôts GitHub",
+    intro: "Connectez votre compte GitHub pour que Castor Cloud puisse lire vos dépôts, par exemple pour des stacks personnalisés. Vous choisissez les dépôts sur GitHub ; nous n’obtenons qu’un accès en lecture et ne stockons aucune clé GitHub.",
+    connect: "Connecter GitHub",
+    connectedAs: "Connecté à @{login}",
+    allRepos: "tous les dépôts",
+    selectedRepos: "dépôts sélectionnés",
+    suspended: "suspendu sur GitHub",
+    reposUnavailable: "Les dépôts n’ont pas pu être chargés pour le moment.",
+    manage: "Choisir les dépôts sur GitHub",
+    disconnect: "Déconnecter",
+    connectedNotice: "GitHub est connecté.",
+    disconnectedNotice: "GitHub est déconnecté. Castor Cloud n’a plus accès à vos dépôts.",
+    error: "La connexion à GitHub n’a pas fonctionné. Veuillez réessayer. Seul votre propre compte GitHub peut être connecté, pas une organisation.",
   },
   account: {
     title: "Mes clouds",

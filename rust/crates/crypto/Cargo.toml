@@ -1,0 +1,23 @@
+[package]
+name = "castor-crypto"
+description = "Envelope encryption for tenant secrets and volume keys, compatible with @pc/core"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+publish.workspace = true
+
+[dependencies]
+aes-gcm = { version = "0.11.1", default-features = false, features = ["aes", "alloc", "zeroize"] }
+base64 = "0.23.1"
+getrandom = "0.4.3"
+hex = "0.4.3"
+thiserror = "2.0.21"
+zeroize = { version = "1.9.1", features = ["zeroize_derive"] }
+
+[dev-dependencies]
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+
+[lints]
+workspace = true

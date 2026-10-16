@@ -359,7 +359,7 @@ const de: Dictionary = {
       },
       {
         q: "Wo genau sind meine Daten gespeichert?",
-        a: "In der Schweiz, inklusive der verschlüsselten Backups. Während der Beta auf unseren eigenen Servern in einem Homelab; wenn wir wachsen, ziehen wir auf eine grössere Infrastruktur in der Schweiz um. Zahlungen wickelt Stripe ab; die Anmeldung mit Google ist optional.",
+        a: "In der Schweiz, inklusive der verschlüsselten Backups. Während der Beta auf unseren eigenen Servern in einem Homelab; wenn wir wachsen, ziehen wir auf eine grössere Infrastruktur in der Schweiz um. Zahlungen wickelt Stripe ab; die Anmeldung mit Google oder GitHub ist optional.",
       },
       {
         q: "Kann ich meine Daten mitnehmen?",
@@ -409,7 +409,7 @@ const de: Dictionary = {
       },
       {
         title: "Drittanbieter",
-        text: "Zahlungen: Stripe (Kartendaten erreichen uns nie). Optionale Anmeldung mit Google: Google erfährt, dass Sie sich anmelden. Der optionale Assistent sendet Ihre Frage und die relevanten Ausschnitte an einen KI-Anbieter – nur wenn Sie ihn buchen.",
+        text: "Zahlungen: Stripe (Kartendaten erreichen uns nie). Optionale Anmeldung mit Google oder GitHub: der Anbieter erfährt, dass Sie sich anmelden. Optional verbundene GitHub-Repos: wir lesen nur die Repos, die Sie freigeben. Der optionale Assistent sendet Ihre Frage und die relevanten Ausschnitte an einen KI-Anbieter – nur wenn Sie ihn buchen.",
       },
     ],
   },
@@ -426,7 +426,7 @@ const de: Dictionary = {
     accept: "Ich akzeptiere die AGB und die Datenschutzerklärung.",
     pay: "Weiter zur Zahlung",
     payDev: "Erstellen (Entwicklung: ohne Zahlung)",
-    signInFirst: "Bitte melden Sie sich zuerst an – mit Google oder Ihrer E-Mail-Adresse.",
+    signInFirst: "Bitte melden Sie sich zuerst an – mit Google, GitHub oder Ihrer E-Mail-Adresse.",
     signIn: "Anmelden oder registrieren",
     change: "Ändern",
   },
@@ -443,6 +443,21 @@ const de: Dictionary = {
     changeSubmit: "Ändern",
     changeOwnerOnly: "Nur die Person, der diese Cloud gehört, kann den Speicher ändern.",
     manage: "Speicher verwalten",
+  },
+  github: {
+    title: "GitHub-Repos",
+    intro: "Verbinden Sie Ihr GitHub-Konto, damit Castor Cloud Ihre Repos lesen kann, zum Beispiel für eigene Stacks. Sie wählen die Repos auf GitHub selbst aus; wir erhalten nur Lesezugriff und speichern keinen GitHub-Schlüssel.",
+    connect: "GitHub verbinden",
+    connectedAs: "Verbunden mit @{login}",
+    allRepos: "alle Repos",
+    selectedRepos: "ausgewählte Repos",
+    suspended: "auf GitHub pausiert",
+    reposUnavailable: "Die Repos konnten gerade nicht geladen werden.",
+    manage: "Repos auf GitHub auswählen",
+    disconnect: "Trennen",
+    connectedNotice: "GitHub ist verbunden.",
+    disconnectedNotice: "GitHub ist getrennt. Castor Cloud hat keinen Zugriff mehr auf Ihre Repos.",
+    error: "Das Verbinden mit GitHub hat nicht geklappt. Bitte versuchen Sie es noch einmal. Verbinden lässt sich nur Ihr eigenes GitHub-Konto, keine Organisation.",
   },
   account: {
     title: "Meine Clouds",

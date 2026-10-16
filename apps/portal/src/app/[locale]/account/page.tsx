@@ -1,13 +1,14 @@
 import Link from "next/link";
 import { redirect } from "next/navigation";
 import { prisma } from "@pc/db";
-import { normalizeEmail } from "@pc/core";
+import { audit, deleteInstallation, githubAppConfig, installationRepositories, normalizeEmail } from "@pc/core";
 import { MAX_STORAGE_UNITS, fitsStorage, formatStorage, minStorageUnits, storageQuotaMb } from "@pc/pricing";
 import { signIn } from "@/auth";
 import { fill, getDictionary, type Locale } from "@/i18n";
 import { APP_LABEL, BASE_DOMAIN, PUBLIC_SCHEME } from "@/lib/config";
 import { withdrawApplication } from "@/lib/applications";
 import { checkoutUrl } from "@/lib/checkout";
+import { accountUrl, startGitHubConnect } from "@/lib/github";
 import { subscribe, unsubscribe } from "@/lib/newsletter";
 import { currentUser, memberTenant, ownedTenant } from "@/lib/session";
 import { signOutAllDevices, signOutBrowser } from "@/lib/signout";
@@ -15,8 +16,15 @@ import { itemKeyFromLookup, stripe } from "@/lib/stripe";
 import { SiteHeader } from "@/components/site/SiteHeader";
 import { StorageMeter } from "@/components/StorageMeter";
 
-export default async function AccountPage({ params }: { params: Promise<{ locale: Locale }> }) {
+export default async function AccountPage({
+  params,
+  searchParams,
+}: {
+  params: Promise<{ locale: Locale }>;
+  searchParams: Promise<{ github?: string }>;
+}) {
   const { locale } = await params;
+  const { github: githubResult } = await searchParams;
   const t = getDictionary(locale);
   const user = await currentUser();
 
@@ -47,6 +55,17 @@ export default async function AccountPage({ params }: { params: Promise<{ locale
 
   const email = normalizeEmail(user.email);
   const newsletter = email ? await prisma.newsletterSubscriber.findUnique({ where: { email } }) : null;
+
+  // Repository access (docs/github.md); hidden until the GitHub App is set up.
+  const githubEnabled = githubAppConfig() !== null;
+  const githubLinks = githubEnabled
+    ? await Promise.all(
+        (await prisma.gitHubInstallation.findMany({ where: { userId: user.id }, orderBy: { createdAt: "asc" } })).map(async (link) => ({
+          link,
+          repos: link.suspendedAt ? [] : await installationRepositories(link.installationId).catch(() => null),
+        })),
+      )
+    : [];
 
   // An approved application (or, outside the beta, an interrupted signup) waits for payment.
   async function pay(form: FormData) {
@@ -80,6 +99,26 @@ export default async function AccountPage({ params }: { params: Promise<{ locale
     const sub = address ? await prisma.newsletterSubscriber.findUnique({ where: { email: address } }) : null;
     if (sub) await unsubscribe(sub.id);
     redirect(`/${locale}/account`);
+  }
+
+  async function connectGitHub() {
+    "use server";
+    const me = await currentUser();
+    const url = me ? await startGitHubConnect(me.id, locale) : null;
+    if (url) redirect(url);
+  }
+
+  // Uninstalls the app from the customer's GitHub account: no access remains.
+  async function disconnectGitHub(form: FormData) {
+    "use server";
+    const me = await currentUser();
+    if (!me) return;
+    const link = await prisma.gitHubInstallation.findFirst({ where: { id: String(form.get("linkId")), userId: me.id } });
+    if (!link) return;
+    await deleteInstallation(link.installationId);
+    await prisma.gitHubInstallation.delete({ where: { id: link.id } });
+    await audit(me.id, "github.disconnected", undefined, { installationId: String(link.installationId), login: link.accountLogin });
+    redirect(accountUrl(locale, "disconnected"));
   }
 
   async function billing(form: FormData) {
@@ -186,6 +225,43 @@ export default async function AccountPage({ params }: { params: Promise<{ locale
             </div>
           ))}
           <Link className="button secondary block" href={`/${locale}/pricing`}>{t.account.create}</Link>
+          {githubEnabled && (
+            <div className="panel" id="github">
+              <h3 style={{ fontSize: 18, marginBottom: 4 }}>{t.github.title}</h3>
+              {githubResult === "connected" && <p className="notice" style={{ marginBottom: 12 }}>{t.github.connectedNotice}</p>}
+              {githubResult === "disconnected" && <p className="notice" style={{ marginBottom: 12 }}>{t.github.disconnectedNotice}</p>}
+              {githubResult === "error" && <p className="notice" style={{ marginBottom: 12 }}>{t.github.error}</p>}
+              {githubLinks.length === 0 && <p className="small-print" style={{ marginBottom: 16 }}>{t.github.intro}</p>}
+              {githubLinks.map(({ link, repos }) => (
+                <div key={link.id} style={{ marginBottom: 16 }}>
+                  <p className="small-print" style={{ marginBottom: 8 }}>
+                    {fill(t.github.connectedAs, { login: link.accountLogin })} ·{" "}
+                    {link.suspendedAt ? t.github.suspended : link.repositorySelection === "all" ? t.github.allRepos : t.github.selectedRepos}
+                  </p>
+                  {repos === null && <p className="small-print" style={{ marginBottom: 8 }}>{t.github.reposUnavailable}</p>}
+                  {repos && repos.length > 0 && (
+                    <ul className="small-print" style={{ marginBottom: 8 }}>
+                      {repos.map((r) => <li key={r.id}>{r.fullName}</li>)}
+                    </ul>
+                  )}
+                  <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
+                    <a className="button secondary small" href={`https://github.com/settings/installations/${link.installationId}`} target="_blank" rel="noreferrer">
+                      {t.github.manage}
+                    </a>
+                    <form action={disconnectGitHub}>
+                      <input type="hidden" name="linkId" value={link.id} />
+                      <button className="button secondary small" type="submit">{t.github.disconnect}</button>
+                    </form>
+                  </div>
+                </div>
+              ))}
+              {githubLinks.length === 0 && (
+                <form action={connectGitHub}>
+                  <button className="button secondary small" type="submit">{t.github.connect}</button>
+                </form>
+              )}
+            </div>
+          )}
           <div className="panel">
             <h3 style={{ fontSize: 18, marginBottom: 4 }}>{t.newsletter.title}</h3>
             <p className="small-print" style={{ marginBottom: 16 }}>

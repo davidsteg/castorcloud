@@ -58,15 +58,6 @@ services:
     networks: [pc-internal]
     restart: unless-stopped
 
-  redis:
-    image: redis:7-alpine
-    ports:
-      - "127.0.0.1:6379:6379"
-    volumes:
-      - redis:/data
-    networks: [pc-internal]
-    restart: unless-stopped
-
   authentik-server:
     image: ghcr.io/goauthentik/server:${AUTHENTIK_TAG}
     command: server
@@ -89,6 +80,8 @@ services:
       PC_PORTAL_CLIENT_SECRET: ${PORTAL_OIDC_CLIENT_SECRET}
       PC_GOOGLE_CLIENT_ID: ${GOOGLE_CLIENT_ID:-}
       PC_GOOGLE_CLIENT_SECRET: ${GOOGLE_CLIENT_SECRET:-}
+      PC_GITHUB_CLIENT_ID: ${GITHUB_LOGIN_CLIENT_ID:-}
+      PC_GITHUB_CLIENT_SECRET: ${GITHUB_LOGIN_CLIENT_SECRET:-}
       # Read-only API token of the monitor's service account (40-monitor.yaml)
       PC_MONITOR_TOKEN: ${MONITOR_AUTHENTIK_TOKEN:-}
     volumes:
@@ -120,7 +113,6 @@ services:
 
 volumes:
   postgres:
-  redis:
   authentik-media:
 
 networks:

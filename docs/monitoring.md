@@ -13,7 +13,7 @@ npm run monitor -w @pc/provisioner -- test      # send a test alert
 ```
 
 It runs next to the provisioner worker on the control plane but as its own
-process, so it can still report a stopped worker, a lost Redis or a
+process, so it can still report a stopped worker, a lost database or a
 database it can't reach.
 
 ## What it checks
@@ -27,7 +27,7 @@ database it can't reach.
 | Certificates | the certificate Traefik serves for `BASE_DOMAIN` and `auth.` expires within 14 days (3: critical), is expired, or doesn't validate | warning / critical |
 | Sign-in security | 30+ failed sign-ins in 15 min; 10+ from one address or against one account; Authentik's suspicious-request events; an admin impersonating a user; an Authentik admin signing in | warning / critical |
 | Audit log | staff break-glass access, a restored backup, an unhealthy backup box | critical / warning |
-| Platform | the provisioner worker isn't connected; Redis or Authentik doesn't answer; the monitor can't reach its database | critical |
+| Platform | no provisioner worker has been seen for 2 minutes (heartbeat, or a running job's lease); Authentik doesn't answer; the monitor can't reach its database | critical |
 
 Node facts come from the provisioner's node watcher (every 5 min), which
 probes each node over SSH as the locked-down `castor` user. The monitor reads
@@ -45,7 +45,7 @@ itself, and alerts it raised earlier stay open instead of reading as resolved.
   until it clears.
 - One-off events (a failed job, an impersonation, an admin sign-in) are sent
   once.
-- Flaky probes (services, Redis, Authentik, unreachable certificates) must fail
+- Flaky probes (services, Authentik, unreachable certificates) must fail
   two rounds in a row before they alert.
 - If no channel accepts a message, it is sent again next round.
 - Telegram gets every message. E-mail gets messages with anything critical in

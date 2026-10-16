@@ -55,6 +55,7 @@ We therefore never claim "zero knowledge" or "we cannot read your data".
 | Stripe secret key, webhook secret | control plane env | Restricted key; webhook signature verified on every call |
 | `LITELLM_MASTER_KEY` | control plane + node env | The one key that also lives on nodes (the gateway needs it). It manages LLM keys and budgets only, it cannot unlock data. The portal and bot use each tenant's own key |
 | `TELEGRAM_BOT_TOKEN` | control plane env | Whoever holds it can read and answer messages sent to the bot |
+| `GITHUB_APP_PRIVATE_KEY` | control plane env | Mints read tokens for every customer repository connected to the GitHub App. Rotate in the app settings if exposed |
 | Database dump secret key | **offline only** | Opens the control-plane database dumps (`npm run backup -- db-keygen`). Keep it with offline copies of `VOLUME_KEK` and `SECRETS_ENCRYPTION_KEY`: restoring a lost control plane needs all three |
 
 Never store these on data-plane nodes.
@@ -65,8 +66,15 @@ Never store these on data-plane nodes.
   local passwords (Immich password login off, Paperless regular login off,
   Dawarich e-mail login off, AirTrail password form hidden).
 - Each service app is bound to the tenant's Authentik group only.
-- Google login uses matching mode `email_deny`: it never attaches to an
-  existing account with the same e-mail (prevents account takeover).
+- Google and GitHub login use matching mode `email_deny`: they never attach
+  to an existing account with the same e-mail (prevents account takeover).
+- Social logins need an address the provider has verified (the apps identify
+  people by e-mail). Authentik doesn't check this itself; a deny stage in the
+  source flows does ([github.md](github.md)).
+- GitHub repository access is separate from GitHub login: a GitHub App the
+  customer installs on their own account, read-only contents of the
+  repositories they pick, tokens minted per use for 1 hour and never stored
+  ([github.md](github.md)).
 - Production: SMTP configured ⇒ e-mail verification is required for
   self-registration. Staff accounts: enforce WebAuthn/TOTP.
 

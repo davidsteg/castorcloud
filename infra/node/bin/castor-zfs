@@ -42,9 +42,9 @@ here=$(dirname "$0")
 [ -f "$here/castor.conf" ] && . "$here/castor.conf"
 DATASET_ROOT=${DATASET_ROOT:-$POOL/t}
 MOUNT_ROOT=${MOUNT_ROOT:-/Volumes/$POOL/t}
-# Stacks live next to the tenant datasets: .../t -> .../s
-STACKS_DATASET_ROOT=${STACKS_DATASET_ROOT:-${DATASET_ROOT%/t}/s}
-STACKS_MOUNT_ROOT=${STACKS_MOUNT_ROOT:-${MOUNT_ROOT%/t}/s}
+# Stacks live next to the tenant datasets: .../t -> .../s (never inside them).
+case "$DATASET_ROOT" in */t) STACKS_DATASET_ROOT=${STACKS_DATASET_ROOT:-${DATASET_ROOT%/t}/s};; esac
+case "$MOUNT_ROOT" in */t) STACKS_MOUNT_ROOT=${STACKS_MOUNT_ROOT:-${MOUNT_ROOT%/t}/s};; esac
 MB=1048576
 
 cmd=${1:?command}
@@ -57,6 +57,11 @@ slug=${2:?slug}
 case "$slug" in ""|-*|*[!a-z0-9-]*) echo "invalid slug" >&2; exit 2;; esac
 case "$cmd" in
   stacks-*|stack-*)
+    if [ -z "${STACKS_DATASET_ROOT:-}" ] || [ -z "${STACKS_MOUNT_ROOT:-}" ]; then
+      echo "castor.conf: no place for stacks (set STACKS_DATASET_ROOT and STACKS_MOUNT_ROOT)" >&2; exit 1
+    fi
+    case "$STACKS_DATASET_ROOT/" in "$DATASET_ROOT"/*) echo "castor.conf: stacks must not be inside the tenant datasets" >&2; exit 1;; esac
+    case "$DATASET_ROOT/" in "$STACKS_DATASET_ROOT"/*) echo "castor.conf: stacks must not overlap the tenant datasets" >&2; exit 1;; esac
     ds="$STACKS_DATASET_ROOT/$slug"
     mnt="$STACKS_MOUNT_ROOT/$slug"
     ;;
