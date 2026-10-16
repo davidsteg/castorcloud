@@ -11,12 +11,24 @@ the TypeScript part is removed.
 |---|---|---|
 | `crates/crypto` | `packages/core/src/crypto.ts` | done; format-compatible, tested in both directions |
 | `crates/node` | `infra/node/bin/castor-ssh`, `castor-zfs`, `castor-snap` | done; same commands and output, the scripts stay until every node runs it |
+| `crates/castord` | `apps/provisioner/src/worker.ts` | queue loop done (same SQL as `jobs.ts`); job kinds move one at a time |
 
 ```bash
 cd rust
 cargo test
 cargo clippy --all-targets -- -D warnings
 ```
+
+castord's queue tests need a Postgres with the migrations applied; set
+`TEST_DATABASE_URL` (without it they pass by skipping, except in CI).
+
+## castord
+
+Runs next to the TypeScript worker on the same queue. `DATABASE_URL` as for
+the control plane, `CASTORD_KINDS` the comma-separated job kinds it takes.
+It refuses a kind it has no handler for. To move a kind: deploy castord
+with the kind added to `CASTORD_KINDS` and, in the same deploy, remove it
+from `KINDS` in `apps/provisioner/src/worker.ts`.
 
 Rules for every crate: no `unsafe` (forbidden workspace-wide), no
 `unwrap`/`expect`/`panic` outside tests, key material in `zeroize` types

@@ -127,15 +127,18 @@ export async function workerHeartbeat(worker: string, kinds: readonly JobKind[])
 }
 
 /**
- * Workers alive: seen within `withinMs`, or holding a job whose lease still
- * runs (a busy worker can't always write its heartbeat in time).
+ * Workers alive and the job kinds they run: seen within `withinMs`, or
+ * holding a job whose lease still runs (a busy worker can't always write its
+ * heartbeat in time). The TypeScript and Rust workers each run some kinds.
  */
-export async function liveWorkers(withinMs: number): Promise<string[]> {
-  const rows = await prisma.$queryRaw<{ id: string }[]>`
-    SELECT id FROM "WorkerHeartbeat" WHERE "seenAt" >= ${utc(new Date(Date.now() - withinMs))}
-    UNION
-    SELECT "lockedBy" FROM "Job" WHERE status = 'RUNNING' AND "lockedBy" IS NOT NULL AND "lockedUntil" >= ${NOW}`;
-  return rows.map((r) => r.id);
+export async function liveWorkers(withinMs: number): Promise<{ id: string; kinds: JobKind[] }[]> {
+  return prisma.$queryRaw<{ id: string; kinds: JobKind[] }[]>`
+    WITH busy AS (
+      SELECT "lockedBy" AS id, array_agg(DISTINCT kind::text) AS kinds FROM "Job"
+      WHERE status = 'RUNNING' AND "lockedUntil" >= ${NOW} GROUP BY "lockedBy")
+    SELECT COALESCE(h.id, b.id) AS id, COALESCE(h.kinds::text[], b.kinds) AS kinds
+    FROM (SELECT * FROM "WorkerHeartbeat" WHERE "seenAt" >= ${utc(new Date(Date.now() - withinMs))}) h
+    FULL JOIN busy b ON b.id = h.id`;
 }
 
 export async function audit(actor: string, action: string, tenantId?: string, details?: object) {
