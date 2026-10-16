@@ -163,6 +163,32 @@ impl Keys {
     }
 }
 
+/// What a ZFS dataset key is derived for (zfs.ts): the tenant's own data, or
+/// its custom stacks on a STACKS node, which never holds the other key.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum Dataset {
+    Tenant,
+    Stacks,
+}
+
+/// ZFS wants a 32-byte key; volume keys are 64 random bytes. HKDF-SHA256 with
+/// an empty salt, as `datasetKey` and `stacksDatasetKey` in zfs.ts, so deleting
+/// the one volume key still shreds both datasets. Hex with a newline is what
+/// `keyformat=hex` reads from stdin.
+pub fn dataset_key(volume_key: &[u8], dataset: Dataset) -> Result<Zeroizing<Vec<u8>>, Error> {
+    let info: &[u8] = match dataset {
+        Dataset::Tenant => b"castor-zfs-dataset-v1",
+        Dataset::Stacks => b"castor-zfs-stacks-v1",
+    };
+    let mut key = Zeroizing::new([0u8; 32]);
+    hkdf::Hkdf::<sha2::Sha256>::new(Some(&[]), volume_key)
+        .expand(info, key.as_mut())
+        .map_err(|_| Error::Unsupported)?;
+    let mut out = Zeroizing::new(hex::encode(key.as_ref()).into_bytes());
+    out.push(b'\n');
+    Ok(out)
+}
+
 fn secret_aad(tenant_id: &str, name: &str) -> String {
     format!("{tenant_id}:{name}")
 }

@@ -32,6 +32,8 @@ pub fn hex8() -> String {
 /// Records every command; answers by the first rule whose words it contains.
 pub struct Fake {
     calls: Mutex<Vec<String>>,
+    /// What each call got on stdin, by call.
+    inputs: Mutex<Vec<Option<Vec<u8>>>>,
     pub rules: Vec<(&'static str, Result<&'static str, &'static str>)>,
 }
 
@@ -39,11 +41,15 @@ impl Fake {
     pub fn new(rules: Vec<(&'static str, Result<&'static str, &'static str>)>) -> Arc<Self> {
         Arc::new(Self {
             calls: Mutex::new(Vec::new()),
+            inputs: Mutex::new(Vec::new()),
             rules,
         })
     }
     pub fn calls(&self) -> Vec<String> {
         self.calls.lock().unwrap().clone()
+    }
+    pub fn inputs(&self) -> Vec<Option<Vec<u8>>> {
+        self.inputs.lock().unwrap().clone()
     }
 }
 
@@ -53,6 +59,7 @@ impl Exec for Fake {
         let env: Vec<String> = cmd.env.iter().map(|(k, v)| format!("{k}={v} ")).collect();
         let line = format!("{}{} {}", env.concat(), cmd.program, cmd.args.join(" "));
         self.calls.lock().unwrap().push(line.clone());
+        self.inputs.lock().unwrap().push(cmd.input.as_ref().map(|i| i.to_vec()));
         for (needle, answer) in &self.rules {
             if line.contains(needle) {
                 return answer.map(str::to_owned).map_err(str::to_owned);

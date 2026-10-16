@@ -1,9 +1,42 @@
-//! The Authentik API, as `apps/provisioner/src/authentik.ts` uses it. Only
-//! what castord's job kinds need so far: removing a tenant's groups and
-//! applications, and ending a user's sessions. Every call is idempotent (look up, then act).
+//! The Authentik API, as `apps/provisioner/src/authentik.ts` uses it: tenant
+//! groups and their members, one OIDC provider and application per tenant
+//! service, a forward-auth application per custom-stack host, and policy
+//! bindings that keep each application to the tenant's group. Every call is
+//! idempotent (look up by name or slug, then create, update or delete).
 
-use serde_json::Value;
+use serde_json::{Value, json};
 use zeroize::Zeroizing;
+
+/// Flows, scope mappings and signing key of every provider (providerDefaults).
+pub struct ProviderDefaults {
+    pub authorization_flow: Value,
+    pub invalidation_flow: Value,
+    pub property_mappings: Vec<Value>,
+    pub signing_key: Value,
+}
+
+pub struct GroupUser {
+    pub pk: i64,
+    pub email: String,
+    pub uid: String,
+}
+
+pub struct OidcApp<'a> {
+    pub slug: &'a str,
+    pub name: &'a str,
+    pub client_id: &'a str,
+    pub client_secret: &'a str,
+    pub redirect_uris: &'a [Value],
+    pub launch_url: &'a str,
+    pub allowed_group_pk: &'a str,
+}
+
+pub struct ProxyApp<'a> {
+    pub slug: &'a str,
+    pub name: &'a str,
+    pub external_host: &'a str,
+    pub allowed_group_pk: &'a str,
+}
 
 pub struct Authentik {
     base: String,
@@ -14,6 +47,7 @@ pub struct Authentik {
 #[derive(Clone, Copy)]
 enum Method {
     Get,
+    Post,
     Patch,
     Delete,
 }
@@ -31,6 +65,7 @@ impl Authentik {
         let url = format!("{}/api/v3{path}", self.base);
         let (name, req) = match method {
             Method::Get => ("GET", self.http.get(&url)),
+            Method::Post => ("POST", self.http.post(&url)),
             Method::Patch => ("PATCH", self.http.patch(&url)),
             Method::Delete => ("DELETE", self.http.delete(&url)),
         };
@@ -77,6 +112,241 @@ impl Authentik {
 
     async fn find_pk(&self, path: &str, query: &[(&str, &str)]) -> Result<Option<String>, String> {
         Ok(self.find_one(path, query).await?.and_then(|v| pk(&v)))
+    }
+
+    async fn must_find(&self, what: &str, path: &str, query: &[(&str, &str)]) -> Result<Value, String> {
+        self.find_one(path, query)
+            .await?
+            .ok_or_else(|| format!("Authentik: {what} not found"))
+    }
+
+    /// Flows, scope mappings and signing key shared by every provider castord creates.
+    pub async fn provider_defaults(&self) -> Result<ProviderDefaults, String> {
+        let scope = |name: &'static str| ("managed", name);
+        let get = |what: &'static str, path: &'static str, q: (&'static str, &'static str)| async move {
+            let v = self.must_find(what, path, &[q]).await?;
+            v.get("pk")
+                .cloned()
+                .ok_or_else(|| format!("Authentik: {what} has no pk"))
+        };
+        let flow = "/flows/instances/";
+        let mappings = "/propertymappings/provider/scope/";
+        Ok(ProviderDefaults {
+            authorization_flow: get(
+                "authorization flow",
+                flow,
+                ("slug", "default-provider-authorization-implicit-consent"),
+            )
+            .await?,
+            invalidation_flow: get(
+                "invalidation flow",
+                flow,
+                ("slug", "default-provider-invalidation-flow"),
+            )
+            .await?,
+            property_mappings: vec![
+                get(
+                    "openid scope",
+                    mappings,
+                    scope("goauthentik.io/providers/oauth2/scope-openid"),
+                )
+                .await?,
+                get(
+                    "email scope",
+                    mappings,
+                    scope("goauthentik.io/providers/oauth2/scope-email"),
+                )
+                .await?,
+                get(
+                    "profile scope",
+                    mappings,
+                    scope("goauthentik.io/providers/oauth2/scope-profile"),
+                )
+                .await?,
+            ],
+            signing_key: get(
+                "signing key",
+                "/crypto/certificatekeypairs/",
+                ("name", "authentik Self-signed Certificate"),
+            )
+            .await?,
+        })
+    }
+
+    /// The group's pk, created if missing.
+    pub async fn ensure_group(&self, name: &str) -> Result<String, String> {
+        if let Some(pk) = self.find_pk("/core/groups/", &[("name", name)]).await? {
+            return Ok(pk);
+        }
+        let created = self
+            .request(
+                Method::Post,
+                "/core/groups/",
+                Some(json!({ "name": name, "is_superuser": false })),
+            )
+            .await?
+            .ok_or("Authentik: empty group")?;
+        pk(&created).ok_or_else(|| "Authentik: created group has no pk".to_owned())
+    }
+
+    pub async fn add_user_to_group(&self, group_pk: &str, user_pk: i64) -> Result<(), String> {
+        let path = format!("/core/groups/{}/add_user/", segment(group_pk)?);
+        self.request(Method::Post, &path, Some(json!({ "pk": user_pk })))
+            .await?;
+        Ok(())
+    }
+
+    pub async fn remove_user_from_group(&self, group_pk: &str, user_pk: i64) -> Result<(), String> {
+        let path = format!("/core/groups/{}/remove_user/", segment(group_pk)?);
+        self.request(Method::Post, &path, Some(json!({ "pk": user_pk })))
+            .await?;
+        Ok(())
+    }
+
+    /// Members of a group; `uid` is the OIDC "sub" (providers use hashed_user_id).
+    pub async fn group_users(&self, group_pk: &str) -> Result<Vec<GroupUser>, String> {
+        let path = format!("/core/groups/{}/?include_users=true", segment(group_pk)?);
+        let group = self.request(Method::Get, &path, None).await?;
+        let users = group
+            .as_ref()
+            .and_then(|g| g.get("users_obj"))
+            .and_then(Value::as_array)
+            .cloned()
+            .unwrap_or_default();
+        users
+            .iter()
+            .map(|u| {
+                let s = |k: &str| u.get(k).and_then(Value::as_str).unwrap_or_default().to_owned();
+                Ok(GroupUser {
+                    pk: u
+                        .get("pk")
+                        .and_then(Value::as_i64)
+                        .ok_or("Authentik: group user without pk")?,
+                    email: s("email"),
+                    uid: s("uid"),
+                })
+            })
+            .collect()
+    }
+
+    /// Creates or updates a confidential OIDC provider and its application,
+    /// open to the members of `allowed_group_pk` only.
+    pub async fn ensure_oidc_app(&self, o: &OidcApp<'_>, d: &ProviderDefaults) -> Result<(), String> {
+        let body = json!({
+            "name": o.slug,
+            "client_type": "confidential",
+            "client_id": o.client_id,
+            "client_secret": o.client_secret,
+            "redirect_uris": o.redirect_uris,
+            "sub_mode": "hashed_user_id",
+            "include_claims_in_id_token": true,
+            "authorization_flow": d.authorization_flow,
+            "invalidation_flow": d.invalidation_flow,
+            "property_mappings": d.property_mappings,
+            "signing_key": d.signing_key,
+        });
+        let provider = self.upsert_provider("/providers/oauth2/", o.slug, body).await?;
+        self.ensure_app(o.slug, o.name, provider, o.launch_url, o.allowed_group_pk)
+            .await
+    }
+
+    /// Creates or updates the forward-auth provider and application of one
+    /// custom-stack host, and adds it to the embedded outpost.
+    pub async fn ensure_proxy_app(&self, o: &ProxyApp<'_>, d: &ProviderDefaults) -> Result<(), String> {
+        let body = json!({
+            "name": o.slug,
+            "mode": "forward_single",
+            "external_host": o.external_host,
+            "authorization_flow": d.authorization_flow,
+            "invalidation_flow": d.invalidation_flow,
+            // The app sees who is signed in (X-authentik-*), never a token it could replay elsewhere.
+            "intercept_header_auth": false,
+            "basic_auth_enabled": false,
+            "access_token_validity": "hours=12",
+        });
+        let provider = self.upsert_provider("/providers/proxy/", o.slug, body).await?;
+        self.ensure_app(o.slug, o.name, provider, o.external_host, o.allowed_group_pk)
+            .await?;
+        let outpost = self.embedded_outpost().await?;
+        let opk = pk(&outpost).ok_or("Authentik: embedded outpost has no pk")?;
+        let mut providers = outpost_providers(&outpost);
+        if !providers.contains(&provider) {
+            providers.push(provider);
+            self.request(
+                Method::Patch,
+                &format!("/outposts/instances/{}/", segment(&opk)?),
+                Some(json!({ "providers": providers })),
+            )
+            .await?;
+        }
+        Ok(())
+    }
+
+    async fn embedded_outpost(&self) -> Result<Value, String> {
+        self.must_find(
+            "embedded outpost",
+            "/outposts/instances/",
+            &[("managed__iexact", "goauthentik.io/outposts/embedded")],
+        )
+        .await
+    }
+
+    /// PATCHes the provider named `slug`, or creates it; returns its pk.
+    async fn upsert_provider(&self, base: &str, slug: &str, body: Value) -> Result<i64, String> {
+        let existing = self.find_one(base, &[("name", slug)]).await?;
+        let existing_pk = existing.as_ref().and_then(|p| p.get("pk")).and_then(Value::as_i64);
+        let saved = match existing_pk {
+            Some(ppk) => {
+                self.request(Method::Patch, &format!("{base}{ppk}/"), Some(body))
+                    .await?
+            }
+            None => self.request(Method::Post, base, Some(body)).await?,
+        };
+        saved
+            .as_ref()
+            .and_then(|p| p.get("pk"))
+            .and_then(Value::as_i64)
+            .ok_or_else(|| format!("Authentik: provider {slug} has no pk"))
+    }
+
+    async fn ensure_app(
+        &self,
+        slug: &str,
+        name: &str,
+        provider: i64,
+        launch: &str,
+        group_pk: &str,
+    ) -> Result<(), String> {
+        let body = json!({ "name": name, "slug": slug, "provider": provider, "meta_launch_url": launch });
+        let found = self
+            .find_one(
+                "/core/applications/",
+                &[("slug", slug), ("superuser_full_list", "true")],
+            )
+            .await?;
+        let app = match found {
+            Some(a) => a,
+            None => self
+                .request(Method::Post, "/core/applications/", Some(body.clone()))
+                .await?
+                .ok_or("Authentik: empty application")?,
+        };
+        self.request(
+            Method::Patch,
+            &format!("/core/applications/{}/", segment(slug)?),
+            Some(body),
+        )
+        .await?;
+        let app_pk = pk(&app).ok_or("Authentik: application has no pk")?;
+        // Only members of the tenant group may use this application.
+        let bound = self
+            .find_one("/policies/bindings/", &[("target", &app_pk), ("group", group_pk)])
+            .await?;
+        if bound.is_none() {
+            let binding = json!({ "target": app_pk, "group": group_pk, "order": 0, "enabled": true });
+            self.request(Method::Post, "/policies/bindings/", Some(binding)).await?;
+        }
+        Ok(())
     }
 
     pub async fn find_user_pk_by_email(&self, email: &str) -> Result<Option<i64>, String> {
@@ -141,19 +411,9 @@ impl Authentik {
         let provider = self.find_one("/providers/proxy/", &[("name", slug)]).await?;
         let provider_pk = provider.as_ref().and_then(|p| p.get("pk")).and_then(Value::as_i64);
         if let Some(ppk) = provider_pk {
-            let outpost = self
-                .find_one(
-                    "/outposts/instances/",
-                    &[("managed__iexact", "goauthentik.io/outposts/embedded")],
-                )
-                .await?
-                .ok_or("Authentik: embedded outpost not found")?;
+            let outpost = self.embedded_outpost().await?;
             let opk = pk(&outpost).ok_or("Authentik: embedded outpost has no pk")?;
-            let providers: Vec<i64> = outpost
-                .get("providers")
-                .and_then(Value::as_array)
-                .map(|a| a.iter().filter_map(Value::as_i64).collect())
-                .unwrap_or_default();
+            let providers = outpost_providers(&outpost);
             if providers.contains(&ppk) {
                 let keep: Vec<i64> = providers.into_iter().filter(|p| *p != ppk).collect();
                 self.request(
@@ -186,6 +446,14 @@ impl Authentik {
         }
         Ok(())
     }
+}
+
+fn outpost_providers(outpost: &Value) -> Vec<i64> {
+    outpost
+        .get("providers")
+        .and_then(Value::as_array)
+        .map(|a| a.iter().filter_map(Value::as_i64).collect())
+        .unwrap_or_default()
 }
 
 fn results(page: Option<Value>) -> Vec<Value> {

@@ -1,6 +1,7 @@
 //! The node's LLM gateway (LiteLLM) admin API, as in
-//! `apps/provisioner/src/llm.ts`. Only what castord's job kinds need so
-//! far: block and delete a tenant's key.
+//! `apps/provisioner/src/llm.ts`: one virtual key per tenant, carrying the
+//! tenant's monthly budget. The key value is ours (kept in "Secret"), so
+//! every call is idempotent.
 
 use zeroize::Zeroizing;
 
@@ -45,21 +46,59 @@ impl Gateway {
         Ok((status, text))
     }
 
-    /// Whether the gateway knows the key (unknown: 404, or 400/401 on some versions).
-    async fn exists(&self, key: &str) -> Result<bool, String> {
+    /// The key's info, None when the gateway doesn't know it (404, or 400/401 on some versions).
+    async fn info(&self, key: &str) -> Result<Option<serde_json::Value>, String> {
         match self
             .request(false, &format!("/key/info?key={}", encode(key)), None)
             .await
         {
-            Ok((404, _)) => Ok(false),
+            Ok((404, _)) => Ok(None),
             Ok((_, text)) => {
                 let v: serde_json::Value =
                     serde_json::from_str(&text).map_err(|e| format!("LLM gateway /key/info: {e}"))?;
-                Ok(v.get("info").is_some_and(|i| !i.is_null()))
+                Ok(v.get("info").filter(|i| !i.is_null()).cloned())
             }
-            Err(e) if e.contains("-> 400") || e.contains("-> 401") => Ok(false),
+            Err(e) if e.contains("-> 400") || e.contains("-> 401") => Ok(None),
             Err(e) => Err(e),
         }
+    }
+
+    async fn exists(&self, key: &str) -> Result<bool, String> {
+        Ok(self.info(key).await?.is_some())
+    }
+
+    /// Creates or updates the tenant key: budget per month, only the assistant
+    /// model, unblocked. An existing key keeps its budget_duration, so the
+    /// monthly reset doesn't move.
+    pub async fn ensure_tenant_key(
+        &self,
+        key: &str,
+        slug: &str,
+        tenant_id: &str,
+        max_budget_usd: f64,
+    ) -> Result<(), String> {
+        // Aliases must be unique; tenant ids never repeat, slugs may after a deletion.
+        let mut body = serde_json::json!({
+            "key": key,
+            "key_alias": format!("tenant-{slug}-{tenant_id}"),
+            "max_budget": max_budget_usd,
+            "budget_duration": "1mo",
+            "models": ["assistant"],
+            "metadata": { "tenant_id": tenant_id },
+        });
+        let Some(existing) = self.info(key).await? else {
+            self.request(true, "/key/generate", Some(body)).await?;
+            return Ok(());
+        };
+        if let Some(o) = body.as_object_mut() {
+            o.shift_remove("budget_duration");
+        }
+        self.request(true, "/key/update", Some(body)).await?;
+        if existing.get("blocked").and_then(serde_json::Value::as_bool) == Some(true) {
+            self.request(true, "/key/unblock", Some(serde_json::json!({ "key": key })))
+                .await?;
+        }
+        Ok(())
     }
 
     /// Suspended tenant: no more requests, spend kept.

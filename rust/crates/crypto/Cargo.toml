@@ -12,6 +12,8 @@ aes-gcm = { version = "0.11.1", default-features = false, features = ["aes", "al
 base64 = "0.23.1"
 getrandom = "0.4.3"
 hex = "0.4.3"
+hkdf = "0.12.4"
+sha2 = "0.10.9"
 thiserror = "2.0.21"
 zeroize = { version = "1.9.1", features = ["zeroize_derive"] }
 
