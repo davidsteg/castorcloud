@@ -1,5 +1,7 @@
 # Rust core
 
+Plan and reasons: [docs/rust-core.md](../docs/rust-core.md).
+
 The control-plane core, moving from TypeScript (`packages/core`,
 `apps/provisioner`) to Rust one module at a time. Each crate stays
 compatible with the TypeScript it replaces, so both run side by side until

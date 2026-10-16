@@ -9,6 +9,7 @@ encrypted stack; one portal embeds all services behind one login.
 - Security model (what we protect, and what we can't): [docs/security.md](docs/security.md)
 - Assistant design (Hermes, memory, LLM, credit limit): [docs/assistant.md](docs/assistant.md)
 - Beta applications and newsletter: [docs/beta.md](docs/beta.md)
+- Moving the core to Rust (what moves, what stays, and why): [docs/rust-core.md](docs/rust-core.md)
 
 ## How a customer gets a cloud
 
