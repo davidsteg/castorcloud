@@ -11,6 +11,9 @@
 //!   STACKS_DOMAIN           custom stacks are on when set
 //!   BASE_DOMAIN, PUBLIC_SCHEME, AUTHENTIK_BOOTSTRAP_TOKEN
 //!                           Authentik at <scheme>://auth.<BASE_DOMAIN>
+//!   BRAND_NAME (Castor Cloud), TZ (Europe/Zurich), AUTH_HOST_IP (host-gateway)
+//!   AI_USD_PER_CHF          CHF -> USD rate for AI budgets (default 1.1)
+//!   CA_DIR                  where ca-bundle.pem is for remote nodes (default .dev-certs)
 //!   CASTORD_EXTRA_CA_CERTS  a CA bundle to trust as well (the dev CA)
 use std::path::PathBuf;
 use std::process::ExitCode;
@@ -27,6 +30,9 @@ fn handlers(c: &Arc<Control>) -> Vec<Arc<dyn Handler>> {
         Arc::new(castord::suspend::Suspend(c.clone())),
         Arc::new(castord::delete::Delete(c.clone())),
         Arc::new(castord::revoke::RevokeAccess(c.clone())),
+        Arc::new(castord::apply::Provision(c.clone())),
+        Arc::new(castord::apply::Update(c.clone())),
+        Arc::new(castord::apply::Resume(c.clone())),
     ]
 }
 
@@ -66,16 +72,52 @@ fn control() -> Result<Control, String> {
     }
     let base_domain = var("BASE_DOMAIN").unwrap_or_else(|| "brand.localhost".into());
     let token = var("AUTHENTIK_BOOTSTRAP_TOKEN").ok_or("AUTHENTIK_BOOTSTRAP_TOKEN is not set")?;
-    let authentik =
-        castord::authentik::Authentik::new(&format!("{scheme}://auth.{base_domain}"), Zeroizing::new(token), http);
+    let authentik = castord::authentik::Authentik::new(
+        &format!("{scheme}://auth.{base_domain}"),
+        Zeroizing::new(token),
+        http.clone(),
+    );
+    let stacks_domain = var("STACKS_DOMAIN");
+    // Code we don't control must never share cookies with the portal (*.BASE_DOMAIN).
+    if stacks_domain.as_deref() == Some(base_domain.as_str()) && scheme == "https" {
+        return Err("STACKS_DOMAIN must not be BASE_DOMAIN in production".into());
+    }
+    let versions_file = root.join("packages/stack-templates/versions.env");
+    let versions = castord::render::parse_env_file(
+        &std::fs::read_to_string(&versions_file).map_err(|e| format!("{}: {e}", versions_file.display()))?,
+    );
+    let usd_per_chf: f64 = var("AI_USD_PER_CHF")
+        .unwrap_or_else(|| "1.1".into())
+        .parse()
+        .ok()
+        .filter(|r: &f64| r.is_finite() && *r > 0.0)
+        .ok_or("AI_USD_PER_CHF must be a positive number")?;
+    let platform = castord::render::Platform {
+        base_domain,
+        scheme,
+        brand_name: var("BRAND_NAME").unwrap_or_else(|| "Castor Cloud".into()),
+        time_zone: var("TZ").unwrap_or_else(|| "Europe/Zurich".into()),
+        auth_host_ip: var("AUTH_HOST_IP").unwrap_or_else(|| "host-gateway".into()),
+    };
     Ok(Control {
+        ca_dir: var("CA_DIR")
+            .map(PathBuf::from)
+            .unwrap_or_else(|| root.join(".dev-certs")),
         root,
         traefik_dir,
         exec: Arc::new(castord::exec::Real),
         keys: castor_crypto::Keys::from_env().map_err(|e| e.to_string())?,
         llm,
         authentik,
-        stacks: var("STACKS_DOMAIN").is_some(),
+        stacks: stacks_domain.is_some(),
+        platform,
+        versions,
+        versions_file,
+        usd_per_chf,
+        prepared: Default::default(),
+        http,
+        health_timeout: std::time::Duration::from_secs(900),
+        health_every: std::time::Duration::from_secs(5),
     })
 }
 

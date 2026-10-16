@@ -4,6 +4,7 @@
 //! A kind moves here by adding its handler and removing it from the
 //! TypeScript worker's KINDS in the same deploy.
 
+pub mod apply;
 pub mod assistant;
 pub mod authentik;
 pub mod db;
@@ -20,10 +21,10 @@ pub mod storage;
 pub mod suspend;
 pub mod valid;
 
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 use std::path::PathBuf;
-use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::{Arc, Mutex};
 use std::time::Duration;
 
 use sqlx::PgPool;
@@ -53,6 +54,20 @@ pub struct Control {
     pub authentik: authentik::Authentik,
     /// Custom stacks are on (STACKS_DOMAIN is set).
     pub stacks: bool,
+    pub platform: render::Platform,
+    /// packages/stack-templates/versions.env: image versions of every stack.
+    pub versions: render::Vars,
+    pub versions_file: PathBuf,
+    /// Conservative CHF to USD rate for AI budgets (AI_USD_PER_CHF).
+    pub usd_per_chf: f64,
+    /// Where ca-bundle.pem comes from for remote nodes (CA_DIR).
+    pub ca_dir: PathBuf,
+    /// Nodes prepared by this process (node files and edge are current).
+    pub prepared: Mutex<HashSet<String>>,
+    /// For health checks and service accounts: no redirects, 30 s timeout.
+    pub http: reqwest::Client,
+    pub health_timeout: Duration,
+    pub health_every: Duration,
 }
 
 /// What a handler gets besides the job.
