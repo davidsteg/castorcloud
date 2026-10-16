@@ -28,7 +28,7 @@ pub const RENEW: Duration = Duration::from_secs(60);
 const BACKOFF_MS: f64 = 15_000.0;
 
 /// Postgres' enum "JobKind", as the TypeScript side names them.
-pub const ALL_KINDS: [&str; 7] = [
+pub const ALL_KINDS: [&str; 8] = [
     "PROVISION",
     "UPDATE",
     "SUSPEND",
@@ -36,6 +36,7 @@ pub const ALL_KINDS: [&str; 7] = [
     "DELETE",
     "REVOKE_ACCESS",
     "RESTORE",
+    "STACKS",
 ];
 
 #[derive(Debug, Clone, PartialEq, Eq, sqlx::FromRow)]

@@ -1,17 +1,61 @@
-//! castord: see lib.rs.
+//! castord: see lib.rs. Settings, as for the TypeScript worker (the
+//! control plane's .env):
 //!
-//!   DATABASE_URL    the control plane's Postgres (as for the portal)
-//!   CASTORD_KINDS   comma-separated job kinds this worker takes, e.g. "SUSPEND"
+//!   DATABASE_URL            the control plane's Postgres
+//!   CASTORD_KINDS           comma-separated job kinds this worker takes, e.g.
+//!                           "SUSPEND"; the TypeScript worker leaves them alone
+//!   SECRETS_ENCRYPTION_KEY, VOLUME_KEK
+//!   CASTOR_ROOT             the repository (default: the current directory)
+//!   TRAEFIK_DYNAMIC_DIR     default infra/control-plane/traefik/dynamic
+//!   LITELLM_MASTER_KEY, LLM_GATEWAY_URL (default http://localhost:4000)
+//!   STACKS_DOMAIN           custom stacks are on when set
+use std::path::PathBuf;
 use std::process::ExitCode;
 use std::sync::Arc;
 use std::sync::atomic::Ordering;
 
-use castord::{Handler, Worker};
+use castord::{Control, Handler, Worker};
 use sqlx::postgres::{PgConnectOptions, PgPoolOptions};
+use zeroize::Zeroizing;
 
-/// Job kinds castord can run. Empty until the first one moves over.
-fn handlers() -> Vec<Arc<dyn Handler>> {
-    Vec::new()
+/// The job kinds castord can run.
+fn handlers(c: &Arc<Control>) -> Vec<Arc<dyn Handler>> {
+    vec![Arc::new(castord::suspend::Suspend(c.clone()))]
+}
+
+fn var(name: &str) -> Option<String> {
+    std::env::var(name).ok().filter(|v| !v.is_empty())
+}
+
+fn control() -> Result<Control, String> {
+    let root = match var("CASTOR_ROOT") {
+        Some(r) => PathBuf::from(r),
+        None => std::env::current_dir().map_err(|e| e.to_string())?,
+    };
+    if !root.join("packages/stack-templates/tenant/compose.yml").is_file() {
+        return Err(format!(
+            "{} is not the castorcloud repository (set CASTOR_ROOT)",
+            root.display()
+        ));
+    }
+    let traefik_dir = var("TRAEFIK_DYNAMIC_DIR")
+        .map(PathBuf::from)
+        .unwrap_or_else(|| root.join("infra/control-plane/traefik/dynamic"));
+    let llm = match var("LITELLM_MASTER_KEY") {
+        Some(k) => Some(castord::llm::Gateway::new(
+            &var("LLM_GATEWAY_URL").unwrap_or_else(|| "http://localhost:4000".into()),
+            Zeroizing::new(k),
+        )?),
+        None => None,
+    };
+    Ok(Control {
+        root,
+        traefik_dir,
+        exec: Arc::new(castord::exec::Real),
+        keys: castor_crypto::Keys::from_env().map_err(|e| e.to_string())?,
+        llm,
+        stacks: var("STACKS_DOMAIN").is_some(),
+    })
 }
 
 /// Prisma's URLs carry `?schema=...`, which Postgres doesn't know: it
@@ -58,6 +102,7 @@ async fn run() -> Result<(), String> {
     let url = std::env::var("DATABASE_URL").map_err(|_| "DATABASE_URL is not set".to_owned())?;
     let kinds = std::env::var("CASTORD_KINDS").unwrap_or_default();
     let take: Vec<&str> = kinds.split(',').map(str::trim).filter(|k| !k.is_empty()).collect();
+    let control = Arc::new(control()?);
     let db = PgPoolOptions::new()
         .max_connections(4)
         .connect_with(connect_options(&url)?)
@@ -66,8 +111,13 @@ async fn run() -> Result<(), String> {
     let host = std::fs::read_to_string("/etc/hostname")
         .map(|h| h.trim().to_owned())
         .unwrap_or_else(|_| "castord".into());
-    let worker = Worker::new(format!("{host}:{}", std::process::id()), db.clone(), handlers(), &take)
-        .map_err(|e| e.to_string())?;
+    let worker = Worker::new(
+        format!("{host}:{}", std::process::id()),
+        db.clone(),
+        handlers(&control),
+        &take,
+    )
+    .map_err(|e| e.to_string())?;
 
     let stopping = worker.stopping.clone();
     tokio::spawn(async move {

@@ -11,7 +11,7 @@ the TypeScript part is removed.
 |---|---|---|
 | `crates/crypto` | `packages/core/src/crypto.ts` | done; format-compatible, tested in both directions |
 | `crates/node` | `infra/node/bin/castor-ssh`, `castor-zfs`, `castor-snap` | done; same commands and output, the scripts stay until every node runs it |
-| `crates/castord` | `apps/provisioner/src/worker.ts` | queue loop done (same SQL as `jobs.ts`); job kinds move one at a time |
+| `crates/castord` | `apps/provisioner/src/worker.ts` | queue loop done (same SQL as `jobs.ts`); `SUSPEND` ported, the other job kinds move one at a time |
 
 ```bash
 cd rust
@@ -22,17 +22,29 @@ cargo clippy --all-targets -- -D warnings
 castord's queue tests need a Postgres with the migrations applied; set
 `TEST_DATABASE_URL` (without it they pass by skipping, except in CI).
 
-## castord
-
-Runs next to the TypeScript worker on the same queue. `DATABASE_URL` as for
-the control plane, `CASTORD_KINDS` the comma-separated job kinds it takes.
-It refuses a kind it has no handler for. To move a kind: deploy castord
-with the kind added to `CASTORD_KINDS` and, in the same deploy, remove it
-from `KINDS` in `apps/provisioner/src/worker.ts`.
-
 Rules for every crate: no `unsafe` (forbidden workspace-wide), no
 `unwrap`/`expect`/`panic` outside tests, key material in `zeroize` types
 and never `Debug`-printable.
+
+## castord
+
+Runs next to the TypeScript worker on the same queue, with the control
+plane's `.env` (`set -a; . ./.env; set +a; castord` from the repository, or
+`CASTOR_ROOT` pointing at it). `CASTORD_KINDS` lists the job kinds it takes;
+the TypeScript worker reads the same setting and leaves those kinds alone, so
+one line in `.env` moves a kind, and emptying it moves it back. castord refuses
+a kind it has no handler for, and the monitor raises `platform:queue` when a
+kind has no live worker.
+
+| Kind | In castord | Notes |
+|---|---|---|
+| `SUSPEND` | yes | stops custom stacks and the tenant stack, locks both datasets, blocks the LLM key |
+| others | not yet | |
+
+To switch a kind: build castord (`cargo build --release -p castord`), add the
+kind to `CASTORD_KINDS`, restart the TypeScript worker and start castord.
+castord doesn't prepare nodes (templates, edge proxy); the TypeScript worker
+still does that before it starts tenants.
 
 ## castor-node on a node
 
