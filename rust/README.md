@@ -11,7 +11,7 @@ the TypeScript part is removed.
 |---|---|---|
 | `crates/crypto` | `packages/core/src/crypto.ts` | done; format-compatible, tested in both directions |
 | `crates/node` | `infra/node/bin/castor-ssh`, `castor-zfs`, `castor-snap` | done; same commands and output, the scripts stay until every node runs it |
-| `crates/castord` | `apps/provisioner/src/worker.ts` | queue loop done (same SQL as `jobs.ts`); every job kind but `RESTORE` ported, it moves next |
+| `crates/castord` | `apps/provisioner/src/worker.ts` | queue loop done (same SQL as `jobs.ts`); every job kind ported |
 
 ```bash
 cd rust
@@ -43,7 +43,7 @@ kind has no live worker.
 | `REVOKE_ACCESS` | yes | ends sessions and keys in the booked apps (access.ts commands), Authentik sessions for "sign out everywhere"; waits while the apps are stopped |
 | `PROVISION`, `UPDATE`, `RESUME` | yes | places the tenant, prepares its node once per process, sets up Authentik, opens and sizes the storage, renders the files, starts the stack and waits for it; runs pending revocations; `UPDATE`/`RESUME` queue `STACKS` when the tenant has custom stacks |
 | `STACKS` | yes | places the tenant's stacks node and prepares it (egress image, edge proxy, its allowlist); removes, stops or deploys each stack (images pinned by digest, data directories owned by the mapped container user, Docker checked for userns-remap and gVisor right before), its sign-in, node route and the control plane's route |
-| `RESTORE` | not yet | |
+| `RESTORE` | yes | stops the stack and locks its volume, sets the current dataset aside, pipes the backup box's raw stream into the node's `zfs receive` (a failure puts the old dataset back), then applies as `UPDATE`; a retry once the data is back only restarts the stack |
 
 castord needs the TypeScript worker's settings for these (`AUTHENTIK_BOOTSTRAP_TOKEN`,
 `BASE_DOMAIN`, `PUBLIC_SCHEME`, `BRAND_NAME`, `TZ`, `AUTH_HOST_IP`, the encryption
@@ -64,6 +64,10 @@ parsers could read one file two ways, and the definition is where the
 security checks are. Definitions saved before are converted by the
 TypeScript worker when it starts (`storeDefinitionsAsJson`). Settings:
 `STACKS_DOMAIN`, `STACKS_CERT_RESOLVER`.
+
+Restores need `BACKUP_TARGET` (the backup box's user@host) as for the
+TypeScript worker. The stream goes from one ssh to the other through
+castord, still encrypted with the tenant's key, which castord never sends.
 
 ## castor-node on a node
 

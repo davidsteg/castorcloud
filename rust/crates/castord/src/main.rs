@@ -9,6 +9,7 @@
 //!   TRAEFIK_DYNAMIC_DIR     default infra/control-plane/traefik/dynamic
 //!   LITELLM_MASTER_KEY, LLM_GATEWAY_URL (default http://localhost:4000)
 //!   STACKS_DOMAIN           custom stacks are on when set
+//!   BACKUP_TARGET           user@host of the backup box (RESTORE)
 //!   STACKS_CERT_RESOLVER    production: the ACME resolver of the stacks domain's wildcard
 //!   BASE_DOMAIN, PUBLIC_SCHEME, AUTHENTIK_BOOTSTRAP_TOKEN
 //!                           Authentik at <scheme>://auth.<BASE_DOMAIN>
@@ -35,6 +36,7 @@ fn handlers(c: &Arc<Control>) -> Vec<Arc<dyn Handler>> {
         Arc::new(castord::apply::Provision(c.clone())),
         Arc::new(castord::apply::Update(c.clone())),
         Arc::new(castord::apply::Resume(c.clone())),
+        Arc::new(castord::restore::Restore(c.clone())),
     ]
 }
 
@@ -117,6 +119,7 @@ fn control() -> Result<Control, String> {
         llm,
         authentik,
         stacks,
+        backup_target: var("BACKUP_TARGET"),
         platform,
         versions,
         versions_file,

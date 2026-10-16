@@ -91,6 +91,20 @@ pub struct Edge {
 }
 
 /// "10.0.0.5:8480" or "10.0.0.5" (port 80).
+/// ssh to `target` (user@host) running one forced command's words: castor-ssh
+/// and castor-backup split on spaces and allow only these.
+pub fn ssh_cmd(target: &str, args: Vec<String>) -> Result<Cmd, String> {
+    if !valid::ssh_target(target) {
+        return Err(format!("invalid ssh target: {target}"));
+    }
+    if let Some(bad) = args.iter().find(|a| !valid::ssh_word(a)) {
+        return Err(format!("argument not allowed over ssh: {bad}"));
+    }
+    let mut all = vec!["-o".into(), "BatchMode=yes".into(), "-T".into(), target.to_owned()];
+    all.extend(args);
+    Ok(Cmd::new("ssh", all))
+}
+
 pub fn parse_edge(edge_host: &str) -> Result<Edge, String> {
     let bad = || format!("invalid edge host: {edge_host}");
     let (host, port) = match edge_host.split_once(':') {
@@ -254,18 +268,23 @@ impl Node {
 
     /// A castor-* command on the node's host, through the castor-ssh gate.
     pub async fn host(&self, args: Vec<String>, input: Option<Zeroizing<Vec<u8>>>) -> Result<String, String> {
+        let mut cmd = self.host_cmd(args)?;
+        cmd.input = input;
+        self.exec.run(cmd).await
+    }
+
+    /// The ssh command `host` runs, for a pipe between two hosts.
+    pub fn host_cmd(&self, args: Vec<String>) -> Result<Cmd, String> {
         let Place::Ssh { target, .. } = &self.place else {
             return Err(format!("{} has no host commands", self.name));
         };
-        // castor-ssh splits on spaces and allows only these words.
-        if let Some(bad) = args.iter().find(|a| !valid::ssh_word(a)) {
-            return Err(format!("argument not allowed over ssh: {bad}"));
-        }
-        let mut all = vec!["-o".into(), "BatchMode=yes".into(), "-T".into(), target.clone()];
-        all.extend(args);
-        let mut cmd = Cmd::new("ssh", all);
-        cmd.input = input;
-        self.exec.run(cmd).await
+        ssh_cmd(target, args)
+    }
+
+    /// `from`'s stdout into a castor-* command on this host.
+    pub async fn pipe_into(&self, from: Cmd, args: Vec<String>) -> Result<u64, String> {
+        let to = self.host_cmd(args)?;
+        self.exec.pipe(from, to).await
     }
 
     /// Where castor-zfs mounts tenant datasets, and custom-stack datasets; None on the local node.
