@@ -24,6 +24,11 @@ pub fn ssh_word(s: &str) -> bool {
     all(s, |b| b.is_ascii_alphanumeric() || b"._/=-".contains(&b))
 }
 
+/// A relative path below a tenant's files: ssh words, no empty, "." or ".." segment.
+pub fn rel_path(s: &str) -> bool {
+    ssh_word(s) && s.split('/').all(|seg| !seg.is_empty() && seg != "." && seg != "..")
+}
+
 /// A tenant slug (SLUG_RE in apps/portal/src/lib/slug.ts): 3 to 30 of
 /// a-z, 0-9 and "-", not at either end, no "--".
 pub fn slug(s: &str) -> bool {

@@ -4,6 +4,7 @@
 //! A kind moves here by adding its handler and removing it from the
 //! TypeScript worker's KINDS in the same deploy.
 
+pub mod assistant;
 pub mod authentik;
 pub mod db;
 pub mod delete;

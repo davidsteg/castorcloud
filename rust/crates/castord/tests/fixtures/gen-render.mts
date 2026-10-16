@@ -2,6 +2,8 @@
 // inputs; castord's render module must produce the same.
 //   node --experimental-strip-types gen-render.mts > render.json
 import { readFileSync } from "node:fs";
+import { aiBudgetUsd } from "../../../../../packages/pricing/src/ai-budget.ts";
+import { assistantFiles } from "../../../../../apps/provisioner/src/assistant.ts";
 import {
   SECRET_KEYS, STACK_SERVICES, edgeRoute, immichConfig, parseEnvFile, redirectUris, tenantEnv, volumesOverride,
 } from "../../../../../apps/provisioner/src/tenant.ts";
@@ -24,5 +26,13 @@ console.log(JSON.stringify({
   env_assistant: env(true),
   edge: edgeRoute("anna", p, "http://10.0.0.5:8480"),
   volumes: volumesOverride("/mnt/tank/castor/t/anna/data"),
+  assistant: assistantFiles({
+    brandName: p.brandName, services: ["photos", "flights"], adminKey: "admin1", llmKey: "sk-llm",
+    members: [
+      { member: { id: "cmanna", email: "anna@example.ch", authentikSub: "sub-a", name: "Anna", locale: "de" }, apiKey: "ka", toolsToken: "ta" },
+      { member: { id: "cmbert", email: "bert@example.ch", authentikSub: "sub-b", name: null, locale: "rm" }, apiKey: "kb", toolsToken: "tb" },
+    ],
+  }),
+  budgets: [0, 5, 10, 25, 49, 100].map((c) => [c, aiBudgetUsd(c, 1.1)]),
   redirects: Object.fromEntries(STACK_SERVICES.map((s) => [s, redirectUris("anna", p, s)])),
 }, null, 2));

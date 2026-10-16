@@ -4,7 +4,7 @@
 // Regenerate the second with: CASTOR_WRITE_FIXTURES=1 cargo test -p castor-crypto
 #![allow(clippy::unwrap_used, clippy::expect_used, clippy::panic)]
 
-use castor_crypto::{Key, Keys, decrypt, encrypt};
+use castor_crypto::{Dataset, Key, Keys, dataset_key, decrypt, encrypt};
 use serde::{Deserialize, Serialize};
 
 #[derive(Deserialize, Serialize)]
@@ -131,5 +131,20 @@ fn rejects_bad_keys() {
     assert_eq!(
         format!("{:?}", Key::from_hex("K", &"ab".repeat(32)).unwrap()),
         "Key(<redacted>)"
+    );
+}
+
+/// hkdfSync("sha256", bytes 0..63, empty salt, label, 32) in Node (zfs.ts).
+#[test]
+fn dataset_keys_match_zfs_ts() {
+    let volume_key: Vec<u8> = (0u8..64).collect();
+    let hex = |d| String::from_utf8(dataset_key(&volume_key, d).unwrap().to_vec()).unwrap();
+    assert_eq!(
+        hex(Dataset::Tenant),
+        "6767812656dff0e2c711c92212e062504e2bbc7cf41be35c93b8732f99e4e35d\n"
+    );
+    assert_eq!(
+        hex(Dataset::Stacks),
+        "17d3c0cf56e461fcf93697bfbc31b84c0f36c4edfeda4d773eedefbab5c33e01\n"
     );
 }

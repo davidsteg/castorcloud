@@ -32,6 +32,9 @@ enum Place {
         target: String,
         /// castor-ssh's ROOT (nodeLayout in layout.ts).
         root: String,
+        /// castor-zfs's MOUNT_ROOT and STACKS_MOUNT_ROOT: where datasets are mounted.
+        mount_root: String,
+        stacks_mount_root: String,
     },
 }
 
@@ -93,12 +96,18 @@ impl Node {
                 if !valid::pool(pool) {
                     return Err(format!("invalid pool name: {pool}"));
                 }
-                let root = if kind == "TRUENAS" {
-                    format!("/mnt/{pool}/castor/node")
+                // macOS: the pool is mounted into Colima's VM at the same paths.
+                let (root, mounts) = if kind == "TRUENAS" {
+                    (format!("/mnt/{pool}/castor/node"), format!("/mnt/{pool}/castor"))
                 } else {
-                    "/Users/Shared/castor".to_owned()
+                    ("/Users/Shared/castor".to_owned(), format!("/Volumes/{pool}"))
                 };
-                Place::Ssh { target, root }
+                Place::Ssh {
+                    target,
+                    root,
+                    mount_root: format!("{mounts}/t"),
+                    stacks_mount_root: format!("{mounts}/s"),
+                }
             }
             k => return Err(format!("node {}: unknown kind {k}", row.name)),
         };
@@ -154,6 +163,18 @@ impl Node {
         self.exec.run(cmd).await
     }
 
+    /// Where castor-zfs mounts tenant datasets, and custom-stack datasets; None on the local node.
+    pub fn mount_roots(&self) -> Option<(&str, &str)> {
+        match &self.place {
+            Place::Local => None,
+            Place::Ssh {
+                mount_root,
+                stacks_mount_root,
+                ..
+            } => Some((mount_root, stacks_mount_root)),
+        }
+    }
+
     /// Compose files on the control plane, read by the docker CLI.
     pub fn templates(&self) -> String {
         self.root
@@ -167,6 +188,92 @@ impl Node {
         match &self.place {
             Place::Local => self.templates(),
             Place::Ssh { root, .. } => format!("{root}/files/templates"),
+        }
+    }
+
+    /// infra/node (shared services, the LLM gateway's config) on the control plane.
+    pub fn infra(&self) -> String {
+        self.root.join("infra/node").to_string_lossy().into_owned()
+    }
+
+    /// The same on the node: relative bind mounts of the shared services resolve here.
+    pub fn node_infra(&self) -> String {
+        self.on_node("infra/node", "files/node")
+    }
+
+    /// What the skin proxy serves under /_brand/.
+    pub fn brand(&self) -> String {
+        self.on_node("packages/brand", "files/brand")
+    }
+
+    /// The CA bundle tenant containers trust.
+    pub fn ca(&self) -> String {
+        self.on_node(".dev-certs", "files/ca")
+    }
+
+    fn on_node(&self, local: &str, remote: &str) -> String {
+        match &self.place {
+            Place::Local => self.root.join(local).to_string_lossy().into_owned(),
+            Place::Ssh { root, .. } => format!("{root}/{remote}"),
+        }
+    }
+
+    /// TENANT_DIR in the stack: where write_node_file puts files.
+    pub fn node_config_dir(&self, slug: &str) -> String {
+        match &self.place {
+            Place::Local => self.config_dir(slug),
+            Place::Ssh { root, .. } => format!("{root}/tenants/{slug}"),
+        }
+    }
+
+    /// A file the docker CLI reads (tenant.env, compose.volumes.yml). Stays on
+    /// the control plane, owner-only: tenant.env holds every secret of the stack.
+    pub fn write_config(&self, slug: &str, file: &str, content: &str) -> Result<String, String> {
+        check(slug, file)?;
+        write_private(
+            &self.root.join(".tenants").join(slug).join(file),
+            content.as_bytes(),
+            false,
+        )
+    }
+
+    /// A file tenant containers mount, owner-only unless `readable`; returns its path on the node.
+    pub async fn write_node_file(
+        &self,
+        slug: &str,
+        file: &str,
+        content: &str,
+        readable: bool,
+    ) -> Result<String, String> {
+        check(slug, file)?;
+        if self.is_local() {
+            return write_private(
+                &self.root.join(".tenants").join(slug).join(file),
+                content.as_bytes(),
+                readable,
+            );
+        }
+        let mut args = vec!["castor-put".to_owned(), format!("tenants/{slug}/{file}")];
+        if readable {
+            args.push("644".into());
+        }
+        self.host(args, Some(Zeroizing::new(content.as_bytes().to_vec())))
+            .await?;
+        Ok(format!("{}/{file}", self.node_config_dir(slug)))
+    }
+
+    /// Removes a directory below the tenant's node files.
+    pub async fn remove_node_files(&self, slug: &str, dir: &str) -> Result<(), String> {
+        check(slug, dir)?;
+        if !self.is_local() {
+            self.host(vec!["castor-rm".into(), format!("tenants/{slug}/{dir}")], None)
+                .await?;
+            return Ok(());
+        }
+        let path = self.root.join(".tenants").join(slug).join(dir);
+        match std::fs::remove_dir_all(&path) {
+            Err(e) if e.kind() != std::io::ErrorKind::NotFound => Err(format!("{}: {e}", path.display())),
+            _ => Ok(()),
         }
     }
 
@@ -190,6 +297,37 @@ impl Node {
     pub fn config_dir(&self, slug: &str) -> String {
         self.root.join(".tenants").join(slug).to_string_lossy().into_owned()
     }
+}
+
+fn check(slug: &str, file: &str) -> Result<(), String> {
+    if !valid::slug(slug) {
+        return Err(format!("invalid tenant slug {slug:?}"));
+    }
+    if !valid::rel_path(file) {
+        return Err(format!("invalid tenant file {file:?}"));
+    }
+    Ok(())
+}
+
+/// Writes with mode 0600 (0644 when `readable`), also over an existing file's mode.
+fn write_private(path: &Path, content: &[u8], readable: bool) -> Result<String, String> {
+    use std::io::Write as _;
+    use std::os::unix::fs::{OpenOptionsExt as _, PermissionsExt as _};
+    let mode = if readable { 0o644 } else { 0o600 };
+    let err = |e: std::io::Error| format!("{}: {e}", path.display());
+    if let Some(dir) = path.parent() {
+        std::fs::create_dir_all(dir).map_err(err)?;
+    }
+    let mut f = std::fs::OpenOptions::new()
+        .write(true)
+        .create(true)
+        .truncate(true)
+        .mode(mode)
+        .open(path)
+        .map_err(err)?;
+    f.set_permissions(std::fs::Permissions::from_mode(mode)).map_err(err)?;
+    f.write_all(content).map_err(err)?;
+    Ok(path.to_string_lossy().into_owned())
 }
 
 #[cfg(test)]

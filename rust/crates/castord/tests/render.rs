@@ -77,3 +77,44 @@ fn renders_what_typescript_renders() {
         );
     }
 }
+
+#[test]
+fn assistant_files_and_budgets_as_typescript() {
+    use castord::assistant::*;
+    let f = fixture();
+    let member =
+        |id: &str, email: &str, sub: &str, name: Option<&str>, locale: &str, key: &str, tools: &str| MemberSecrets {
+            member: Member {
+                id: id.into(),
+                email: email.into(),
+                authentik_sub: sub.into(),
+                name: name.map(str::to_owned),
+                locale: locale.into(),
+            },
+            api_key: key.into(),
+            tools_token: tools.into(),
+        };
+    let members = [
+        member("cmanna", "anna@example.ch", "sub-a", Some("Anna"), "de", "ka", "ta"),
+        member("cmbert", "bert@example.ch", "sub-b", None, "rm", "kb", "tb"),
+    ];
+    let got = files(&FilesInput {
+        brand_name: "Castor Cloud",
+        services: &[Service::Photos, Service::Flights],
+        admin_key: "admin1",
+        llm_key: "sk-llm",
+        members: &members,
+    })
+    .unwrap();
+    let want: Vec<(String, String)> = f["assistant"]
+        .as_object()
+        .unwrap()
+        .iter()
+        .map(|(k, v)| (k.clone(), v.as_str().unwrap().to_owned()))
+        .collect();
+    assert_eq!(got, want);
+    for b in f["budgets"].as_array().unwrap() {
+        let (credit, usd) = (b[0].as_i64().unwrap(), b[1].as_f64().unwrap());
+        assert!((ai_budget_usd(credit, 1.1) - usd).abs() < 1e-9, "{credit}");
+    }
+}
