@@ -358,7 +358,7 @@ const en = {
       },
       {
         q: "Where exactly is my data stored?",
-        a: "In Switzerland, including the encrypted backups. During the beta it runs on our own servers in a homelab; as we grow, we move to bigger infrastructure in Switzerland. Payments are processed by Stripe; logging in with Google is optional.",
+        a: "In Switzerland, including the encrypted backups. During the beta it runs on our own servers in a homelab; as we grow, we move to bigger infrastructure in Switzerland. Payments are processed by Stripe; logging in with Google or GitHub is optional.",
       },
       {
         q: "Can I take my data with me?",
@@ -408,7 +408,7 @@ const en = {
       },
       {
         title: "Third parties",
-        text: "Payments: Stripe (card data never reaches us). Optional login with Google: Google learns that you log in. The optional assistant sends your question and the relevant excerpts to an AI provider – only if you book it.",
+        text: "Payments: Stripe (card data never reaches us). Optional login with Google or GitHub: the provider learns that you log in. Optionally connected GitHub repositories: we only read the ones you share. The optional assistant sends your question and the relevant excerpts to an AI provider – only if you book it.",
       },
     ],
   },
@@ -425,7 +425,7 @@ const en = {
     accept: "I accept the terms and the privacy policy.",
     pay: "Continue to payment",
     payDev: "Create (development: without payment)",
-    signInFirst: "Please log in first – with Google or your e-mail address.",
+    signInFirst: "Please log in first – with Google, GitHub or your e-mail address.",
     signIn: "Log in or register",
     change: "Change",
   },
@@ -442,6 +442,21 @@ const en = {
     changeSubmit: "Change",
     changeOwnerOnly: "Only the owner of this cloud can change its storage.",
     manage: "Manage storage",
+  },
+  github: {
+    title: "GitHub repositories",
+    intro: "Connect your GitHub account so Castor Cloud can read your repositories, for example for custom stacks. You pick the repositories on GitHub; we only get read access and store no GitHub key.",
+    connect: "Connect GitHub",
+    connectedAs: "Connected to @{login}",
+    allRepos: "all repositories",
+    selectedRepos: "selected repositories",
+    suspended: "suspended on GitHub",
+    reposUnavailable: "The repositories couldn't be loaded right now.",
+    manage: "Choose repositories on GitHub",
+    disconnect: "Disconnect",
+    connectedNotice: "GitHub is connected.",
+    disconnectedNotice: "GitHub is disconnected. Castor Cloud no longer has access to your repositories.",
+    error: "Connecting GitHub didn't work. Please try again. Only your own GitHub account can be connected, not an organisation.",
   },
   account: {
     title: "My clouds",

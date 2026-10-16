@@ -6,7 +6,7 @@
 # refuses to show inside a frame.
 #
 # Every login stage a customer can pass through: password login, Google
-# login, Google sign-up, and e-mail sign-up (its flow is instantiated by the
+# or GitHub login, social sign-up, and e-mail sign-up (its flow is instantiated by the
 # provisioner from Authentik's examples; this creates or updates the stage by
 # name, whichever comes first).
 version: 1
