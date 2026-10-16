@@ -1,13 +1,23 @@
 # yaml-language-server: $schema=https://goauthentik.io/blueprints/schema.json
-# Self-service sign-up: e-mail registration and (optional) "Continue with Google".
+# Self-service sign-up: e-mail registration and (optional) "Continue with
+# Google" and "Continue with GitHub".
 #
 # - Enrollment: the flow "default-enrollment-flow" is instantiated by the
 #   provisioner at startup (Authentik can't instantiate blueprints from a
 #   blueprint): with SMTP configured, new accounts must verify their e-mail;
 #   without it (development) the 2-stage flow is used.
-# - Google: enabled when PC_GOOGLE_CLIENT_ID is set. Matching mode "email_deny":
-#   a Google login never attaches to an existing account with the same e-mail
-#   (prevents takeover via a pre-registered, unverified account).
+# - Google: enabled when PC_GOOGLE_CLIENT_ID is set, GitHub when
+#   PC_GITHUB_CLIENT_ID is set. Matching mode "email_deny": a social login
+#   never attaches to an existing account with the same e-mail (prevents
+#   takeover via a pre-registered, unverified account).
+# - Verified e-mail only: the apps identify people by e-mail, so a social
+#   login whose provider hasn't verified the address is refused. Authentik
+#   takes GitHub's primary address whether verified or not, and doesn't check
+#   Google's verified flag; the "social-email-verified" guard below does.
+# - GitHub login only reads the profile and e-mail addresses (read:user,
+#   user:email). Repository access is a separate, opt-in GitHub App the
+#   customer connects in the portal (docs/github.md), so the token Authentik
+#   keeps for the login can't read any code.
 version: 1
 metadata:
   name: personal-cloud-signup
@@ -29,7 +39,101 @@ entries:
       user_matching_mode: email_deny
       enabled: true
 
-  # Login page: offer registration, and the Google button when configured.
+  - model: authentik_sources_oauth.oauthsourcepropertymapping
+    id: github-verified-email
+    conditions:
+      - !Env PC_GITHUB_CLIENT_ID
+    identifiers:
+      name: castor-github-verified-email
+    attrs:
+      name: castor-github-verified-email
+      expression: |
+        # Only GitHub's primary address, and only if GitHub has verified it.
+        # Without one, "email" stays unset and social-email-verified refuses
+        # the login. The marker tells that guard this mapping ran.
+        email = None
+        for entry in client.get_github_emails(token):
+            if entry.get("primary") and entry.get("verified") and entry.get("email"):
+                email = entry["email"]
+        return {"email": email, "attributes": {"castor_verified_email": email}}
+
+  - model: authentik_sources_oauth.oauthsource
+    conditions:
+      - !Env PC_GITHUB_CLIENT_ID
+    identifiers:
+      slug: github
+    attrs:
+      name: GitHub
+      provider_type: github
+      consumer_key: !Env PC_GITHUB_CLIENT_ID
+      consumer_secret: !Env PC_GITHUB_CLIENT_SECRET
+      authentication_flow: !Find [authentik_flows.flow, [slug, default-source-authentication]]
+      enrollment_flow: !Find [authentik_flows.flow, [slug, default-source-enrollment]]
+      user_matching_mode: email_deny
+      user_property_mappings:
+        - !KeyOf github-verified-email
+      enabled: true
+
+  # Refuses a social login without a verified e-mail address. Bound as the
+  # first stage of both source flows: the policy passes (= deny) when the
+  # address isn't verified. Password logins never reach these flows.
+  - model: authentik_policies_expression.expressionpolicy
+    id: social-email-unverified
+    identifiers:
+      name: castor-social-email-unverified
+    attrs:
+      expression: |
+        source = context.get("source")
+        if source is None:
+            return True
+        if source.slug == "google":
+            info = context.get("oauth_userinfo") or {}
+            # Google's v1 userinfo says "verified_email", OpenID Connect "email_verified".
+            return not (info.get("verified_email") is True or info.get("email_verified") is True)
+        if source.slug == "github":
+            props = context.get("prompt_data") or {}
+            email = props.get("email")
+            return not email or email != (props.get("attributes") or {}).get("castor_verified_email")
+        # Any other source must be added here first.
+        return True
+  - model: authentik_stages_deny.denystage
+    id: social-email-deny
+    identifiers:
+      name: castor-social-email-deny
+    attrs:
+      deny_message: Please verify your e-mail address with the provider first, or register with your e-mail address.
+  - model: authentik_flows.flowstagebinding
+    id: social-email-deny-auth
+    identifiers:
+      target: !Find [authentik_flows.flow, [slug, default-source-authentication]]
+      stage: !KeyOf social-email-deny
+    attrs:
+      order: -100
+      evaluate_on_plan: true
+      re_evaluate_policies: false
+  - model: authentik_policies.policybinding
+    identifiers:
+      target: !KeyOf social-email-deny-auth
+      policy: !KeyOf social-email-unverified
+    attrs:
+      order: 0
+  - model: authentik_flows.flowstagebinding
+    id: social-email-deny-enroll
+    identifiers:
+      target: !Find [authentik_flows.flow, [slug, default-source-enrollment]]
+      stage: !KeyOf social-email-deny
+    attrs:
+      order: -100
+      evaluate_on_plan: true
+      re_evaluate_policies: false
+  - model: authentik_policies.policybinding
+    identifiers:
+      target: !KeyOf social-email-deny-enroll
+      policy: !KeyOf social-email-unverified
+    attrs:
+      order: 0
+
+  # Login page: offer registration, and a button per configured social login.
   - model: authentik_stages_identification.identificationstage
     identifiers:
       name: default-authentication-identification
@@ -40,11 +144,31 @@ entries:
   - model: authentik_stages_identification.identificationstage
     conditions:
       - !Env PC_GOOGLE_CLIENT_ID
+      - !Condition [NOR, !Env PC_GITHUB_CLIENT_ID]
     identifiers:
       name: default-authentication-identification
     attrs:
       sources:
         - !Find [authentik_sources_oauth.oauthsource, [slug, google]]
+  - model: authentik_stages_identification.identificationstage
+    conditions:
+      - !Env PC_GITHUB_CLIENT_ID
+      - !Condition [NOR, !Env PC_GOOGLE_CLIENT_ID]
+    identifiers:
+      name: default-authentication-identification
+    attrs:
+      sources:
+        - !Find [authentik_sources_oauth.oauthsource, [slug, github]]
+  - model: authentik_stages_identification.identificationstage
+    conditions:
+      - !Env PC_GOOGLE_CLIENT_ID
+      - !Env PC_GITHUB_CLIENT_ID
+    identifiers:
+      name: default-authentication-identification
+    attrs:
+      sources:
+        - !Find [authentik_sources_oauth.oauthsource, [slug, google]]
+        - !Find [authentik_sources_oauth.oauthsource, [slug, github]]
 
   # Login pages in the portal's look.
   - model: authentik_brands.brand

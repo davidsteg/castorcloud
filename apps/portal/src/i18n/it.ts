@@ -358,7 +358,7 @@ const it: Dictionary = {
       },
       {
         q: "Dove sono conservati esattamente i miei dati?",
-        a: "In Svizzera, compresi i backup cifrati. Durante la beta sui nostri server in un homelab; crescendo, passeremo a un’infrastruttura più grande in Svizzera. I pagamenti sono gestiti da Stripe; l’accesso con Google è facoltativo.",
+        a: "In Svizzera, compresi i backup cifrati. Durante la beta sui nostri server in un homelab; crescendo, passeremo a un’infrastruttura più grande in Svizzera. I pagamenti sono gestiti da Stripe; l’accesso con Google o GitHub è facoltativo.",
       },
       {
         q: "Posso portare via i miei dati?",
@@ -408,7 +408,7 @@ const it: Dictionary = {
       },
       {
         title: "Terze parti",
-        text: "Pagamenti: Stripe (i dati della carta non ci raggiungono mai). Accesso facoltativo con Google: Google sa che accedi. L’assistente facoltativo invia la tua domanda e gli estratti pertinenti a un fornitore di IA – solo se lo prenoti.",
+        text: "Pagamenti: Stripe (i dati della carta non ci raggiungono mai). Accesso facoltativo con Google o GitHub: il fornitore sa che accedi. Repository GitHub collegati facoltativamente: leggiamo solo quelli che condividi. L’assistente facoltativo invia la tua domanda e gli estratti pertinenti a un fornitore di IA – solo se lo prenoti.",
       },
     ],
   },
@@ -425,7 +425,7 @@ const it: Dictionary = {
     accept: "Accetto le CG e l’informativa sulla protezione dei dati.",
     pay: "Continua al pagamento",
     payDev: "Crea (sviluppo: senza pagamento)",
-    signInFirst: "Accedi prima – con Google o con il tuo indirizzo e-mail.",
+    signInFirst: "Accedi prima – con Google, GitHub o con il tuo indirizzo e-mail.",
     signIn: "Accedi o registrati",
     change: "Modifica",
   },
@@ -442,6 +442,21 @@ const it: Dictionary = {
     changeSubmit: "Modifica",
     changeOwnerOnly: "Solo chi possiede questo cloud può modificarne lo spazio.",
     manage: "Gestisci spazio",
+  },
+  github: {
+    title: "Repository GitHub",
+    intro: "Collega il tuo account GitHub affinché Castor Cloud possa leggere i tuoi repository, ad esempio per stack personalizzati. Scegli tu i repository su GitHub; otteniamo solo l’accesso in lettura e non salviamo alcuna chiave GitHub.",
+    connect: "Collega GitHub",
+    connectedAs: "Collegato a @{login}",
+    allRepos: "tutti i repository",
+    selectedRepos: "repository selezionati",
+    suspended: "sospeso su GitHub",
+    reposUnavailable: "Al momento non è stato possibile caricare i repository.",
+    manage: "Scegli i repository su GitHub",
+    disconnect: "Scollega",
+    connectedNotice: "GitHub è collegato.",
+    disconnectedNotice: "GitHub è scollegato. Castor Cloud non ha più accesso ai tuoi repository.",
+    error: "Il collegamento a GitHub non è riuscito. Riprova. Si può collegare solo il proprio account GitHub, non un’organizzazione.",
   },
   account: {
     title: "I miei cloud",
