@@ -3,8 +3,8 @@ import { test } from "node:test";
 import { nodeLayout, parseEdge } from "./layout.ts";
 
 test("TrueNAS keeps everything under <pool>/castor, macOS uses its own places", () => {
-  assert.deepEqual(nodeLayout("TRUENAS", "tank"), { root: "/mnt/tank/castor/node", mountRoot: "/mnt/tank/castor/t" });
-  assert.deepEqual(nodeLayout("MAC", "castor"), { root: "/Users/Shared/castor", mountRoot: "/Volumes/castor/t" });
+  assert.deepEqual(nodeLayout("TRUENAS", "tank"), { root: "/mnt/tank/castor/node", mountRoot: "/mnt/tank/castor/t", stacksMountRoot: "/mnt/tank/castor/s" });
+  assert.deepEqual(nodeLayout("MAC", "castor"), { root: "/Users/Shared/castor", mountRoot: "/Volumes/castor/t", stacksMountRoot: "/Volumes/castor/s" });
 });
 
 test("edge host with and without a port", () => {

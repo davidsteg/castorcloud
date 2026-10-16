@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { pickNode, unfit, type PlacementNode } from "./placement.ts";
+import { pickNode, pickStacksNode, unfit, unfitForStacks, type PlacementNode, type StacksPlacementNode } from "./placement.ts";
 
 const now = new Date("2026-09-28T12:00:00Z");
 const GB = 1024;
@@ -52,4 +52,27 @@ test("memory limits the number of stacks", () => {
   // 16 GB: 8 reserved leaves room for two 3 GB stacks
   assert.equal(unfit(mac("m", { memoryMb: 16 * GB, tenants: [{ storageUnits: 1 }] }), 1, now), null);
   assert.equal(unfit(mac("m", { memoryMb: 16 * GB, tenants: [{ storageUnits: 1 }, { storageUnits: 1 }] }), 1, now), "not enough memory");
+});
+
+test("tenants never go to a stacks node", () => {
+  assert.equal(unfit(mac("s", { role: "STACKS" }), 1, now), "stacks node");
+  assert.equal(pickNode([mac("s", { role: "STACKS" }), mac("a")], 1, now).node?.name, "a");
+});
+
+function stacksNode(name: string, over: Partial<StacksPlacementNode> = {}): StacksPlacementNode {
+  return {
+    id: name, name, role: "STACKS", enabled: true, poolSizeMb: 1000 * GB, poolUsedMb: 10 * GB, poolHealth: "ONLINE",
+    memoryMb: 16 * GB, uidBase: 100000, lastSeenAt: new Date(now.getTime() - 60_000), stackTenants: [], ...over,
+  };
+}
+
+test("stacks go to the stacks node with the most free memory, never overcommitted", () => {
+  const need = { memoryUnits: 8, cpuUnits: 2, storageUnits: 1 }; // 2 GB
+  const busy = stacksNode("busy", { stackTenants: [{ stackMemoryUnits: 40, stackStorageUnits: 0 }] }); // 10 GB used
+  const idle = stacksNode("idle");
+  assert.equal(pickStacksNode([busy, idle, stacksNode("tenants", { role: "TENANTS" })], need, now).node?.name, "idle");
+  const full = stacksNode("full", { stackTenants: [{ stackMemoryUnits: 48, stackStorageUnits: 0 }] }); // 12 + 2 + 2 reserved > 16
+  assert.equal(unfitForStacks(full, { ...need, memoryUnits: 9 }, now), "not enough memory");
+  assert.equal(unfitForStacks(stacksNode("x", { uidBase: null }), need, now), "no userns-remap");
+  assert.equal(unfitForStacks(stacksNode("t", { role: "TENANTS" }), need, now), "not a stacks node");
 });

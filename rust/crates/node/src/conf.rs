@@ -19,6 +19,10 @@ pub struct Layout {
     pub pool: String,
     pub dataset_root: String,
     pub mount_root: String,
+    /// Custom stacks (STACKS nodes): next to the tenant datasets, `.../t` ->
+    /// `.../s`, or STACKS_DATASET_ROOT / STACKS_MOUNT_ROOT. None when neither
+    /// gives a place that can't overlap the tenant datasets.
+    pub stacks: Option<(String, String)>,
 }
 
 /// What the gate needs.
@@ -102,10 +106,36 @@ impl Conf {
             }
         }
         absolute(&mount_root)?;
+        let sibling = |root: &str| root.strip_suffix("/t").map(|r| format!("{r}/s"));
+        let stacks_ds = self
+            .get("STACKS_DATASET_ROOT")
+            .map(str::to_owned)
+            .or_else(|| sibling(&dataset_root));
+        let stacks_mnt = self
+            .get("STACKS_MOUNT_ROOT")
+            .map(str::to_owned)
+            .or_else(|| sibling(&mount_root));
+        let stacks = match (stacks_ds, stacks_mnt) {
+            (Some(ds), Some(mnt)) => {
+                if ds.starts_with('-') || ds.starts_with('/') || ds.contains(char::is_whitespace) {
+                    return Err(Fail::new(1, format!("castor.conf: bad dataset name {ds}")));
+                }
+                absolute(&mnt)?;
+                // Never inside (or around) the tenant datasets.
+                let nested =
+                    |a: &str, b: &str| a == b || a.starts_with(&format!("{b}/")) || b.starts_with(&format!("{a}/"));
+                if nested(&ds, &dataset_root) || nested(&mnt, &mount_root) {
+                    return Err(Fail::new(1, "castor.conf: stacks must not overlap the tenant datasets"));
+                }
+                Some((ds, mnt))
+            }
+            _ => None,
+        };
         Ok(Layout {
             pool,
             dataset_root,
             mount_root,
+            stacks,
         })
     }
 
@@ -164,7 +194,8 @@ DOCKER_HOST=
             Layout {
                 pool: "tank".into(),
                 dataset_root: "tank/castor/t".into(),
-                mount_root: "/mnt/tank/castor/t".into()
+                mount_root: "/mnt/tank/castor/t".into(),
+                stacks: Some(("tank/castor/s".into(), "/mnt/tank/castor/s".into())),
             }
         );
         let g = c.gate(Some("/home/castor")).unwrap();
@@ -181,7 +212,8 @@ DOCKER_HOST=
             Layout {
                 pool: "castor".into(),
                 dataset_root: "castor/t".into(),
-                mount_root: "/Volumes/castor/t".into()
+                mount_root: "/Volumes/castor/t".into(),
+                stacks: Some(("castor/s".into(), "/Volumes/castor/s".into())),
             }
         );
         let g = c.gate(Some("/Users/castor")).unwrap();
@@ -208,6 +240,10 @@ DOCKER_HOST=
         }
         assert!(Conf::parse("MOUNT_ROOT=relative").unwrap().layout().is_err());
         assert!(Conf::parse("POOL=-o").unwrap().layout().is_err());
+        // No sibling of the tenant root, and never inside it.
+        let odd = Conf::parse("DATASET_ROOT=tank/tenants\nMOUNT_ROOT=/mnt/tenants").unwrap();
+        assert_eq!(odd.layout().unwrap().stacks, None);
+        assert!(Conf::parse("STACKS_DATASET_ROOT=castor/t/s").unwrap().layout().is_err());
         assert!(Conf::parse("ROOT=/a/../b").unwrap().gate(None).is_err());
     }
 

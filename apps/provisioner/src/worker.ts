@@ -17,6 +17,7 @@ const { Lifecycle } = await import("./lifecycle.ts");
 const { LlmGateway } = await import("./llm.ts");
 const { Nodes } = await import("./nodes.ts");
 const { Backups, backupSettings } = await import("./backup.ts");
+const { Stacks } = await import("./stacks.ts");
 const { parseEnvFile } = await import("./tenant.ts");
 type TenantJob = import("@pc/core").TenantJob;
 type JobKind = import("@pc/db").JobKind;
@@ -38,7 +39,28 @@ const assistant = process.env.LITELLM_MASTER_KEY
       usdPerChf: Number(process.env.AI_USD_PER_CHF ?? "1.1"),
     }
   : undefined;
-const lifecycle = new Lifecycle((id) => nodes.forTenant(id), ak, platform, parseEnvFile(readFileSync(versionsFile, "utf8")), versionsFile, assistant);
+// Customers' own stacks (docs/stacks.md), served under their own domain: code we
+// don't control must never share cookies with the portal (*.BASE_DOMAIN).
+const stacksDomain = process.env.STACKS_DOMAIN ?? "";
+if (stacksDomain && stacksDomain === platform.baseDomain && platform.scheme === "https") {
+  throw new Error("STACKS_DOMAIN must not be BASE_DOMAIN in production (custom stacks would share the portal's cookie domain)");
+}
+const stacks = stacksDomain
+  ? new Stacks((tenantId) => nodes.placeStacks(tenantId), (nodeId) => nodes.forStacks(nodeId), ak, {
+      domain: stacksDomain,
+      scheme: platform.scheme,
+      certResolver: process.env.STACKS_CERT_RESOLVER || undefined,
+    })
+  : undefined;
+if (!stacks) console.warn("STACKS_DOMAIN is not set: custom stacks are OFF");
+const lifecycle = new Lifecycle((id) => nodes.forTenant(id), ak, platform, parseEnvFile(readFileSync(versionsFile, "utf8")), versionsFile, assistant, stacks);
+
+/** After the tenant's own stack: its custom stacks, in their own job (a stacks node outage never fails the tenant's). */
+async function followWithStacks(tenantId: string) {
+  if (!stacks) return;
+  const t = await prisma.tenant.findUniqueOrThrow({ where: { id: tenantId }, select: { stacksNodeId: true, _count: { select: { stacks: true } } } });
+  if (t.stacksNodeId || t._count.stacks > 0) await enqueueTenantJob(tenantId, "STACKS");
+}
 const backupConfig = backupSettings();
 const backups = backupConfig ? new Backups(backupConfig) : undefined;
 if (!backups) console.warn("BACKUP_TARGET is not set: tenant backups are OFF");
@@ -84,6 +106,11 @@ async function run(job: TenantJob) {
     case "RESUME":
       await nodes.place(tenantId); // no-op once placed
       await lifecycle.apply(tenantId, report);
+      await followWithStacks(tenantId);
+      break;
+    case "STACKS":
+      if (!stacks) throw new Error("STACKS_DOMAIN is not set");
+      await stacks.apply(tenantId, report);
       break;
     case "REVOKE_ACCESS":
       await lifecycle.revokeAccess(tenantId, report);
@@ -119,7 +146,7 @@ async function run(job: TenantJob) {
 // Jobs come from the Job table (packages/core/src/jobs.ts). One at a time:
 // stacks are heavy to start. The kinds this worker runs; once the Rust
 // worker takes one over, it leaves this list.
-const KINDS: readonly JobKind[] = ["PROVISION", "UPDATE", "SUSPEND", "RESUME", "DELETE", "REVOKE_ACCESS", "RESTORE"];
+const KINDS: readonly JobKind[] = ["PROVISION", "UPDATE", "SUSPEND", "RESUME", "DELETE", "REVOKE_ACCESS", "RESTORE", "STACKS"];
 const me = workerId();
 let stopping = false;
 for (const sig of ["SIGINT", "SIGTERM"] as const) {
@@ -179,7 +206,7 @@ type Task = { name: string; when: import("@pc/core").Every; run: () => Promise<v
 // Hourly: delete tenants whose grace period after cancellation has ended,
 // and measure every active tenant's storage usage for the portal.
 const maintenance: Task[] = [
-  { name: "watch-nodes", when: { everyMs: 5 * 60_000 }, run: () => nodes.watch() },
+  { name: "watch-nodes", when: { everyMs: 5 * 60_000 }, run: () => nodes.watch(stacks ? (id) => stacks.needsUnlock(id) : undefined) },
   {
     name: "measure-storage",
     when: { everyMs: 60 * 60_000 },

@@ -2,7 +2,11 @@
 # Turns a Mac mini into a Castor Cloud node. Run once, as an admin user, on
 # the Mac itself:
 #
-#   sudo infra/node/macos/bootstrap.sh <disk> "<provisioner ssh public key>"
+#   sudo infra/node/macos/bootstrap.sh <disk> "<provisioner ssh public key>" [--stacks]
+#
+#   --stacks  a STACKS node for customers' own stacks (docs/stacks.md): Docker
+#             runs with userns-remap and gVisor, and the pool gets castor/s.
+#             Never make a Mac that holds tenant data a stacks node.
 #
 #   <disk>  the SSD (or partition) for the ZFS pool, e.g. disk4 or disk0s3.
 #           Everything on it is erased. `diskutil list` shows the candidates.
@@ -27,6 +31,8 @@ pubkey=${2:?usage: bootstrap.sh <disk> "<ssh public key>"}
 [ -x "$ZPOOL" ] || { echo "OpenZFS is not installed (README.md, step 1)" >&2; exit 1; }
 [ -x "$BREW" ] || { echo "Homebrew is not installed (README.md, step 2)" >&2; exit 1; }
 admin=${SUDO_USER:?run with sudo from an admin account}
+role=tenants
+[ "${3:-}" = --stacks ] && role=stacks
 
 step() { printf '\n==> %s\n' "$*"; }
 
@@ -56,7 +62,11 @@ else
     -O compression=zstd -O atime=off -O casesensitivity=sensitive -O normalization=formD \
     -O com.apple.browse=off -O mountpoint="/Volumes/$POOL" "$POOL" "$disk"
 fi
-"$ZFS" list "$POOL/t" >/dev/null 2>&1 || "$ZFS" create "$POOL/t"
+if [ "$role" = stacks ]; then
+  "$ZFS" list "$POOL/s" >/dev/null 2>&1 || "$ZFS" create "$POOL/s"
+else
+  "$ZFS" list "$POOL/t" >/dev/null 2>&1 || "$ZFS" create "$POOL/t"
+fi
 mdutil -i off "/Volumes/$POOL" >/dev/null 2>&1 || true   # no Spotlight on tenant data
 
 step "castor-zfs and the SSH gate"
@@ -92,6 +102,9 @@ vm_cpu=$(( cpus > 2 ? cpus - 1 : cpus ))
 mkdir -p "$home/.colima/default"
 sed -e "s/__CPU__/$vm_cpu/" -e "s/__MEMORY_GB__/$vm_mem/" -e "s/__POOL__/$POOL/" \
   "$HERE/colima.yaml" > "$home/.colima/default/colima.yaml"
+# Stacks node: root in a container is not root in the VM (userns-remap), and
+# containers run under gVisor (installed from its signed apt repository).
+[ "$role" = stacks ] && cat "$HERE/colima-stacks.yaml" >> "$home/.colima/default/colima.yaml"
 chown -R "$USER_NAME":staff "$home/.colima"
 # Cap the ZFS ARC (an eighth of RAM) so it doesn't compete with the VM.
 arc="kstat.zfs.darwin.tunable.zfs_arc_max=$(( (mem_gb / 8) * 1073741824 ))"
@@ -115,5 +128,9 @@ vm_ip=$(sudo -u "$USER_NAME" env HOME="$home" /opt/homebrew/bin/colima ls -j 2>/
 cat <<DONE
 
 Node ready. Give the Docker VM (${vm_ip:-see 'colima ls'}) a fixed DHCP lease, then on the control plane:
-  npm run node -w @pc/provisioner -- add <name> $USER_NAME@$(ipconfig getifaddr en0 || hostname) --kind mac --pool $POOL --edge ${vm_ip:-<vm-ip>} --auth-host-ip <control-plane-ip>
 DONE
+if [ "$role" = stacks ]; then
+  echo "  npm run node -w @pc/provisioner -- add <name> $USER_NAME@$(ipconfig getifaddr en0 || hostname) --kind mac --role stacks --pool $POOL --edge ${vm_ip:-<vm-ip>} --control-plane-ip <control-plane-ip>"
+else
+  echo "  npm run node -w @pc/provisioner -- add <name> $USER_NAME@$(ipconfig getifaddr en0 || hostname) --kind mac --pool $POOL --edge ${vm_ip:-<vm-ip>} --auth-host-ip <control-plane-ip>"
+fi

@@ -93,6 +93,42 @@ impl FakeZfs {
                 ),
                 Some(d) => (0, format!("{}\n", d.props.get(*prop).map_or("-", String::as_str))),
             },
+            ["list", "-H", "-o", "name", "-r", "-d", "1", ds] => (
+                0,
+                self.objects
+                    .keys()
+                    .filter(|n| {
+                        *n == ds
+                            || n.strip_prefix(&format!("{ds}/"))
+                                .is_some_and(|r| !r.contains(['/', '@', '#']))
+                    })
+                    .map(|n| format!("{n}\n"))
+                    .collect(),
+            ),
+            ["list", "-Hp", "-o", "name,used", "-r", "-d", "1", ds] => (
+                0,
+                self.objects
+                    .iter()
+                    .filter(|(n, _)| {
+                        *n == ds
+                            || n.strip_prefix(&format!("{ds}/"))
+                                .is_some_and(|r| !r.contains(['/', '@', '#']))
+                    })
+                    .map(|(n, d)| format!("{n}\t{}\n", d.props.get("used").map_or("0", String::as_str)))
+                    .collect(),
+            ),
+            ["create", "-p", ds] => {
+                self.add(ds, &[]);
+                (0, String::new())
+            }
+            // A child: key and mountpoint inherited, mounted by a separate call.
+            ["create", "-o", q, ds] if !matches!(stdin, Input::Bytes(_)) => {
+                self.dataset(ds, true);
+                self.set(ds, "mounted", "no");
+                let (k, v) = q.split_once('=').unwrap();
+                self.set(ds, k, v);
+                (0, String::new())
+            }
             ["create", opts @ .., ds] => {
                 let Input::Bytes(key) = stdin else {
                     panic!("create without key")
@@ -179,6 +215,7 @@ impl Sys for FakeZfs {
             "zfs" => self.zfs(args, &stdin),
             "zpool" => (0, "2000398934016\t1073741824\tONLINE\n".into()),
             "du" => (0, format!("7\t{}\n", args[1])),
+            "chown" => (0, String::new()),
             _ => panic!("unexpected {prog}"),
         })
     }
@@ -196,6 +233,7 @@ fn layout(mount_root: &str) -> Layout {
         pool: "tank".into(),
         dataset_root: "tank/castor/t".into(),
         mount_root: mount_root.into(),
+        stacks: Some(("tank/castor/s".into(), format!("{mount_root}/s"))),
     }
 }
 
@@ -592,4 +630,125 @@ fn conf_from_truenas_setup_drives_the_layout() {
     };
     zfs::main(&mut ctx, &["status", "anna"]).unwrap();
     assert_eq!(f.calls, ["zfs list -H -o name tank/castor/t/anna"]);
+}
+
+#[test]
+fn zfs_stacks() {
+    let dir = tempfile::tempdir().unwrap();
+    let root = dir.path().to_str().unwrap();
+    let mut f = FakeZfs::default();
+    let key = format!("{KEY}\n");
+    let ds = "tank/castor/s/anna";
+
+    // Not open yet: no stack can be created.
+    let (r, _) = zfs_run(
+        &mut f,
+        root,
+        &["stack-create", "anna", "links", "1024", "data=100000.100000"],
+        "",
+    );
+    assert_eq!(r.unwrap_err().code, 3);
+
+    let (r, out) = zfs_run(&mut f, root, &["stacks-open", "anna", "20480"], &key);
+    assert_eq!((r, out.as_str()), (Ok(()), "open\n"));
+    assert!(f.calls.contains(&"zfs create -p tank/castor/s".to_owned()));
+    let create = f
+        .calls
+        .iter()
+        .find(|c| c.starts_with("zfs create -o encryption"))
+        .unwrap();
+    assert!(create.contains("encryption=aes-256-gcm") && create.contains(&format!("mountpoint={root}/s/anna")));
+
+    let (r, out) = zfs_run(
+        &mut f,
+        root,
+        &["stack-create", "anna", "links", "1024", "data=100000.100001"],
+        "",
+    );
+    assert_eq!((r, out.as_str()), (Ok(()), "open\n"));
+    let data = dir.path().join("s/anna/links/data");
+    assert!(data.join("data").is_dir());
+    assert!(f.calls.contains(&format!("chown -h 0:0 {}", data.display())));
+    assert!(
+        f.calls
+            .contains(&format!("chown -h 100000:100001 {}", data.join("data").display()))
+    );
+    assert_eq!(f.objects[&format!("{ds}/links")].props["quota"], "1024M");
+
+    f.set(&format!("{ds}/links"), "used", "5242880");
+    assert_eq!(
+        zfs_run(&mut f, root, &["stack-usage", "anna"], ""),
+        (Ok(()), "links 5\n".into())
+    );
+
+    // After a restart: unlocking mounts the stacks again.
+    assert_eq!(
+        zfs_run(&mut f, root, &["stacks-close", "anna"], ""),
+        (Ok(()), "closed\n".into())
+    );
+    assert_eq!(f.objects[&format!("{ds}/links")].props["mounted"], "no");
+    assert_eq!(
+        zfs_run(&mut f, root, &["stacks-status", "anna"], ""),
+        (Ok(()), "closed\n".into())
+    );
+    assert_eq!(
+        zfs_run(&mut f, root, &["stacks-open", "anna", "20480"], &key),
+        (Ok(()), "open\n".into())
+    );
+    assert_eq!(f.objects[&format!("{ds}/links")].props["mounted"], "yes");
+
+    assert_eq!(
+        zfs_run(&mut f, root, &["stack-destroy", "anna", "links"], ""),
+        (Ok(()), "destroyed\n".into())
+    );
+    assert!(!f.objects.contains_key(&format!("{ds}/links")));
+    assert_eq!(
+        zfs_run(&mut f, root, &["stacks-destroy", "anna"], ""),
+        (Ok(()), "destroyed\n".into())
+    );
+    assert_eq!(
+        zfs_run(&mut f, root, &["stacks-status", "anna"], ""),
+        (Ok(()), "missing\n".into())
+    );
+}
+
+#[test]
+fn zfs_stacks_refuse_bad_input() {
+    let mut f = FakeZfs::default();
+    let key = format!("{KEY}\n");
+    for (args, stdin) in [
+        (vec!["stacks-open", "anna", "0"], key.as_str()),
+        (vec!["stacks-open", "anna", "1"], "nope\n"),
+        (vec!["stack-create", "anna", "Links", "1"], ""),
+        (vec!["stack-create", "anna", "a-b", "1"], ""),
+        (vec!["stack-create", "anna", "links", "1", "data=0.0"], ""),
+        (vec!["stack-create", "anna", "links", "1", "data=65535.100000"], ""),
+        (vec!["stack-create", "anna", "links", "1", "../x=100000.100000"], ""),
+        (vec!["stack-create", "anna", "links", "1", "data=100000"], ""),
+        (vec!["stack-destroy", "anna", "../t"], ""),
+        (vec!["stacks-format", "anna"], ""),
+    ] {
+        let (r, _) = zfs_run(&mut f, "/mnt/x", &args, stdin);
+        assert_eq!(r.unwrap_err().code, 2, "{args:?}");
+    }
+    assert!(f.calls.is_empty(), "{:?}", f.calls);
+}
+
+#[test]
+fn zfs_stacks_symlinks_are_refused() {
+    let dir = tempfile::tempdir().unwrap();
+    let root = dir.path().to_str().unwrap();
+    let mut f = FakeZfs::default();
+    f.dataset("tank/castor/s/anna", true);
+    let data = dir.path().join("s/anna/links/data");
+    std::fs::create_dir_all(&data).unwrap();
+    std::os::unix::fs::symlink("/etc", data.join("data")).unwrap();
+    let (r, _) = zfs_run(
+        &mut f,
+        root,
+        &["stack-create", "anna", "links", "1024", "data=100000.100000"],
+        "",
+    );
+    assert_eq!(r.unwrap_err().code, 2);
+    assert!(!f.calls.iter().any(|c| c.contains("100000:100000")));
 }

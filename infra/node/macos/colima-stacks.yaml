@@ -1,0 +1,20 @@
+# Appended to colima.yaml by bootstrap.sh --stacks (docs/stacks.md).
+# Docker daemon settings (daemon.json) for a node that runs customers' code:
+docker:
+  # Root in a container maps to an unprivileged uid range (dockremap, from 100000).
+  userns-remap: default
+  no-new-privileges: true
+  runtimes:
+    runsc:
+      path: /usr/bin/runsc
+# Runs in the VM at every start: gVisor from its signed apt repository.
+provision:
+  - mode: system
+    script: |
+      set -eu
+      command -v runsc >/dev/null 2>&1 && exit 0
+      apt-get update -q && apt-get install -yq ca-certificates curl gnupg
+      curl -fsSL https://gvisor.dev/archive.key | gpg --dearmor -o /usr/share/keyrings/gvisor-archive-keyring.gpg
+      echo "deb [arch=$(dpkg --print-architecture) signed-by=/usr/share/keyrings/gvisor-archive-keyring.gpg] https://storage.googleapis.com/gvisor/releases release main" > /etc/apt/sources.list.d/gvisor.list
+      apt-get update -q && apt-get install -yq runsc
+      systemctl restart docker

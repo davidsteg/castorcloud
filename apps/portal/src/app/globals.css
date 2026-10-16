@@ -505,3 +505,4 @@ button.shell-link { width: 100%; border: 0; background: none; font: inherit; tex
   .chat-log { padding: 20px 16px; }
   .chat-compose { padding: 10px 16px 14px; }
 }
+.mono { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 13px; }

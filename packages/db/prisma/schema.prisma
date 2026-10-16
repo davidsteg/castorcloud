@@ -48,6 +48,7 @@ enum JobKind {
   DELETE
   REVOKE_ACCESS // process the tenant's pending AccessRevocations
   RESTORE  // puts a backup back onto the tenant's node (params: gen, snap)
+  STACKS   // custom stacks changed: deploy, update or remove them (docs/stacks.md)
 }
 
 enum RevocationScope {
@@ -69,6 +70,13 @@ enum NodeKind {
   TRUENAS // TrueNAS SCALE: native ZFS + the system Docker engine, driven over SSH
 }
 
+/// What a node runs. Customers' own stacks run code we haven't written, so
+/// they never share a node with tenant data (docs/stacks.md).
+enum NodeRole {
+  TENANTS // tenant stacks (photos, documents, ...)
+  STACKS  // customers' custom stacks only
+}
+
 model Node {
   id          String    @id @default(cuid())
   name        String    @unique
@@ -85,6 +93,7 @@ model Node {
   /// node's tenant hosts there
   edgeHost    String?
   capacity    Int       // max tenant stacks on this node
+  role        NodeRole  @default(TENANTS)
   /// false = draining: keeps its tenants, gets no new ones
   enabled     Boolean   @default(true)
   // Measured by the provisioner (registration and health checks)
@@ -92,9 +101,18 @@ model Node {
   poolUsedMb  Int?
   poolHealth  String?
   memoryMb    Int?
+  cpus        Int?
   lastSeenAt  DateTime?
   lastError   String?
-  tenants     Tenant[]
+  // STACKS nodes: checked at registration (node-admin.ts)
+  /// "runsc" (gVisor) when the node's Docker has it, else "runc"
+  stackRuntime    String?
+  /// Host uid that root in a container maps to (Docker userns-remap, required on STACKS nodes)
+  uidBase         Int?
+  /// Comma-separated addresses the control plane reaches the node's edge from; nothing else may call it
+  controlPlaneIps String?
+  tenants      Tenant[] @relation("TenantNode")
+  stackTenants Tenant[] @relation("StacksNode")
   createdAt   DateTime  @default(now())
 }
 
@@ -111,8 +129,11 @@ model Tenant {
   reviewedAt           DateTime?
   /// User id of the staff member who approved the application
   reviewedBy           String?
-  node                 Node?           @relation(fields: [nodeId], references: [id])
+  node                 Node?           @relation("TenantNode", fields: [nodeId], references: [id])
   nodeId               String?
+  /// Where the tenant's custom stacks run (a STACKS node), placed at the first install
+  stacksNode           Node?           @relation("StacksNode", fields: [stacksNodeId], references: [id])
+  stacksNodeId         String?
 
   // Booked configuration (source of truth: the Stripe subscription)
   storageUnits         Int             @default(1) // x 100 GB
@@ -120,6 +141,10 @@ model Tenant {
   /// Monthly AI credit in CHF (hard spending limit of the assistant), 0 = none
   aiCreditChf          Int             @default(0)
   billingInterval      BillingInterval @default(MONTH)
+  /// Booked for custom stacks (x 256 MB, x 0.25 vCPU, x 10 GB; @pc/pricing stacks.ts)
+  stackMemoryUnits     Int             @default(0)
+  stackCpuUnits        Int             @default(0)
+  stackStorageUnits    Int             @default(0)
 
   // Storage, measured by the provisioner. The volume size is the hard quota.
   /// Size of the encrypted volume in MB. Larger than the booking only while
@@ -145,6 +170,7 @@ model Tenant {
   backup               TenantBackup?
   jobs                 Job[]
   revocations          AccessRevocation[]
+  stacks               Stack[]
   createdAt            DateTime        @default(now())
   updatedAt            DateTime        @updatedAt
 }
@@ -231,6 +257,46 @@ model ServiceInstance {
   lastHealthAt DateTime?
 
   @@unique([tenantId, kind])
+}
+
+enum StackSource {
+  CATALOG // an app from @pc/stacks catalog.ts
+  CUSTOM  // the customer's own definition
+}
+
+enum StackStatus {
+  PENDING   // saved, waiting for the booking or the STACKS job
+  DEPLOYING
+  RUNNING
+  STOPPED   // tenant suspended, or the booking no longer covers it
+  FAILED
+  REMOVING  // the owner removed it: containers, route and data are deleted
+}
+
+/// A customer's own app on the tenant's STACKS node (docs/stacks.md).
+model Stack {
+  id          String      @id @default(cuid())
+  tenant      Tenant      @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  tenantId    String
+  /// Host label: <name>-<slug>.<STACKS_DOMAIN>
+  name        String
+  source      StackSource
+  catalogKey  String?
+  /// The definition as written (compose subset), sealed with SECRETS_ENCRYPTION_KEY: it may hold passwords
+  definition  String
+  /// What the definition reserves (sum of the containers' limits), shown and billed
+  memoryMb    Int
+  cpus        Float
+  storageGb   Int
+  status      StackStatus @default(PENDING)
+  error       String?
+  /// Images pinned at the last deploy: { service: "registry/repo:tag@sha256:..." }
+  images      Json?
+  deployedAt  DateTime?
+  createdAt   DateTime    @default(now())
+  updatedAt   DateTime    @updatedAt
+
+  @@unique([tenantId, name])
 }
 
 /// Tenant secrets (DB passwords, OIDC client secrets, API tokens),

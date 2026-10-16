@@ -12,6 +12,7 @@ import type { Authentik } from "./authentik.ts";
 import type { LlmGateway } from "./llm.ts";
 import type { NodeExec } from "./node.ts";
 import { removeTenantRoute, writeTenantRoute } from "./routes.ts";
+import type { Stacks } from "./stacks.ts";
 import type { TenantStorage } from "./storage.ts";
 import {
   ALL_VOLUMES, ASSISTANT_CONTAINERS, SERVICES, STACK_SERVICES, edgeRoute, ensureSecrets, immichConfig, names, redirectUris,
@@ -42,6 +43,8 @@ export class Lifecycle {
     private readonly versions: Record<string, string>,
     private readonly versionsFile: string,
     private readonly assistant?: AssistantSettings,
+    /** Customers' own stacks (stacks.ts), stopped and deleted with the tenant. */
+    private readonly stacks?: Stacks,
   ) {}
 
   private async load(tenantId: string) {
@@ -222,6 +225,7 @@ export class Lifecycle {
 
   async suspend(tenantId: string) {
     const tenant = await this.load(tenantId);
+    await this.stacks?.stopAll(tenantId);
     if (tenant.nodeId) {
       const node = await this.nodeFor(tenant.nodeId);
       this.compose(node, tenant, ["stop"], ALL_PROFILES);
@@ -257,6 +261,8 @@ export class Lifecycle {
     const tenant = await this.load(tenantId);
     const n = names(tenant.slug, this.p);
     await prisma.tenant.update({ where: { id: tenant.id }, data: { status: "DELETING" } });
+    // Custom stacks first: their dataset key derives from the volume key deleted below.
+    await this.stacks?.deleteAll(tenantId);
 
     // A tenant that failed before placement has nothing on any node.
     const node = tenant.nodeId ? await this.nodeFor(tenant.nodeId) : null;
@@ -385,7 +391,8 @@ export class Lifecycle {
 
   /** Tenant secrets from the DB (encrypted at rest); missing ones are generated. */
   private async secrets(tenantId: string) {
-    const rows = await prisma.secret.findMany({ where: { tenantId } });
+    // Custom stacks keep their generated secrets under "stack:" (stacks.ts); they stay out of the tenant stack.
+    const rows = await prisma.secret.findMany({ where: { tenantId, NOT: { key: { startsWith: "stack:" } } } });
     const existing = Object.fromEntries(rows.map((r) => [r.key, openSecret(tenantId, r.key, r.ciphertext)]));
     const { secrets, created } = ensureSecrets(existing);
     for (const key of created) {
