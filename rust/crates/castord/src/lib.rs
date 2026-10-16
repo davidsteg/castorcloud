@@ -4,9 +4,17 @@
 //! A kind moves here by adding its handler and removing it from the
 //! TypeScript worker's KINDS in the same deploy.
 
+pub mod db;
+pub mod exec;
+pub mod llm;
+pub mod node;
 pub mod queue;
+pub mod storage;
+pub mod suspend;
+pub mod valid;
 
 use std::collections::HashMap;
+use std::path::PathBuf;
 use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::time::Duration;
@@ -23,6 +31,20 @@ pub trait Handler: Send + Sync {
     async fn run(&self, cx: &JobCx, job: &Job) -> Result<(), String>;
     /// After the last attempt failed (PROVISION marks the tenant FAILED).
     async fn gave_up(&self, _cx: &JobCx, _job: &Job, _error: &str) {}
+}
+
+/// What the job handlers share: the control plane's settings and keys.
+pub struct Control {
+    /// The repository on the control plane (templates, .tenants/).
+    pub root: PathBuf,
+    /// The control plane Traefik's file-provider directory.
+    pub traefik_dir: PathBuf,
+    pub exec: Arc<dyn exec::Exec>,
+    pub keys: castor_crypto::Keys,
+    /// Unset without LITELLM_MASTER_KEY, as in the TypeScript worker.
+    pub llm: Option<llm::Gateway>,
+    /// Custom stacks are on (STACKS_DOMAIN is set).
+    pub stacks: bool,
 }
 
 /// What a handler gets besides the job.

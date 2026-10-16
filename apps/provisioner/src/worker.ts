@@ -19,6 +19,7 @@ const { Nodes } = await import("./nodes.ts");
 const { Backups, backupSettings } = await import("./backup.ts");
 const { Stacks } = await import("./stacks.ts");
 const { parseEnvFile } = await import("./tenant.ts");
+const { workerKinds } = await import("./kinds.ts");
 type TenantJob = import("@pc/core").TenantJob;
 type JobKind = import("@pc/db").JobKind;
 
@@ -144,9 +145,10 @@ async function run(job: TenantJob) {
 
 // ------------------------------------------------------------ the queue
 // Jobs come from the Job table (packages/core/src/jobs.ts). One at a time:
-// stacks are heavy to start. The kinds this worker runs; once the Rust
-// worker takes one over, it leaves this list.
-const KINDS: readonly JobKind[] = ["PROVISION", "UPDATE", "SUSPEND", "RESUME", "DELETE", "REVOKE_ACCESS", "RESTORE", "STACKS"];
+// stacks are heavy to start. The kinds this worker runs: all but those the
+// Rust worker castord takes (CASTORD_KINDS, the same setting castord reads).
+const ALL_KINDS: readonly JobKind[] = ["PROVISION", "UPDATE", "SUSPEND", "RESUME", "DELETE", "REVOKE_ACCESS", "RESTORE", "STACKS"];
+const KINDS = workerKinds(ALL_KINDS, process.env.CASTORD_KINDS);
 const me = workerId();
 let stopping = false;
 for (const sig of ["SIGINT", "SIGTERM"] as const) {
