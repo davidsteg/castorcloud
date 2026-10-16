@@ -170,6 +170,24 @@ pub async fn heartbeat(db: &PgPool, worker: &str, kinds: &[&str]) -> sqlx::Resul
     Ok(())
 }
 
+/// Queues a job for the tenant (enqueueTenantJob in jobs.ts).
+pub async fn enqueue(db: &PgPool, tenant_id: &str, kind: &str) -> Result<(), String> {
+    if !ALL_KINDS.contains(&kind) {
+        return Err(format!("unknown job kind {kind}"));
+    }
+    sqlx::query(
+        r#"INSERT INTO "Job" (id, "tenantId", kind, "createdAt", "runAfter")
+           VALUES ($1, $2, $3::"JobKind", now() AT TIME ZONE 'UTC', now() AT TIME ZONE 'UTC')"#,
+    )
+    .bind(crate::db::new_id()?)
+    .bind(tenant_id)
+    .bind(kind)
+    .execute(db)
+    .await
+    .map_err(|e| format!("enqueue {kind}: {e}"))?;
+    Ok(())
+}
+
 /// Appends a line to the job's log, which the portal shows.
 pub async fn log(db: &PgPool, job_id: &str, line: &str) -> sqlx::Result<()> {
     sqlx::query(

@@ -11,7 +11,7 @@ the TypeScript part is removed.
 |---|---|---|
 | `crates/crypto` | `packages/core/src/crypto.ts` | done; format-compatible, tested in both directions |
 | `crates/node` | `infra/node/bin/castor-ssh`, `castor-zfs`, `castor-snap` | done; same commands and output, the scripts stay until every node runs it |
-| `crates/castord` | `apps/provisioner/src/worker.ts` | queue loop done (same SQL as `jobs.ts`); `SUSPEND`, `DELETE` and `REVOKE_ACCESS` ported, the other job kinds move one at a time |
+| `crates/castord` | `apps/provisioner/src/worker.ts` | queue loop done (same SQL as `jobs.ts`); every job kind but `STACKS` and `RESTORE` ported, those two move next |
 
 ```bash
 cd rust
@@ -41,16 +41,19 @@ kind has no live worker.
 | `SUSPEND` | yes | stops custom stacks and the tenant stack, locks both datasets, blocks the LLM key |
 | `DELETE` | yes | removes custom stacks, the tenant stack, its data and files, its Authentik apps and groups, LLM key and secrets; deleting the volume key crypto-shreds every copy |
 | `REVOKE_ACCESS` | yes | ends sessions and keys in the booked apps (access.ts commands), Authentik sessions for "sign out everywhere"; waits while the apps are stopped |
-| others | not yet | |
+| `PROVISION`, `UPDATE`, `RESUME` | yes | places the tenant, prepares its node once per process, sets up Authentik, opens and sizes the storage, renders the files, starts the stack and waits for it; runs pending revocations; `UPDATE`/`RESUME` queue `STACKS` when the tenant has custom stacks |
+| `STACKS`, `RESTORE` | not yet | |
 
 castord needs the TypeScript worker's settings for these (`AUTHENTIK_BOOTSTRAP_TOKEN`,
-`BASE_DOMAIN`, `PUBLIC_SCHEME`, the encryption keys, `LITELLM_MASTER_KEY`); in
-development also `CASTORD_EXTRA_CA_CERTS=.dev-certs/ca.crt`.
+`BASE_DOMAIN`, `PUBLIC_SCHEME`, `BRAND_NAME`, `TZ`, `AUTH_HOST_IP`, the encryption
+keys, `LITELLM_MASTER_KEY`, `AI_USD_PER_CHF`, `CA_DIR`); in development also
+`CASTORD_EXTRA_CA_CERTS=.dev-certs/ca.crt`.
 
 To switch a kind: build castord (`cargo build --release -p castord`), add the
 kind to `CASTORD_KINDS`, restart the TypeScript worker and start castord.
-castord doesn't prepare nodes (templates, edge proxy); the TypeScript worker
-still does that before it starts tenants.
+castord prepares tenant nodes (templates, edge proxy) before it starts a
+tenant there, as the TypeScript worker does; STACKS nodes are still prepared
+by the TypeScript worker.
 
 ## castor-node on a node
 

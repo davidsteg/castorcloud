@@ -260,9 +260,28 @@ pub fn control(exec: Arc<Fake>, traefik: &Path, llm: Option<&str>, authentik: &s
         exec,
         keys: keys(),
         llm: llm.map(|u| castord::llm::Gateway::new(u, Zeroizing::new("master".into()), http.clone())),
-        authentik: castord::authentik::Authentik::new(authentik, Zeroizing::new("ak".into()), http),
+        authentik: castord::authentik::Authentik::new(authentik, Zeroizing::new("ak".into()), http.clone()),
         stacks: true,
+        platform: platform(),
+        versions: castord::render::parse_env_file(include_str!("../../../../../packages/stack-templates/versions.env")),
+        versions_file: PathBuf::from("/repo/packages/stack-templates/versions.env"),
+        usd_per_chf: 1.1,
+        ca_dir: PathBuf::from("/repo/.dev-certs"),
+        prepared: Default::default(),
+        http,
+        health_timeout: std::time::Duration::from_secs(2),
+        health_every: std::time::Duration::from_millis(20),
     })
+}
+
+pub fn platform() -> castord::render::Platform {
+    castord::render::Platform {
+        base_domain: "castor.test".into(),
+        scheme: "http".into(),
+        brand_name: "Castor Cloud".into(),
+        time_zone: "Europe/Zurich".into(),
+        auth_host_ip: "host-gateway".into(),
+    }
 }
 
 pub async fn rows(db: &PgPool, sql: &str, id: &str) -> Vec<String> {

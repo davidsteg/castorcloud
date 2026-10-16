@@ -278,19 +278,28 @@ impl Handler for RevokeAccess {
             .into_iter()
             .filter(|s| booked.iter().any(|b| b == s))
             .collect();
-        process(c, cx, &node, &t, &enabled).await?;
+        process(c, cx, &node, &t.id, &t.slug, &enabled).await?;
         cx.report(job, "ready", "access revoked").await
     }
 }
 
-async fn process(c: &Control, cx: &JobCx, node: &Node, t: &Tenant, enabled: &[&str]) -> Result<(), String> {
+/// Carries out the tenant's pending AccessRevocations in the booked apps
+/// (processRevocations in lifecycle.ts); also run by every apply.
+pub(crate) async fn process(
+    c: &Control,
+    cx: &JobCx,
+    node: &Node,
+    tenant_id: &str,
+    slug: &str,
+    enabled: &[&str],
+) -> Result<(), String> {
     let db = &cx.db;
     let pending = sqlx::query_as::<_, Request>(
         r#"SELECT id, email, sub, scope::text AS scope,
                   to_char("createdAt", 'YYYY-MM-DD"T"HH24:MI:SS.MS"Z"') AS created
            FROM "AccessRevocation" WHERE "tenantId" = $1 ORDER BY "createdAt", id"#,
     )
-    .bind(&t.id)
+    .bind(tenant_id)
     .fetch_all(db)
     .await
     .map_err(sql)?;
@@ -317,7 +326,7 @@ async fn process(c: &Control, cx: &JobCx, node: &Node, t: &Tenant, enabled: &[&s
         for cmd in access_commands(enabled, &who, scope) {
             let args = compose_args(
                 node,
-                &t.slug,
+                slug,
                 enabled,
                 &exec_args(&cmd).iter().map(String::as_str).collect::<Vec<_>>(),
             );
@@ -339,7 +348,7 @@ async fn process(c: &Control, cx: &JobCx, node: &Node, t: &Tenant, enabled: &[&s
             db,
             "system",
             "access.revoked",
-            Some(&t.id),
+            Some(tenant_id),
             Some(json!({ "sub": sub, "scope": scope.name(), "apps": enabled })),
         )
         .await?;
