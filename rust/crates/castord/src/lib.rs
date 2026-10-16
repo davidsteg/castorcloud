@@ -12,6 +12,7 @@ pub mod http;
 pub mod llm;
 pub mod node;
 pub mod queue;
+pub mod render;
 pub mod revoke;
 pub mod storage;
 pub mod suspend;
