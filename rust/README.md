@@ -45,6 +45,17 @@ kind has no live worker.
 | `STACKS` | yes | places the tenant's stacks node and prepares it (egress image, edge proxy, its allowlist); removes, stops or deploys each stack (images pinned by digest, data directories owned by the mapped container user, Docker checked for userns-remap and gVisor right before), its sign-in, node route and the control plane's route |
 | `RESTORE` | yes | stops the stack and locks its volume, sets the current dataset aside, pipes the backup box's raw stream into the node's `zfs receive` (a failure puts the old dataset back), then applies as `UPDATE`; a retry once the data is back only restarts the stack |
 
+Recurring tasks move the same way, with `CASTORD_TASKS`. Each runs once per
+slot across every worker (the `Schedule` table, as `schedule.ts`), so either
+worker can hold it:
+
+| Task | In castord | Notes |
+|---|---|---|
+| `watch-nodes` | yes | every 5 min: probes remote nodes (pool, memory, CPUs; a stacks node by its Docker engine, checked for userns-remap and gVisor), records the facts or the error, and reopens active tenants whose storage or stacks came back locked |
+| `measure-storage` | yes | hourly: every active tenant's storage use, for the portal |
+| `sweep-deletions` | yes | hourly: queues `DELETE` for tenants whose grace period has ended |
+| `backup-tenants`, `backup-database`, `verify-backups` | not yet | |
+
 castord needs the TypeScript worker's settings for these (`AUTHENTIK_BOOTSTRAP_TOKEN`,
 `BASE_DOMAIN`, `PUBLIC_SCHEME`, `BRAND_NAME`, `TZ`, `AUTH_HOST_IP`, the encryption
 keys, `LITELLM_MASTER_KEY`, `AI_USD_PER_CHF`, `CA_DIR`); in development also

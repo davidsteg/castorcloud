@@ -4,6 +4,7 @@
 //!   DATABASE_URL            the control plane's Postgres
 //!   CASTORD_KINDS           comma-separated job kinds this worker takes, e.g.
 //!                           "SUSPEND"; the TypeScript worker leaves them alone
+//!   CASTORD_TASKS           the same for recurring tasks, e.g. "watch-nodes"
 //!   SECRETS_ENCRYPTION_KEY, VOLUME_KEK
 //!   CASTOR_ROOT             the repository (default: the current directory)
 //!   TRAEFIK_DYNAMIC_DIR     default infra/control-plane/traefik/dynamic
@@ -20,8 +21,9 @@
 use std::path::PathBuf;
 use std::process::ExitCode;
 use std::sync::Arc;
-use std::sync::atomic::Ordering;
+use std::sync::atomic::{AtomicBool, Ordering};
 
+use castord::tasks::Task;
 use castord::{Control, Handler, Worker};
 use sqlx::postgres::{PgConnectOptions, PgPoolOptions};
 use zeroize::Zeroizing;
@@ -171,11 +173,48 @@ async fn main() -> ExitCode {
     }
 }
 
+/// The tasks CASTORD_TASKS names, each known (a typo would leave it unrun
+/// once the TypeScript worker skips it).
+fn tasks(c: &Arc<Control>, names: &[&str]) -> Result<Vec<Arc<dyn Task>>, String> {
+    let all: Vec<Arc<dyn Task>> = vec![
+        Arc::new(castord::tasks::WatchNodes(c.clone())),
+        Arc::new(castord::tasks::MeasureStorage(c.clone())),
+        Arc::new(castord::tasks::SweepDeletions),
+    ];
+    names
+        .iter()
+        .map(|n| {
+            if !castord::tasks::ALL_TASKS.contains(n) {
+                return Err(format!("CASTORD_TASKS: unknown task {n}"));
+            }
+            all.iter()
+                .find(|t| t.name() == *n)
+                .cloned()
+                .ok_or_else(|| format!("CASTORD_TASKS: castord has no {n} yet"))
+        })
+        .collect()
+}
+
+/// A setting read once for the process's lifetime.
+fn list(name: &str) -> &'static str {
+    std::env::var(name).unwrap_or_default().leak()
+}
+
 async fn run() -> Result<(), String> {
     let url = std::env::var("DATABASE_URL").map_err(|_| "DATABASE_URL is not set".to_owned())?;
-    let kinds = std::env::var("CASTORD_KINDS").unwrap_or_default();
-    let take: Vec<&str> = kinds.split(',').map(str::trim).filter(|k| !k.is_empty()).collect();
+    let (kinds, task_names) = (list("CASTORD_KINDS"), list("CASTORD_TASKS"));
+    let split = |s: &'static str| {
+        s.split(',')
+            .map(str::trim)
+            .filter(|k| !k.is_empty())
+            .collect::<Vec<_>>()
+    };
+    let (take, task_names) = (split(kinds), split(task_names));
+    if take.is_empty() && task_names.is_empty() {
+        return Err("CASTORD_KINDS and CASTORD_TASKS list nothing: nothing to do".into());
+    }
     let control = Arc::new(control()?);
+    let tasks = tasks(&control, &task_names)?;
     let db = PgPoolOptions::new()
         .max_connections(4)
         .connect_with(connect_options(&url)?)
@@ -184,15 +223,17 @@ async fn run() -> Result<(), String> {
     let host = std::fs::read_to_string("/etc/hostname")
         .map(|h| h.trim().to_owned())
         .unwrap_or_else(|_| "castord".into());
-    let worker = Worker::new(
-        format!("{host}:{}", std::process::id()),
-        db.clone(),
-        handlers(&control),
-        &take,
-    )
-    .map_err(|e| e.to_string())?;
+    let id = format!("{host}:{}", std::process::id());
+    let worker = if take.is_empty() {
+        None
+    } else {
+        Some(Worker::new(id.clone(), db.clone(), handlers(&control), &take).map_err(|e| e.to_string())?)
+    };
 
-    let stopping = worker.stopping.clone();
+    let stopping = worker
+        .as_ref()
+        .map_or_else(|| Arc::new(AtomicBool::new(false)), |w| w.stopping.clone());
+    let on_signal = stopping.clone();
     tokio::spawn(async move {
         let mut term = match tokio::signal::unix::signal(tokio::signal::unix::SignalKind::terminate()) {
             Ok(s) => s,
@@ -202,11 +243,25 @@ async fn run() -> Result<(), String> {
             _ = tokio::signal::ctrl_c() => {}
             _ = term.recv() => {}
         }
-        eprintln!("castord: finishing the current job, then stopping");
-        stopping.store(true, Ordering::SeqCst);
+        eprintln!("castord: finishing the current job and task, then stopping");
+        on_signal.store(true, Ordering::SeqCst);
     });
-    eprintln!("castord {} ready (jobs: {})", worker.id, worker.kinds().join(", "));
-    worker.run().await;
+    eprintln!(
+        "castord {id} ready (jobs: {}; tasks: {})",
+        worker.as_ref().map_or_else(|| "none".into(), |w| w.kinds().join(", ")),
+        if task_names.is_empty() {
+            "none".into()
+        } else {
+            task_names.join(", ")
+        }
+    );
+    let task_loop = castord::tasks::run(db.clone(), tasks, stopping);
+    match &worker {
+        Some(w) => {
+            tokio::join!(w.run(), task_loop);
+        }
+        None => task_loop.await,
+    }
     db.close().await;
     Ok(())
 }

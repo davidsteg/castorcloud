@@ -19,7 +19,7 @@ const { Nodes } = await import("./nodes.ts");
 const { Backups, backupSettings } = await import("./backup.ts");
 const { Stacks, storeDefinitionsAsJson } = await import("./stacks.ts");
 const { parseEnvFile } = await import("./tenant.ts");
-const { workerKinds } = await import("./kinds.ts");
+const { workerKinds, workerTasks } = await import("./kinds.ts");
 type TenantJob = import("@pc/core").TenantJob;
 type JobKind = import("@pc/db").JobKind;
 
@@ -187,7 +187,7 @@ async function work(job: TenantJob) {
 }
 
 async function queueLoop() {
-  while (!stopping) {
+  while (!stopping && KINDS.length) {
     try {
       await workerHeartbeat(me, KINDS);
       for (const job of await recoverExpiredJobs()) await onFailed(job, "the worker running it stopped", job.failed);
@@ -268,8 +268,14 @@ const backupTasks: Task[] = backups
     ]
   : [];
 
-async function taskLoop(tasks: Task[]) {
-  while (!stopping) {
+// The tasks castord runs (CASTORD_TASKS, the same setting castord reads) are left to it.
+const ALL_TASKS = ["watch-nodes", "measure-storage", "sweep-deletions", "backup-tenants", "backup-database", "verify-backups"] as const;
+const TASKS: string[] = workerTasks(ALL_TASKS, process.env.CASTORD_TASKS);
+if (!KINDS.length && !TASKS.length) throw new Error("castord takes every job kind and task: this worker isn't needed");
+
+async function taskLoop(all: Task[]) {
+  const tasks = all.filter((t) => TASKS.includes(t.name));
+  while (!stopping && tasks.length) {
     for (const t of tasks) {
       if (stopping) break;
       try {
@@ -282,6 +288,6 @@ async function taskLoop(tasks: Task[]) {
   }
 }
 
-console.log(`worker ${me} ready (jobs: ${KINDS.join(", ")})`);
+console.log(`worker ${me} ready (jobs: ${KINDS.join(", ") || "none"}; tasks: ${TASKS.join(", ") || "none"})`);
 await Promise.all([queueLoop(), taskLoop(maintenance), taskLoop(backupTasks)]);
 await prisma.$disconnect();
