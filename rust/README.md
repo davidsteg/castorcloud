@@ -58,13 +58,14 @@ by the TypeScript worker.
 ## castor-node on a node
 
 One binary replaces the three node scripts; it picks the tool by the name it
-is installed under. CI builds it for each node platform (job
-`castor-node`, artifacts `castor-node-x86_64-unknown-linux-musl` for
-TrueNAS SCALE and `castor-node-aarch64-apple-darwin` for Mac minis, each
-with a SHA-256 file). To switch a node:
+is installed under. CI builds it for TrueNAS SCALE in the `Rust core` job
+on every push to main (artifact `castor-node-x86_64-unknown-linux-musl`,
+with a SHA-256 file, kept 30 days). Mac minis build it themselves with
+`cargo build --release -p castor-node`. To switch
+a node:
 
-1. Download the artifact for the node's platform from the CI run of the
-   commit you deploy, check it with `shasum -a 256 -c castor-node.sha256`.
+1. Download the artifact from the CI run of the commit you deploy (on a
+   Mac, build it from that commit), check it with `shasum -a 256 -c castor-node.sha256`.
 2. Put it at `infra/node/bin/castor-node` in the copy of `infra/node` on the node.
 3. Re-run the node's setup script (`truenas/setup.sh` or
    `macos/bootstrap.sh`). It installs the binary as `castor-ssh`,

@@ -6,11 +6,9 @@ on:
   pull_request:
     # Docs alone don't need a build.
     paths-ignore: ["**.md", "docs/**"]
-  # Runs the macOS build on a branch by hand.
-  workflow_dispatch:
 
-# Actions minutes are limited and a macOS minute counts ten times, so
-# runs a newer push replaces are cancelled and jobs can't hang for long.
+# Actions minutes are limited, so runs a newer push replaces are cancelled
+# and jobs can't hang for long.
 concurrency:
   group: ci-${{ github.ref }}
   cancel-in-progress: true
@@ -100,6 +98,7 @@ jobs:
       - uses: dtolnay/rust-toolchain@stable
         with:
           components: rustfmt, clippy
+          targets: x86_64-unknown-linux-musl
 
       - uses: Swatinem/rust-cache@v2
         with:
@@ -117,47 +116,23 @@ jobs:
           tool: cargo-audit
       - run: cargo audit --deny warnings
 
-  # The node helpers (castor-ssh, castor-zfs, castor-snap) as one static
-  # binary per node platform, tested on that platform. The artifact goes to
-  # infra/node/bin/castor-node before running the node's setup script.
-  # Pull requests build only the Linux one; macOS runs on main and by hand.
-  castor-node:
-    name: castor-node (${{ matrix.target }})
-    runs-on: ${{ matrix.os }}
-    timeout-minutes: 20
-    strategy:
-      matrix:
-        include: ${{ fromJSON(github.event_name == 'pull_request' && '[{"os":"ubuntu-latest","target":"x86_64-unknown-linux-musl"}]' || '[{"os":"ubuntu-latest","target":"x86_64-unknown-linux-musl"},{"os":"macos-latest","target":"aarch64-apple-darwin"}]') }}
-    defaults:
-      run:
-        working-directory: rust
-    steps:
-      - uses: actions/checkout@v4
-
-      - uses: dtolnay/rust-toolchain@stable
-        with:
-          targets: ${{ matrix.target }}
-
-      - uses: Swatinem/rust-cache@v2
-        with:
-          workspaces: rust
-          key: ${{ matrix.target }}
-
-      - run: cargo test --locked -p castor-node
-
-      - run: cargo build --locked --release -p castor-node --target ${{ matrix.target }}
+      # The node helpers (castor-ssh, castor-zfs, castor-snap) as one static
+      # binary for TrueNAS SCALE; cargo test above already ran its tests. The
+      # artifact goes to infra/node/bin/castor-node before running the node's
+      # setup script, so only main's builds are kept.
+      - run: cargo build --locked --release -p castor-node --target x86_64-unknown-linux-musl
 
       - name: Checksum
         run: |
-          cd target/${{ matrix.target }}/release
+          cd target/x86_64-unknown-linux-musl/release
           shasum -a 256 castor-node > castor-node.sha256
 
       - uses: actions/upload-artifact@v4
+        if: github.event_name == 'push'
         with:
-          name: castor-node-${{ matrix.target }}
+          name: castor-node-x86_64-unknown-linux-musl
           path: |
-            rust/target/${{ matrix.target }}/release/castor-node
-            rust/target/${{ matrix.target }}/release/castor-node.sha256
+            rust/target/x86_64-unknown-linux-musl/release/castor-node
+            rust/target/x86_64-unknown-linux-musl/release/castor-node.sha256
           if-no-files-found: error
-          # Artifact storage is limited too; main builds them again on every push.
-          retention-days: 14
+          retention-days: 30
