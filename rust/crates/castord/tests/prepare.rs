@@ -115,21 +115,26 @@ async fn places_once() {
     )
     .await;
     assert_eq!(vec![castord::placement::place(&db, &w.tenant).await.unwrap()], placed);
-    // Unplaced: some node takes it (others' test nodes may be there too), with an audit entry.
+    // Unplaced: our node is the only healthy remote one (other tests' nodes
+    // were never seen, and remote beats local), so it takes the tenant.
     sqlx::query(r#"UPDATE "Tenant" SET "nodeId" = NULL WHERE id = $1"#)
         .bind(&w.tenant)
         .execute(&db)
         .await
         .unwrap();
+    sqlx::query(
+        r#"UPDATE "Node" SET "lastSeenAt" = now() AT TIME ZONE 'UTC', "poolSizeMb" = 2000000, "poolUsedMb" = 1000,
+                  "poolHealth" = 'ONLINE', "memoryMb" = 65536 WHERE id = $1"#,
+    )
+    .bind(&w.nodes[0])
+    .execute(&db)
+    .await
+    .unwrap();
     let name = castord::placement::place(&db, &w.tenant).await.unwrap();
+    assert_eq!(vec![name.clone()], placed);
     assert_eq!(
-        rows(
-            &db,
-            r#"SELECT n.name FROM "Tenant" t JOIN "Node" n ON n.id = t."nodeId" WHERE t.id = $1"#,
-            &w.tenant
-        )
-        .await,
-        vec![name.clone()]
+        rows(&db, r#"SELECT "nodeId" FROM "Tenant" WHERE id = $1"#, &w.tenant).await,
+        vec![w.nodes[0].clone()]
     );
     assert_eq!(
         rows(
