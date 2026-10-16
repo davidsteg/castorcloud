@@ -4,7 +4,13 @@ on:
   push:
     branches: [main]
   pull_request:
+    # Docs alone don't need a build.
+    paths-ignore: ["**.md", "docs/**"]
+  # Runs the macOS build on a branch by hand.
+  workflow_dispatch:
 
+# Actions minutes are limited and a macOS minute counts ten times, so
+# runs a newer push replaces are cancelled and jobs can't hang for long.
 concurrency:
   group: ci-${{ github.ref }}
   cancel-in-progress: true
@@ -13,6 +19,7 @@ jobs:
   check:
     name: Typecheck and test
     runs-on: ubuntu-latest
+    timeout-minutes: 20
     env:
       TURBO_TELEMETRY_DISABLED: 1
       # The job queue's tests (packages/core/src/jobs.db.test.ts) run against it.
@@ -61,6 +68,7 @@ jobs:
   rust:
     name: Rust core
     runs-on: ubuntu-latest
+    timeout-minutes: 20
     defaults:
       run:
         working-directory: rust
@@ -112,16 +120,14 @@ jobs:
   # The node helpers (castor-ssh, castor-zfs, castor-snap) as one static
   # binary per node platform, tested on that platform. The artifact goes to
   # infra/node/bin/castor-node before running the node's setup script.
+  # Pull requests build only the Linux one; macOS runs on main and by hand.
   castor-node:
     name: castor-node (${{ matrix.target }})
     runs-on: ${{ matrix.os }}
+    timeout-minutes: 20
     strategy:
       matrix:
-        include:
-          - os: ubuntu-latest
-            target: x86_64-unknown-linux-musl
-          - os: macos-latest
-            target: aarch64-apple-darwin
+        include: ${{ fromJSON(github.event_name == 'pull_request' && '[{"os":"ubuntu-latest","target":"x86_64-unknown-linux-musl"}]' || '[{"os":"ubuntu-latest","target":"x86_64-unknown-linux-musl"},{"os":"macos-latest","target":"aarch64-apple-darwin"}]') }}
     defaults:
       run:
         working-directory: rust
@@ -153,3 +159,5 @@ jobs:
             rust/target/${{ matrix.target }}/release/castor-node
             rust/target/${{ matrix.target }}/release/castor-node.sha256
           if-no-files-found: error
+          # Artifact storage is limited too; main builds them again on every push.
+          retention-days: 14
