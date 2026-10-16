@@ -9,6 +9,7 @@ encrypted stack; one portal embeds all services behind one login.
 - Security model (what we protect, and what we can't): [docs/security.md](docs/security.md)
 - Assistant design (Hermes, memory, LLM, credit limit): [docs/assistant.md](docs/assistant.md)
 - Beta applications and newsletter: [docs/beta.md](docs/beta.md)
+- GitHub login and repository access: [docs/github.md](docs/github.md)
 - Moving the core to Rust (what moves, what stays, and why): [docs/rust-core.md](docs/rust-core.md)
 
 ## How a customer gets a cloud
@@ -16,7 +17,8 @@ encrypted stack; one portal embeds all services behind one login.
 1. **Pricing page** (`app.<domain>/<locale>`) – DE/FR/IT/EN. Services and
    storage are chosen individually; the page shows where every franc goes
    (VAT, Stripe fees, 10 % open-source donation, infrastructure, operations).
-2. **Sign in / register** through Authentik – e-mail or "Continue with Google".
+2. **Sign in / register** through Authentik – e-mail, "Continue with Google" or
+   "Continue with GitHub".
 3. **Signup** – name + address (`<slug>.<domain>`), then **Stripe Checkout**.
    During the beta the signup is an **application**: staff approve it in the
    admin console first, then the owner pays from "My clouds" (docs/beta.md).
@@ -84,6 +86,14 @@ Put the printed `whsec_…` into `STRIPE_WEBHOOK_SECRET`.
 Create an OAuth client (type *Web*) in Google Cloud Console with redirect URI
 `https://auth.<BASE_DOMAIN>/source/oauth/callback/google/`, set
 `GOOGLE_CLIENT_ID` / `GOOGLE_CLIENT_SECRET`, then `npm run cp:up`.
+
+### GitHub login and repositories
+
+Login: a GitHub OAuth App with callback
+`https://auth.<BASE_DOMAIN>/source/oauth/callback/github/`, into
+`GITHUB_LOGIN_CLIENT_ID` / `GITHUB_LOGIN_CLIENT_SECRET`. Repository access: a
+separate GitHub App, `GITHUB_APP_*`. Both are described in
+[docs/github.md](docs/github.md).
 
 ### Provisioning test
 

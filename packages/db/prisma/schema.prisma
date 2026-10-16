@@ -159,7 +159,31 @@ model User {
   /// Portal sessions signed in before this are rejected ("sign out everywhere").
   sessionsRevokedAt DateTime?
   memberships  Member[]
+  githubInstallations GitHubInstallation[]
   createdAt    DateTime @default(now())
+}
+
+/// A customer's own GitHub account, connected for read access to the
+/// repositories they picked (the Castor GitHub App installed on it,
+/// docs/github.md). No GitHub token is stored: each use mints a short-lived,
+/// read-only installation token (packages/core/src/github.ts).
+model GitHubInstallation {
+  id                  String    @id @default(cuid())
+  user                User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  userId              String
+  /// GitHub's installation id
+  installationId      BigInt    @unique
+  /// The GitHub user account it is installed on (only ever the person's own)
+  accountId           BigInt
+  accountLogin        String
+  /// "all" or "selected" repositories
+  repositorySelection String
+  /// Suspended on GitHub: no tokens until it is unsuspended
+  suspendedAt         DateTime?
+  createdAt           DateTime  @default(now())
+  updatedAt           DateTime  @updatedAt
+
+  @@index([userId])
 }
 
 model Member {
