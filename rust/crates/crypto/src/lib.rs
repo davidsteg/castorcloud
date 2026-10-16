@@ -21,6 +21,8 @@ use base64::Engine as _;
 use base64::engine::general_purpose::URL_SAFE_NO_PAD as B64;
 use zeroize::{Zeroize, ZeroizeOnDrop, Zeroizing};
 
+pub mod dump;
+
 const VERSION: &str = "v1";
 const IV_LEN: usize = 12;
 const TAG_LEN: usize = 16;

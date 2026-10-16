@@ -10,7 +10,9 @@
 //!   TRAEFIK_DYNAMIC_DIR     default infra/control-plane/traefik/dynamic
 //!   LITELLM_MASTER_KEY, LLM_GATEWAY_URL (default http://localhost:4000)
 //!   STACKS_DOMAIN           custom stacks are on when set
-//!   BACKUP_TARGET           user@host of the backup box (RESTORE)
+//!   BACKUP_TARGET           user@host of the backup box (RESTORE, backup tasks);
+//!                           BACKUP_INTERVAL_HOURS (6), BACKUP_DB_PUBLIC_KEY,
+//!                           BACKUP_PG_CONTAINER, POSTGRES_USER as for the TypeScript worker
 //!   STACKS_CERT_RESOLVER    production: the ACME resolver of the stacks domain's wildcard
 //!   BASE_DOMAIN, PUBLIC_SCHEME, AUTHENTIK_BOOTSTRAP_TOKEN
 //!                           Authentik at <scheme>://auth.<BASE_DOMAIN>
@@ -121,7 +123,7 @@ fn control() -> Result<Control, String> {
         llm,
         authentik,
         stacks,
-        backup_target: var("BACKUP_TARGET"),
+        backup: backup_settings()?,
         platform,
         versions,
         versions_file,
@@ -173,6 +175,31 @@ async fn main() -> ExitCode {
     }
 }
 
+/// BACKUP_* as backupSettings in backup.ts; None without BACKUP_TARGET.
+fn backup_settings() -> Result<Option<castord::backup::Settings>, String> {
+    let Some(target) = var("BACKUP_TARGET") else {
+        return Ok(None);
+    };
+    let interval_hours: f64 = var("BACKUP_INTERVAL_HOURS")
+        .unwrap_or_else(|| "6".into())
+        .parse()
+        .map_err(|_| "BACKUP_INTERVAL_HOURS must be a number")?;
+    if !(interval_hours.is_finite() && interval_hours > 0.0) {
+        return Err("BACKUP_INTERVAL_HOURS must be above 0".into());
+    }
+    let db_public_key = var("BACKUP_DB_PUBLIC_KEY");
+    if let Some(k) = &db_public_key {
+        castor_crypto::dump::public_key(k).map_err(|e| e.to_string())?;
+    }
+    Ok(Some(castord::backup::Settings {
+        target,
+        interval_hours,
+        db_public_key,
+        pg_container: var("BACKUP_PG_CONTAINER").unwrap_or_else(|| "pc-control-plane-postgres-1".into()),
+        pg_user: var("POSTGRES_USER").unwrap_or_else(|| "pc".into()),
+    }))
+}
+
 /// The tasks CASTORD_TASKS names, each known (a typo would leave it unrun
 /// once the TypeScript worker skips it).
 fn tasks(c: &Arc<Control>, names: &[&str]) -> Result<Vec<Arc<dyn Task>>, String> {
@@ -181,6 +208,14 @@ fn tasks(c: &Arc<Control>, names: &[&str]) -> Result<Vec<Arc<dyn Task>>, String>
         Arc::new(castord::tasks::MeasureStorage(c.clone())),
         Arc::new(castord::tasks::SweepDeletions),
     ];
+    let mut all = all;
+    if let Some(b) = &c.backup {
+        all.push(Arc::new(castord::backup::BackupTenants(c.clone(), b.clone())));
+        all.push(Arc::new(castord::backup::BackupDatabase(c.clone(), b.clone())));
+        all.push(Arc::new(castord::backup::VerifyBackups(c.clone(), b.clone())));
+    } else if names.iter().any(|n| n.starts_with("backup-") || *n == "verify-backups") {
+        return Err("CASTORD_TASKS: the backup tasks need BACKUP_TARGET".into());
+    }
     names
         .iter()
         .map(|n| {

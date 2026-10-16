@@ -58,7 +58,11 @@ impl Handler for Restore {
     async fn run(&self, cx: &JobCx, job: &Job) -> Result<(), String> {
         let c = &self.0;
         let db = &cx.db;
-        let target = c.backup_target.as_deref().ok_or("BACKUP_TARGET is not set")?;
+        let target = c
+            .backup
+            .as_ref()
+            .map(|b| b.target.as_str())
+            .ok_or("BACKUP_TARGET is not set")?;
         let params: Option<Value> = sqlx::query_scalar(r#"SELECT params FROM "Job" WHERE id = $1"#)
             .bind(&job.id)
             .fetch_optional(db)

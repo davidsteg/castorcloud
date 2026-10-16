@@ -7,6 +7,7 @@
 pub mod apply;
 pub mod assistant;
 pub mod authentik;
+pub mod backup;
 pub mod db;
 pub mod delete;
 pub mod exec;
@@ -17,6 +18,7 @@ pub mod placement;
 pub mod queue;
 pub mod render;
 pub mod restore;
+pub mod retention;
 pub mod revoke;
 pub mod schedule;
 pub mod stacks;
@@ -58,8 +60,8 @@ pub struct Control {
     pub authentik: authentik::Authentik,
     /// Custom stacks are on when STACKS_DOMAIN is set.
     pub stacks: Option<stacks::Platform>,
-    /// user@host of the backup box, for RESTORE (BACKUP_TARGET).
-    pub backup_target: Option<String>,
+    /// The backup box, for RESTORE and the backup tasks (BACKUP_TARGET).
+    pub backup: Option<backup::Settings>,
     pub platform: render::Platform,
     /// packages/stack-templates/versions.env: image versions of every stack.
     pub versions: render::Vars,
