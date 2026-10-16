@@ -10,14 +10,13 @@ import tls from "node:tls";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { config } from "dotenv";
-import { Queue } from "bullmq";
 import nodemailer from "nodemailer";
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../../..");
 config({ path: path.join(root, ".env"), quiet: true });
 
 const { prisma, Prisma } = await import("@pc/db");
-const { TENANT_QUEUE, redisConnection } = await import("@pc/core");
+const { liveWorkers } = await import("@pc/core");
 const { SERVICES, STACK_SERVICES, names } = await import("./tenant.ts");
 const R = await import("./monitor-rules.ts");
 type Finding = import("./monitor-rules.ts").Finding;
@@ -276,25 +275,21 @@ const auditCheck: Check = {
   },
 };
 
-// The platform itself: Redis, the provisioner worker, Authentik.
-let lifecycleQueue: Queue | undefined;
+// The platform itself: the provisioner worker, Authentik.
 const platformCheck: Check = {
   scope: "platform",
   async run() {
     const out: Finding[] = [];
     try {
-      if (!lifecycleQueue) {
-        lifecycleQueue = new Queue(TENANT_QUEUE, { connection: { ...redisConnection(), enableOfflineQueue: false, maxRetriesPerRequest: 1 } });
-        lifecycleQueue.on("error", () => {}); // reported by the check below, not as a crash
-      }
-      const workers = await withTimeout(lifecycleQueue.getWorkersCount(), 10_000, "Redis");
-      if (workers === 0) {
+      // Workers write a heartbeat every few seconds while they take jobs.
+      const workers = await withTimeout(liveWorkers(2 * 60_000), 10_000, "database");
+      if (workers.length === 0) {
         out.push({ key: "platform:queue", severity: "CRITICAL", summary: "The provisioner worker is not running", after: 2 });
       }
     } catch (err) {
-      // Same key: without Redis the worker can't be seen either, and its
-      // alert must not read as resolved.
-      out.push({ key: "platform:queue", severity: "CRITICAL", summary: "Redis is not reachable", details: { error: (err as Error).message }, after: 2 });
+      // Same key: without the database the worker can't be seen either, and
+      // its alert must not read as resolved.
+      out.push({ key: "platform:queue", severity: "CRITICAL", summary: "The job queue's database is not reachable", details: { error: (err as Error).message }, after: 2 });
     }
     try {
       const res = await fetch(`${authUrl}/-/health/live/`, { signal: AbortSignal.timeout(10_000) });

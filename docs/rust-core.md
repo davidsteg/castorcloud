@@ -21,7 +21,7 @@ static binary per platform with a short, audited dependency list
 |---|---|---|
 | `packages/core/src/crypto.ts` | Rust `crates/crypto` (done) | Holds the keys; byte-compatible format, tested in both directions |
 | `infra/node/bin/castor-ssh`, `castor-zfs`, `castor-snap` | One Rust binary `castor-node` (done, `crates/node`) | Runs as root behind the SSH forced command: parsed, typed arguments instead of shell `case` patterns, unit tests for every refusal |
-| BullMQ + Redis job queue (`packages/core/src/jobs.ts`) | Postgres queue: the `Job` table, claimed with `FOR UPDATE SKIP LOCKED`, woken by `LISTEN/NOTIFY` | Postgres is already the source of truth; one service less (Redis), and a Rust worker can claim jobs without speaking BullMQ's Lua protocol. The portal enqueues by inserting a row |
+| BullMQ + Redis job queue (`packages/core/src/jobs.ts`) | Postgres queue (done): the `Job` table, claimed with `FOR UPDATE SKIP LOCKED`, leases, and a `Schedule` table for recurring tasks | Postgres is already the source of truth; Redis is gone (one service and one unauthenticated port less), and a Rust worker claims jobs with the same SQL. The portal enqueues by inserting a row |
 | `apps/provisioner` worker: lifecycle, tenant rendering, placement, storage, nodes, ZFS, volumes, backups, retention, DB dumps | Rust daemon `castord` (tokio, sqlx), ported job kind by job kind | The privileged orchestration; each job kind moves when its Rust version passes the same tests |
 | Monitoring and alert rules, Authentik and LLM-gateway clients, Telegram bot | Part of `castord` | Plain HTTP and rules; no reason to keep a second runtime once the worker is Rust |
 | Admin CLIs (`node`, `backup`, `staff`, `delete-tenant`) | `castorctl` subcommands | Same code paths as the daemon |
@@ -40,7 +40,10 @@ static binary per platform with a short, audited dependency list
 ## Order
 
 1. Workspace and encryption (done).
-2. Job queue on Postgres, still consumed by the TypeScript worker.
+2. Job queue and recurring tasks on Postgres, Redis removed (done). The
+   claim/lease/retry contract is at the top of `packages/core/src/jobs.ts`;
+   the Rust worker implements the same, and each worker declares which job
+   kinds it runs.
 3. `castor-node` replacing the node scripts, switched over per node by
    re-running its setup script (done; see `rust/README.md`). The dev-only
    `infra/node/cryptd` (LUKS volumes on the local Docker host) stays shell

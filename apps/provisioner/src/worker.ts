@@ -4,21 +4,22 @@
 import { readFileSync } from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
+import { setTimeout as sleep } from "node:timers/promises";
 import { config } from "dotenv";
-import { Queue, Worker, type Job as BullJob } from "bullmq";
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../../..");
 config({ path: path.join(root, ".env"), quiet: true });
 
 const { prisma } = await import("@pc/db");
-const { TENANT_QUEUE, audit, enqueueTenantJob, redisConnection } = await import("@pc/core");
+const { RENEW_MS, audit, claimScheduled, claimTenantJob, enqueueTenantJob, failTenantJob, recoverExpiredJobs, renewLease, succeedTenantJob, workerHeartbeat, workerId } = await import("@pc/core");
 const { Authentik } = await import("./authentik.ts");
 const { Lifecycle } = await import("./lifecycle.ts");
 const { LlmGateway } = await import("./llm.ts");
 const { Nodes } = await import("./nodes.ts");
 const { Backups, backupSettings } = await import("./backup.ts");
 const { parseEnvFile } = await import("./tenant.ts");
-type TenantJobData = import("@pc/core").TenantJobData;
+type TenantJob = import("@pc/core").TenantJob;
+type JobKind = import("@pc/db").JobKind;
 
 const versionsFile = path.join(root, "packages/stack-templates/versions.env");
 const nodes = new Nodes(root);
@@ -38,7 +39,6 @@ const assistant = process.env.LITELLM_MASTER_KEY
     }
   : undefined;
 const lifecycle = new Lifecycle((id) => nodes.forTenant(id), ak, platform, parseEnvFile(readFileSync(versionsFile, "utf8")), versionsFile, assistant);
-const connection = redisConnection();
 const backupConfig = backupSettings();
 const backups = backupConfig ? new Backups(backupConfig) : undefined;
 if (!backups) console.warn("BACKUP_TARGET is not set: tenant backups are OFF");
@@ -63,13 +63,12 @@ if (localEnabled) {
   nodes.driver(localNode);
 }
 
-async function run(job: BullJob<TenantJobData>) {
-  const { jobId, tenantId, kind } = job.data;
+async function run(job: TenantJob) {
+  const { id: jobId, tenantId, kind } = job;
   const log = async (line: string) => {
     console.log(`[${kind} ${tenantId}] ${line}`);
     await prisma.$executeRaw`UPDATE "Job" SET log = log || ${`${new Date().toISOString()} ${line}\n`} WHERE id = ${jobId}`;
   };
-  await prisma.job.update({ where: { id: jobId }, data: { status: "RUNNING", error: null } });
 
   const report = async (step: string, message: string) => {
     await prisma.job.update({ where: { id: jobId }, data: { step } });
@@ -114,70 +113,77 @@ async function run(job: BullJob<TenantJobData>) {
       break;
     }
   }
-  await prisma.job.update({ where: { id: jobId }, data: { status: "SUCCEEDED", finishedAt: new Date() } });
 }
 
-// One job at a time: jobs of a tenant must not overlap, and stacks are heavy
-// to start. Scale out with more workers per node group later.
-const worker = new Worker<TenantJobData>(TENANT_QUEUE, run, { connection, concurrency: 1 });
-
-worker.on("failed", async (job, err) => {
-  if (!job) return;
-  const final = job.attemptsMade >= (job.opts.attempts ?? 1);
-  console.error(`[${job.data.kind} ${job.data.tenantId}] attempt ${job.attemptsMade} failed: ${err.message}`);
-  await prisma.job.update({
-    where: { id: job.data.jobId },
-    data: { status: final ? "FAILED" : "QUEUED", error: err.message.slice(0, 4000) },
+// ------------------------------------------------------------ the queue
+// Jobs come from the Job table (packages/core/src/jobs.ts). One at a time:
+// stacks are heavy to start. The kinds this worker runs; once the Rust
+// worker takes one over, it leaves this list.
+const KINDS: readonly JobKind[] = ["PROVISION", "UPDATE", "SUSPEND", "RESUME", "DELETE", "REVOKE_ACCESS", "RESTORE"];
+const me = workerId();
+let stopping = false;
+for (const sig of ["SIGINT", "SIGTERM"] as const) {
+  process.on(sig, () => {
+    if (stopping) process.exit(130); // a second signal: stop now (the job's lease expires and it is retried)
+    console.log(`${sig}: finishing the current job, then stopping`);
+    stopping = true;
   });
-  if (final && job.data.kind === "PROVISION") {
-    await prisma.tenant.update({ where: { id: job.data.tenantId }, data: { status: "FAILED" } });
-    await audit("system", "tenant.provision_failed", job.data.tenantId, { error: err.message.slice(0, 500) });
-  }
-});
+}
 
-// ------------------------------------------------------------ maintenance
+async function onFailed(job: TenantJob, message: string, final: boolean) {
+  console.error(`[${job.kind} ${job.tenantId}] attempt ${job.attempts} failed: ${message}`);
+  if (final && job.kind === "PROVISION") {
+    await prisma.tenant.update({ where: { id: job.tenantId }, data: { status: "FAILED" } });
+    await audit("system", "tenant.provision_failed", job.tenantId, { error: message.slice(0, 500) });
+  }
+}
+
+async function work(job: TenantJob) {
+  const renew = setInterval(() => {
+    renewLease(job.id, me).then((mine) => {
+      if (!mine) console.error(`[${job.kind} ${job.tenantId}] lost the lease on job ${job.id}`);
+    }, (err) => console.error(`[${job.kind} ${job.tenantId}] renewing the lease: ${(err as Error).message}`));
+  }, RENEW_MS);
+  try {
+    await run(job);
+    await succeedTenantJob(job.id, me);
+  } catch (err) {
+    const message = (err as Error).message ?? String(err);
+    await onFailed(job, message, await failTenantJob(job.id, me, message));
+  } finally {
+    clearInterval(renew);
+  }
+}
+
+async function queueLoop() {
+  while (!stopping) {
+    try {
+      await workerHeartbeat(me, KINDS);
+      for (const job of await recoverExpiredJobs()) await onFailed(job, "the worker running it stopped", job.failed);
+      const job = await claimTenantJob(me, KINDS);
+      if (job) {
+        await work(job);
+        continue;
+      }
+    } catch (err) {
+      console.error(`[queue] ${(err as Error).message}`);
+    }
+    await sleep(2_000);
+  }
+}
+
+// ------------------------------------------------------------ recurring tasks
+// Each runs once per slot across all workers (packages/core/src/schedule.ts).
+type Task = { name: string; when: import("@pc/core").Every; run: () => Promise<void> };
+
 // Hourly: delete tenants whose grace period after cancellation has ended,
 // and measure every active tenant's storage usage for the portal.
-const maintenance = new Queue("maintenance", { connection });
-await maintenance.upsertJobScheduler("sweep-deletions", { every: 60 * 60 * 1000 }, { name: "sweep-deletions" });
-await maintenance.upsertJobScheduler("measure-storage", { every: 60 * 60 * 1000 }, { name: "measure-storage" });
-await maintenance.upsertJobScheduler("watch-nodes", { every: 5 * 60 * 1000 }, { name: "watch-nodes" });
-
-// Backups: their own queue, so a long first send doesn't hold up the node
-// watcher. Every BACKUP_INTERVAL_HOURS: send, then prune. Nightly: the
-// control-plane database. Weekly: read every tenant's newest backup back.
-if (backups) {
-  const backupQueue = new Queue("backups", { connection });
-  await backupQueue.upsertJobScheduler("backup-tenants", { every: backups.s.intervalHours * 3600_000 }, { name: "backup-tenants" });
-  await backupQueue.upsertJobScheduler("backup-database", { pattern: "30 2 * * *", tz: platform.timeZone }, { name: "backup-database" });
-  await backupQueue.upsertJobScheduler("verify-backups", { pattern: "0 4 * * 0", tz: platform.timeZone }, { name: "verify-backups" });
-  new Worker(
-    "backups",
-    async (job) => {
-      const log = (line: string) => console.log(`[${job.name}] ${line}`);
-      if (job.name === "backup-tenants") {
-        await backups.runAll(log);
-        for (const p of await backups.problems()) console.error(`[backup ${p.slug}] ${p.issues.join("; ")}`);
-      } else if (job.name === "backup-database") {
-        if (backups.s.dbPublicKey) await backups.dumpDatabase(log);
-        else console.error("[backup-database] BACKUP_DB_PUBLIC_KEY is not set: the control-plane database is NOT backed up");
-      } else if (job.name === "verify-backups") {
-        await backups.verifyAll(log);
-      }
-    },
-    // Hours-long sends: renew the lock well within its duration.
-    { connection, concurrency: 1, lockDuration: 5 * 60_000 },
-  );
-}
-
-new Worker(
-  "maintenance",
-  async (job) => {
-    if (job.name === "watch-nodes") {
-      await nodes.watch();
-      return;
-    }
-    if (job.name === "measure-storage") {
+const maintenance: Task[] = [
+  { name: "watch-nodes", when: { everyMs: 5 * 60_000 }, run: () => nodes.watch() },
+  {
+    name: "measure-storage",
+    when: { everyMs: 60 * 60_000 },
+    async run() {
       const active = await prisma.tenant.findMany({ where: { status: "ACTIVE" }, select: { id: true } });
       for (const t of active) {
         try {
@@ -186,16 +192,65 @@ new Worker(
           console.error(`[measure ${t.id}] ${(err as Error).message}`);
         }
       }
-      return;
-    }
-    const due = await prisma.tenant.findMany({
-      where: { status: "SUSPENDED", deleteAfter: { lt: new Date() } },
-      select: { id: true },
-    });
-    for (const t of due) await enqueueTenantJob(t.id, "DELETE");
-    if (due.length) console.log(`scheduled ${due.length} deletion(s)`);
+    },
   },
-  { connection },
-);
+  {
+    name: "sweep-deletions",
+    when: { everyMs: 60 * 60_000 },
+    async run() {
+      const due = await prisma.tenant.findMany({
+        where: { status: "SUSPENDED", deleteAfter: { lt: new Date() } },
+        select: { id: true },
+      });
+      for (const t of due) await enqueueTenantJob(t.id, "DELETE");
+      if (due.length) console.log(`scheduled ${due.length} deletion(s)`);
+    },
+  },
+];
 
-console.log(`worker ready (queue ${TENANT_QUEUE})`);
+// Backups: their own loop, so a long first send doesn't hold up the node
+// watcher. Every BACKUP_INTERVAL_HOURS: send, then prune. Nightly: the
+// control-plane database. Weekly: read every tenant's newest backup back.
+const backupTasks: Task[] = backups
+  ? [
+      {
+        name: "backup-tenants",
+        when: { everyMs: backups.s.intervalHours * 3600_000 },
+        async run() {
+          await backups.runAll((line) => console.log(`[backup-tenants] ${line}`));
+          for (const p of await backups.problems()) console.error(`[backup ${p.slug}] ${p.issues.join("; ")}`);
+        },
+      },
+      {
+        name: "backup-database",
+        when: { at: "02:30", tz: platform.timeZone },
+        async run() {
+          if (backups.s.dbPublicKey) await backups.dumpDatabase((line) => console.log(`[backup-database] ${line}`));
+          else console.error("[backup-database] BACKUP_DB_PUBLIC_KEY is not set: the control-plane database is NOT backed up");
+        },
+      },
+      {
+        name: "verify-backups",
+        when: { at: "04:00", tz: platform.timeZone, weekday: 0 },
+        run: () => backups.verifyAll((line) => console.log(`[verify-backups] ${line}`)),
+      },
+    ]
+  : [];
+
+async function taskLoop(tasks: Task[]) {
+  while (!stopping) {
+    for (const t of tasks) {
+      if (stopping) break;
+      try {
+        if (await claimScheduled(t.name, t.when)) await t.run();
+      } catch (err) {
+        console.error(`[${t.name}] ${(err as Error).message}`);
+      }
+    }
+    await sleep(30_000);
+  }
+}
+
+console.log(`worker ${me} ready (jobs: ${KINDS.join(", ")})`);
+await Promise.all([queueLoop(), taskLoop(maintenance), taskLoop(backupTasks)]);
+await prisma.$disconnect();

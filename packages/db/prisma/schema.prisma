@@ -271,6 +271,37 @@ model Job {
   params     Json?
   createdAt  DateTime  @default(now())
   finishedAt DateTime?
+
+  // The queue (packages/core/src/jobs.ts): workers claim QUEUED rows whose
+  // runAfter has passed, at most one RUNNING job per tenant (a partial
+  // unique index in the migration), oldest first per tenant.
+  attempts    Int       @default(0)
+  maxAttempts Int       @default(5)
+  runAfter    DateTime  @default(now())
+  /// The worker running it, and until when its lease holds. A worker
+  /// renews the lease while it works; an expired lease means it died.
+  lockedBy    String?
+  lockedUntil DateTime?
+
+  @@index([status, runAfter])
+  @@index([tenantId, status])
+}
+
+/// A recurring worker task (packages/core/src/schedule.ts): whoever moves
+/// nextRunAt forward runs it, so it runs once per slot across workers.
+model Schedule {
+  name      String    @id
+  nextRunAt DateTime
+  lastRunAt DateTime?
+}
+
+/// A worker process taking jobs from the queue. Updated every few seconds;
+/// monitoring alerts when none has been seen recently.
+model WorkerHeartbeat {
+  id     String   @id // "<host>:<pid>"
+  /// Job kinds it runs (TypeScript worker: all; the Rust worker takes them over one by one)
+  kinds  JobKind[]
+  seenAt DateTime @default(now())
 }
 
 /// Access to end in the tenant's apps for one person. Processed by the
