@@ -25,7 +25,7 @@ Decisions taken (from Q&A):
 ```
                     ┌──────────────── CONTROL PLANE (1 host) ────────────────┐
  customer ──HTTPS──►│ Traefik ─► Portal (Next.js)   Authentik (IdP)          │
-                    │            Provisioner worker (BullMQ)  Postgres  Redis │
+                    │            Provisioner worker   Postgres (+ job queue) │
                     └───────────────┬──────────────────────────────────────────┘
                                     │ SSH / Docker API (provision, update, backup)
                     ┌───────────────▼──── DATA-PLANE NODE(s) ─────────────────┐
@@ -89,12 +89,12 @@ Also: `suspend`, `resume`, `update` (rolling image bump), `export`, `delete` (GD
 ## Repository layout (pnpm + Turborepo monorepo)
 ```
 apps/portal/            Next.js (App Router): marketing, signup, tenant shell, admin console
-apps/provisioner/       TS worker (BullMQ): tenant jobs, Authentik/DNS/SSH clients
+apps/provisioner/       TS worker (jobs queued in Postgres): tenant jobs, Authentik/DNS/SSH clients
 packages/db/            Prisma schema: Tenant, User, Node, ServiceInstance, Secret, Job, Plan
 packages/brand/         theme tokens, theme.css, services/*.css, bridge.js
 packages/stack-templates/ compose + env templates per service, pinned versions
 packages/sdk/           typed clients for Immich/Paperless/Dawarich/AirTrail APIs (dashboard + agent)
-infra/control-plane/    docker-compose: traefik, authentik, postgres, redis, portal, provisioner
+infra/control-plane/    docker-compose: traefik, authentik, postgres, portal, provisioner
 infra/node/             node bootstrap (docker, traefik, skin proxy, shared ML/tika/gotenberg)
 agent/tools/            read-only MCP servers for the assistant (Hermes runs from its upstream image)
 ```

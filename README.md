@@ -35,13 +35,13 @@ encrypted stack; one portal embeds all services behind one login.
 | Path | What |
 |---|---|
 | `apps/portal` | Next.js: marketing site, signup, account, tenant shell, Stripe webhook |
-| `apps/provisioner` | Worker executing tenant lifecycle jobs (BullMQ) + e2e test |
+| `apps/provisioner` | Worker executing tenant lifecycle jobs (queued in Postgres) + e2e test |
 | `packages/pricing` | Price list (CHF) and the transparent breakdown – shared by site and checkout |
 | `packages/core` | Envelope encryption (secrets, volume keys), job queue, audit log |
 | `packages/db` | Prisma schema of the control plane |
 | `packages/brand` | Brand tokens, skin CSS injected into services, iframe bridge |
 | `packages/stack-templates` | Per-tenant compose (one profile per service), skin proxy, pinned versions |
-| `infra/control-plane` | Traefik, Postgres, Redis, Authentik (+ blueprints) |
+| `infra/control-plane` | Traefik, Postgres, Authentik (+ blueprints) |
 | `infra/node` | Shared node services, `cryptd` volume helper |
 | `infra/dev-certs` | Local CA + wildcard certificate for development |
 
@@ -53,7 +53,7 @@ Requires Docker Desktop and Node 24. `*.brand.localhost` resolves to your machin
 cp .env.example .env                                   # replace every change-me value
 npm install
 bash infra/dev-certs/generate.sh brand.localhost       # dev CA + *.brand.localhost cert
-npm run cp:up                                          # Traefik, Postgres, Redis, Authentik
+npm run cp:up                                          # Traefik, Postgres, Authentik
 npm run db:migrate
 npm run dev -w @pc/portal                              # portal on :3000 (via Traefik)
 npm run worker -w @pc/provisioner                      # provisioning worker
