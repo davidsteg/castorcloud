@@ -49,7 +49,10 @@ static binary per platform with a short, audited dependency list
    `infra/node/cryptd` (LUKS volumes on the local Docker host) stays shell
    until the local node moves to ZFS too.
 4. `castord` with the job claim loop, taking job kinds over one by one;
-   the TypeScript worker only claims the kinds it still owns.
+   the TypeScript worker only claims the kinds it still owns. The loop is
+   in place (`rust/crates/castord`, tested against the same Postgres schema);
+   no kind has moved yet. The monitor raises `platform:queue` when a job
+   kind has no live worker, so a kind can't be left unrun between the two.
 5. Monitoring, clients and admin CLIs; then the TypeScript provisioner is
    removed.
 

@@ -15,7 +15,7 @@ import nodemailer from "nodemailer";
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../../..");
 config({ path: path.join(root, ".env"), quiet: true });
 
-const { prisma, Prisma } = await import("@pc/db");
+const { prisma, Prisma, JobKind } = await import("@pc/db");
 const { liveWorkers } = await import("@pc/core");
 const { SERVICES, STACK_SERVICES, names } = await import("./tenant.ts");
 const R = await import("./monitor-rules.ts");
@@ -283,8 +283,13 @@ const platformCheck: Check = {
     try {
       // Workers write a heartbeat every few seconds while they take jobs.
       const workers = await withTimeout(liveWorkers(2 * 60_000), 10_000, "database");
+      const covered = new Set(workers.flatMap((w) => w.kinds));
+      const missing = Object.values(JobKind).filter((k) => !covered.has(k));
       if (workers.length === 0) {
         out.push({ key: "platform:queue", severity: "CRITICAL", summary: "The provisioner worker is not running", after: 2 });
+      } else if (missing.length) {
+        // The TypeScript and Rust workers split the kinds: one of them is down.
+        out.push({ key: "platform:queue", severity: "CRITICAL", summary: `No worker takes ${missing.join(", ")} jobs`, details: { workers: workers.map((w) => w.id) }, after: 2 });
       }
     } catch (err) {
       // Same key: without the database the worker can't be seen either, and

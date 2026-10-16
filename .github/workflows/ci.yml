@@ -56,8 +56,30 @@ jobs:
     defaults:
       run:
         working-directory: rust
+    env:
+      # castord's queue tests run against the real schema.
+      TEST_DATABASE_URL: postgresql://castor:castor@localhost:5432/castor_test
+      REQUIRE_TEST_DATABASE: "1"
+    services:
+      postgres:
+        image: postgres:17-alpine
+        env:
+          POSTGRES_USER: castor
+          POSTGRES_PASSWORD: castor
+          POSTGRES_DB: castor_test
+        ports: ["5432:5432"]
+        options: >-
+          --health-cmd "pg_isready -U castor" --health-interval 5s --health-retries 10
     steps:
       - uses: actions/checkout@v4
+
+      # The Prisma migrations, in order, as the control plane applies them.
+      - name: Apply the migrations to the test database
+        run: |
+          for f in packages/db/prisma/migrations/*/migration.sql; do
+            psql "$TEST_DATABASE_URL" -v ON_ERROR_STOP=1 -q -f "$f"
+          done
+        working-directory: .
 
       - uses: dtolnay/rust-toolchain@stable
         with:

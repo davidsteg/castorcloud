@@ -92,7 +92,7 @@ test("a dead worker's job is recovered; its late result is ignored", { skip }, a
   assert.equal((await q.claimTenantJob(dead, ALL))?.id, j.id);
   assert.equal(await q.renewLease(j.id, dead), true);
   assert.deepEqual(await q.recoverExpiredJobs().then((r) => r.filter((x) => x.id === j.id)), []);
-  assert.ok((await q.liveWorkers(60_000)).includes(dead), "a worker holding a lease counts as alive");
+  assert.ok((await q.liveWorkers(60_000)).some((w) => w.id === dead), "a worker holding a lease counts as alive");
 
   await prisma.job.update({ where: { id: j.id }, data: { lockedUntil: new Date(Date.now() - 1000) } });
   const recovered = (await q.recoverExpiredJobs()).find((x) => x.id === j.id);
@@ -139,7 +139,8 @@ test("a schedule slot is won by exactly one worker", { skip }, async () => {
 
 test("heartbeats", { skip }, async () => {
   await q.workerHeartbeat(`${tag}-hb`, ALL);
-  assert.ok((await q.liveWorkers(60_000)).includes(`${tag}-hb`));
+  const hb = (await q.liveWorkers(60_000)).find((w) => w.id === `${tag}-hb`);
+  assert.deepEqual(hb?.kinds, [...ALL]);
   await prisma.workerHeartbeat.update({ where: { id: `${tag}-hb` }, data: { seenAt: new Date(Date.now() - 600_000) } });
-  assert.ok(!(await q.liveWorkers(60_000)).includes(`${tag}-hb`));
+  assert.ok(!(await q.liveWorkers(60_000)).some((w) => w.id === `${tag}-hb`));
 });
