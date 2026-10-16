@@ -54,7 +54,9 @@ worker can hold it:
 | `watch-nodes` | yes | every 5 min: probes remote nodes (pool, memory, CPUs; a stacks node by its Docker engine, checked for userns-remap and gVisor), records the facts or the error, and reopens active tenants whose storage or stacks came back locked |
 | `measure-storage` | yes | hourly: every active tenant's storage use, for the portal |
 | `sweep-deletions` | yes | hourly: queues `DELETE` for tenants whose grace period has ended |
-| `backup-tenants`, `backup-database`, `verify-backups` | not yet | |
+| `backup-tenants` | yes | every `BACKUP_INTERVAL_HOURS`: snapshot each active tenant on a ZFS node and pipe it to the box (incremental while the chain is intact, else a full send into a new generation), record the outcome, then the retention policy of `retention.ts` and forgetting deleted tenants |
+| `backup-database` | yes | 02:30: `pg_dumpall` of the control plane, gzipped and sealed to `BACKUP_DB_PUBLIC_KEY` (the format of `db-dump.ts`, opened by `npm run backup -- db-get` either way) |
+| `verify-backups` | yes | Sundays 04:00: the box reads every tenant's newest backup back |
 
 castord needs the TypeScript worker's settings for these (`AUTHENTIK_BOOTSTRAP_TOKEN`,
 `BASE_DOMAIN`, `PUBLIC_SCHEME`, `BRAND_NAME`, `TZ`, `AUTH_HOST_IP`, the encryption
