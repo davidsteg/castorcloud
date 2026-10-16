@@ -4,8 +4,8 @@
 //!   ssh    TrueNAS SCALE or a Mac mini: Docker over ssh://, and castor-*
 //!          commands through the node's castor-ssh gate.
 //!
-//! Preparing a node (templates, edge proxy) stays with the TypeScript worker
-//! until the jobs that need it move here; stopping and locking need none.
+//! Preparing a STACKS node stays with the TypeScript worker until the STACKS
+//! job kind moves here.
 
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
@@ -18,6 +18,8 @@ use crate::valid;
 
 /// Same tag as CRYPTD_IMAGE in node.ts.
 pub const CRYPTD_IMAGE: &str = "pc-cryptd:1";
+/// Same tag as ASSISTANT_TOOLS_IMAGE in packages/stack-templates/versions.env.
+pub const ASSISTANT_TOOLS_IMAGE: &str = "pc-assistant-tools:1";
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum Role {
@@ -39,7 +41,7 @@ enum Place {
 }
 
 /// The columns of "Node" a driver needs.
-#[derive(Debug, Clone, sqlx::FromRow)]
+#[derive(Debug, Clone, Default, sqlx::FromRow)]
 pub struct NodeRow {
     pub id: String,
     pub name: String,
@@ -51,12 +53,17 @@ pub struct NodeRow {
     pub ssh_user: String,
     #[sqlx(rename = "zfsPool")]
     pub zfs_pool: Option<String>,
+    #[sqlx(rename = "authHostIp")]
+    pub auth_host_ip: Option<String>,
+    #[sqlx(rename = "edgeHost")]
+    pub edge_host: Option<String>,
 }
 
 impl NodeRow {
     pub async fn load(db: &PgPool, id: &str) -> Result<Self, String> {
         sqlx::query_as::<_, NodeRow>(
-            r#"SELECT id, name, kind::text AS kind, role::text AS role, "sshHost", "sshUser", "zfsPool"
+            r#"SELECT id, name, kind::text AS kind, role::text AS role, "sshHost", "sshUser", "zfsPool",
+                      "authHostIp", "edgeHost"
                FROM "Node" WHERE id = $1"#,
         )
         .bind(id)
@@ -67,9 +74,49 @@ impl NodeRow {
     }
 }
 
+/// Where the control plane reaches a node's edge proxy (parseEdge in layout.ts).
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct Edge {
+    pub host: String,
+    pub port: u16,
+    pub url: String,
+}
+
+/// "10.0.0.5:8480" or "10.0.0.5" (port 80).
+pub fn parse_edge(edge_host: &str) -> Result<Edge, String> {
+    let bad = || format!("invalid edge host: {edge_host}");
+    let (host, port) = match edge_host.split_once(':') {
+        Some((h, p)) => {
+            if p.is_empty() || p.len() > 5 || !p.bytes().all(|b| b.is_ascii_digit()) {
+                return Err(bad());
+            }
+            (h, p.parse::<u16>().map_err(|_| bad())?)
+        }
+        None => (edge_host, 80),
+    };
+    if host.is_empty() || port == 0 || !host.bytes().all(|b| b.is_ascii_alphanumeric() || b".-".contains(&b)) {
+        return Err(bad());
+    }
+    let url = if port == 80 {
+        format!("http://{host}")
+    } else {
+        format!("http://{host}:{port}")
+    };
+    Ok(Edge {
+        host: host.to_owned(),
+        port,
+        url,
+    })
+}
+
 pub struct Node {
+    pub id: String,
     pub name: String,
     pub role: Role,
+    /// Overrides the platform's AUTH_HOST_IP for stacks on this node.
+    pub auth_host_ip: Option<String>,
+    /// Unset for the local node, whose stacks sit on the control plane Traefik's network.
+    pub edge: Option<Edge>,
     place: Place,
     /// The repository on the control plane (templates, .tenants/).
     root: PathBuf,
@@ -111,9 +158,16 @@ impl Node {
             }
             k => return Err(format!("node {}: unknown kind {k}", row.name)),
         };
+        let edge = match (&place, row.edge_host.as_deref()) {
+            (Place::Ssh { .. }, Some(e)) => Some(parse_edge(e)?),
+            _ => None,
+        };
         Ok(Self {
+            id: row.id.clone(),
             name: row.name.clone(),
             role,
+            auth_host_ip: row.auth_host_ip.clone().filter(|_| place != Place::Local),
+            edge,
             place,
             root: root.to_owned(),
             exec,
@@ -135,8 +189,20 @@ impl Node {
         input: Option<Zeroizing<Vec<u8>>>,
         allow_fail: bool,
     ) -> Result<String, String> {
+        self.docker_env(args, input, vec![], allow_fail).await
+    }
+
+    /// With extra environment for the docker CLI (compose variables).
+    pub async fn docker_env(
+        &self,
+        args: Vec<String>,
+        input: Option<Zeroizing<Vec<u8>>>,
+        env: Vec<(&'static str, String)>,
+        allow_fail: bool,
+    ) -> Result<String, String> {
         let mut cmd = Cmd::new("docker", args);
         cmd.input = input;
+        cmd.env = env;
         if let Place::Ssh { target, .. } = &self.place {
             cmd.env.push(("DOCKER_HOST", format!("ssh://{target}")));
             cmd.env.push(("DOCKER_CONTEXT", String::new()));
@@ -277,6 +343,124 @@ impl Node {
         }
     }
 
+    /// Brings the node up to date with this deployment before stacks start
+    /// (node.ts prepare; idempotent). Local: the shared /srv/pc mount and the
+    /// cryptd image. Remote: templates, the shared services' files, brand
+    /// assets and the CA bundle (only ca-bundle.pem, never a CA key), then
+    /// the edge proxy. Both build the assistant's tools image.
+    pub async fn prepare(&self, ca_dir: &Path) -> Result<(), String> {
+        let root = |p: &str| self.root.join(p).to_string_lossy().into_owned();
+        let s = |v: &[&str]| v.iter().map(|a| (*a).to_owned()).collect::<Vec<String>>();
+        match &self.place {
+            Place::Local => {
+                // /srv/pc must be a shared mount so volumes opened by cryptd are
+                // visible to tenant containers; Docker Desktop's VM loses it on restart.
+                self.docker(
+                    s(&[
+                        "run",
+                        "--rm",
+                        "--privileged",
+                        "--pid=host",
+                        "alpine:3.22",
+                        "nsenter",
+                        "-t",
+                        "1",
+                        "-m",
+                        "--",
+                        "sh",
+                        "-c",
+                        "mkdir -p /srv/pc/volumes /srv/pc/tenants && (findmnt -no PROPAGATION /srv/pc | grep -q shared || (mount --bind /srv/pc /srv/pc && mount --make-rshared /srv/pc))",
+                    ]),
+                    false,
+                )
+                .await?;
+                self.docker(
+                    vec![
+                        "build".into(),
+                        "-q".into(),
+                        "-t".into(),
+                        CRYPTD_IMAGE.into(),
+                        root("infra/node/cryptd"),
+                    ],
+                    false,
+                )
+                .await?;
+            }
+            Place::Ssh { .. } if self.role == Role::Stacks => {
+                return Err(format!(
+                    "{}: stacks nodes are prepared by the TypeScript worker",
+                    self.name
+                ));
+            }
+            Place::Ssh { .. } => {
+                let ca = ca_dir.to_string_lossy().into_owned();
+                self.sync("templates", &root("packages/stack-templates"), &["."])
+                    .await?;
+                // Relative bind mounts of the shared services (the LLM gateway's config).
+                self.sync("node", &root("infra/node"), &["compose.yml", "litellm"])
+                    .await?;
+                // What the skin proxy serves under /_brand/ (not the design sources).
+                let brand = [
+                    "tokens.css",
+                    "theme.css",
+                    "bridge.js",
+                    "logo.svg",
+                    "icon.svg",
+                    "services",
+                ];
+                self.sync("brand", &root("packages/brand"), &brand).await?;
+                self.sync("ca", &ca, &["ca-bundle.pem"]).await?;
+                if self
+                    .docker(s(&["network", "inspect", "pc-edge"]), true)
+                    .await?
+                    .is_empty()
+                {
+                    self.docker(s(&["network", "create", "pc-edge"]), false).await?;
+                }
+                let port = self.edge.as_ref().map_or(80, |e| e.port);
+                let up = vec![
+                    "compose".into(),
+                    "-p".into(),
+                    "pc-edge".into(),
+                    "-f".into(),
+                    root("infra/node/edge.yml"),
+                    "up".into(),
+                    "-d".into(),
+                    "--remove-orphans".into(),
+                ];
+                self.docker_env(up, None, vec![("EDGE_PORT", port.to_string())], false)
+                    .await?;
+            }
+        }
+        self.docker(
+            vec![
+                "build".into(),
+                "-q".into(),
+                "-t".into(),
+                ASSISTANT_TOOLS_IMAGE.into(),
+                "-f".into(),
+                root("agent/tools/Dockerfile"),
+                self.root.to_string_lossy().into_owned(),
+            ],
+            false,
+        )
+        .await?;
+        Ok(())
+    }
+
+    /// Sends files of a control-plane directory to the node (castor-untar <name>).
+    async fn sync(&self, name: &str, dir: &str, files: &[&str]) -> Result<(), String> {
+        if !Path::new(dir).is_dir() {
+            return Err(format!("{dir} missing"));
+        }
+        let mut args = vec!["-C".to_owned(), dir.to_owned(), "-cf".into(), "-".into()];
+        args.extend(files.iter().map(|f| (*f).to_owned()));
+        let tar = self.exec.run_bytes(Cmd::new("tar", args)).await?;
+        self.host(vec!["castor-untar".into(), name.into()], Some(Zeroizing::new(tar)))
+            .await?;
+        Ok(())
+    }
+
     /// Removes the tenant's files on the node and on the control plane (delete).
     pub async fn remove_config(&self, slug: &str) -> Result<(), String> {
         if !valid::slug(slug) {
@@ -344,6 +528,7 @@ mod tests {
             ssh_host: host.into(),
             ssh_user: user.into(),
             zfs_pool: pool.map(Into::into),
+            ..Default::default()
         }
     }
 
