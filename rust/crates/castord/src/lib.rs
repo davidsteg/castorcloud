@@ -18,9 +18,11 @@ pub mod queue;
 pub mod render;
 pub mod restore;
 pub mod revoke;
+pub mod schedule;
 pub mod stacks;
 pub mod storage;
 pub mod suspend;
+pub mod tasks;
 pub mod valid;
 
 use std::collections::{HashMap, HashSet};
