@@ -46,9 +46,17 @@ done
 
 step "castor-zfs and the SSH gate in $BIN"
 mkdir -p "$BIN" "$BASE/node" "$BASE/home"
-install -o root -g root -m 755 "$HERE/../bin/castor-zfs" "$HERE/../bin/castor-ssh" "$BIN/"
-# Backups (snapshots, send/receive), once that helper is in the repo.
-[ ! -f "$HERE/../bin/castor-snap" ] || install -o root -g root -m 755 "$HERE/../bin/castor-snap" "$BIN/"
+# The Rust build (rust/crates/node, one binary for all three helpers) wins
+# when it is next to the scripts as bin/castor-node; see rust/README.md.
+if [ -f "$HERE/../bin/castor-node" ]; then
+  for tool in castor-ssh castor-zfs castor-snap; do
+    install -o root -g root -m 755 "$HERE/../bin/castor-node" "$BIN/$tool"
+  done
+  echo "castor-node (Rust)"
+else
+  install -o root -g root -m 755 "$HERE/../bin/castor-zfs" "$HERE/../bin/castor-ssh" "$HERE/../bin/castor-snap" "$BIN/"
+  echo "shell helpers"
+fi
 # Root-owned: the castor user can't change where the helpers point.
 cat > "$BIN/castor.conf" <<CONF
 # Written by infra/node/truenas/setup.sh. Read by castor-ssh and castor-zfs.

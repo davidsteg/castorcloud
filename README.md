@@ -10,6 +10,7 @@ encrypted stack; one portal embeds all services behind one login.
 - Assistant design (Hermes, memory, LLM, credit limit): [docs/assistant.md](docs/assistant.md)
 - Beta applications and newsletter: [docs/beta.md](docs/beta.md)
 - GitHub login and repository access: [docs/github.md](docs/github.md)
+- Moving the core to Rust (what moves, what stays, and why): [docs/rust-core.md](docs/rust-core.md)
 
 ## How a customer gets a cloud
 

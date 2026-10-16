@@ -1,0 +1,37 @@
+{
+  "comment": "Sealed by packages/core/src/crypto.ts with fixed test-only keys. Regenerate with gen-node-sealed.mts",
+  "secrets_key": "000102030405060708090a0b0c0d0e0f101112131415161718191a1b1c1d1e1f",
+  "volume_kek": "f0e0d0c0b0a090807060504030201000ffeeddccbbaa99887766554433221100",
+  "secrets": [
+    {
+      "tenant": "cm0tenant1",
+      "name": "DB_PASSWORD",
+      "value": "hunter2",
+      "sealed": "v1.obj1tkvSejvke39J.RQcLPLzP0ziwAe-B7CJ2lQ.oQU-2LayTQ"
+    },
+    {
+      "tenant": "cm0tenant1",
+      "name": "EMPTY",
+      "value": "",
+      "sealed": "v1.NsNj_9teoCVDJupM._4bkKzYxTHRxs1jAJDFerA."
+    },
+    {
+      "tenant": "cm0tenant2",
+      "name": "OIDC_CLIENT_SECRET",
+      "value": "Grüezi 🏔 – ✓",
+      "sealed": "v1.EUHUqZ0Gm_MMBmRm.jgrVq0xcIExM0AyJczFR5g.MtoXmAvXaDV_GmVUqekYNpBtSJs"
+    }
+  ],
+  "volumes": [
+    {
+      "tenant": "cm0tenant1",
+      "wrapped": "v1.2kal9dKrIImBi3Gx.ZU-UeFdJkmXo5XnY1TXRGw.w6GgmT148HomDH51EIaD80Nw9GjYcUTjAlcWw1TY03E38MvpvYQhRXCwNtkDAZwauDOHvhLPsQxzpaSdYVFZMw",
+      "dek_hex": "d337ebdedff8ef2bcae18b8a6a9704c4a991937d9bb2885c26c852b636fd05d102729714336bc0207d3b5eddd81a6890ea65979db010683b8ce890b37b29ab34"
+    },
+    {
+      "tenant": "cm0tenant2",
+      "wrapped": "v1.gnw243Ix7dCPfmn_.YWeXDMt4jtOW4EFo0giE2Q.-gFhQbe0bgpu5PM79I1F8Tm0-Eoc1q5RMOUl27-s7xr_4CwuLtYfv8GOZEE5sYdzA9OBcCavT3iv_50c4cRLrQ",
+      "dek_hex": "5b8f9e95cf4213fdea7caf4da7242326abc0d8974bffef2053bdb341e58d4faf542dbe6cbb7728e791ebb4e50cdb64a126070a396e34d379a169baeed93c4f58"
+    }
+  ]
+}

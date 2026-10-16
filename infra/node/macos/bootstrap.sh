@@ -61,8 +61,17 @@ mdutil -i off "/Volumes/$POOL" >/dev/null 2>&1 || true   # no Spotlight on tenan
 
 step "castor-zfs and the SSH gate"
 mkdir -p "$BIN"
-install -o root -g wheel -m 755 "$HERE/../bin/castor-zfs" "$HERE/../bin/castor-ssh" "$BIN/"
-[ ! -f "$HERE/../bin/castor-snap" ] || install -o root -g wheel -m 755 "$HERE/../bin/castor-snap" "$BIN/"
+# The Rust build (rust/crates/node, one binary for all three helpers) wins
+# when it is next to the scripts as bin/castor-node; see rust/README.md.
+if [ -f "$HERE/../bin/castor-node" ]; then
+  for tool in castor-ssh castor-zfs castor-snap; do
+    install -o root -g wheel -m 755 "$HERE/../bin/castor-node" "$BIN/$tool"
+  done
+  echo "castor-node (Rust)"
+else
+  install -o root -g wheel -m 755 "$HERE/../bin/castor-zfs" "$HERE/../bin/castor-ssh" "$HERE/../bin/castor-snap" "$BIN/"
+  echo "shell helpers"
+fi
 printf '%s ALL=(root) NOPASSWD: %s/castor-zfs, %s/castor-snap\n' "$USER_NAME" "$BIN" "$BIN" > /etc/sudoers.d/castor
 chmod 440 /etc/sudoers.d/castor
 visudo -cf /etc/sudoers.d/castor >/dev/null
