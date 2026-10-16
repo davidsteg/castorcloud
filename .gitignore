@@ -16,3 +16,5 @@ infra/control-plane/traefik/dynamic/tenant-*.yml
 
 # Rust build output
 rust/target/
+# Node helpers built from rust/crates/node (CI artifact or cargo build)
+infra/node/bin/castor-node

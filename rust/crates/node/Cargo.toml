@@ -1,0 +1,18 @@
+[package]
+name = "castor-node"
+description = "Node-side helpers: the provisioner's SSH gate, tenant ZFS datasets, backup snapshots"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+publish.workspace = true
+
+[dependencies]
+tar = { version = "0.4", default-features = false }
+zeroize = "1.9.1"
+
+[dev-dependencies]
+tempfile = "3"
+
+[lints]
+workspace = true

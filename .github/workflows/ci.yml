@@ -60,3 +60,48 @@ jobs:
         with:
           tool: cargo-audit
       - run: cargo audit --deny warnings
+
+  # The node helpers (castor-ssh, castor-zfs, castor-snap) as one static
+  # binary per node platform, tested on that platform. The artifact goes to
+  # infra/node/bin/castor-node before running the node's setup script.
+  castor-node:
+    name: castor-node (${{ matrix.target }})
+    runs-on: ${{ matrix.os }}
+    strategy:
+      matrix:
+        include:
+          - os: ubuntu-latest
+            target: x86_64-unknown-linux-musl
+          - os: macos-latest
+            target: aarch64-apple-darwin
+    defaults:
+      run:
+        working-directory: rust
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: ${{ matrix.target }}
+
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: rust
+          key: ${{ matrix.target }}
+
+      - run: cargo test --locked -p castor-node
+
+      - run: cargo build --locked --release -p castor-node --target ${{ matrix.target }}
+
+      - name: Checksum
+        run: |
+          cd target/${{ matrix.target }}/release
+          shasum -a 256 castor-node > castor-node.sha256
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: castor-node-${{ matrix.target }}
+          path: |
+            rust/target/${{ matrix.target }}/release/castor-node
+            rust/target/${{ matrix.target }}/release/castor-node.sha256
+          if-no-files-found: error

@@ -20,7 +20,7 @@ static binary per platform with a short, audited dependency list
 | Today | Becomes | Why |
 |---|---|---|
 | `packages/core/src/crypto.ts` | Rust `crates/crypto` (done) | Holds the keys; byte-compatible format, tested in both directions |
-| `infra/node/bin/castor-ssh`, `castor-zfs`, `castor-snap`, `infra/node/cryptd` | One Rust binary `castor-node` (gate + subcommands) | Runs as root behind the SSH forced command: parsed, typed arguments instead of shell `case` patterns, unit tests for every refusal |
+| `infra/node/bin/castor-ssh`, `castor-zfs`, `castor-snap` | One Rust binary `castor-node` (done, `crates/node`) | Runs as root behind the SSH forced command: parsed, typed arguments instead of shell `case` patterns, unit tests for every refusal |
 | BullMQ + Redis job queue (`packages/core/src/jobs.ts`) | Postgres queue: the `Job` table, claimed with `FOR UPDATE SKIP LOCKED`, woken by `LISTEN/NOTIFY` | Postgres is already the source of truth; one service less (Redis), and a Rust worker can claim jobs without speaking BullMQ's Lua protocol. The portal enqueues by inserting a row |
 | `apps/provisioner` worker: lifecycle, tenant rendering, placement, storage, nodes, ZFS, volumes, backups, retention, DB dumps | Rust daemon `castord` (tokio, sqlx), ported job kind by job kind | The privileged orchestration; each job kind moves when its Rust version passes the same tests |
 | Monitoring and alert rules, Authentik and LLM-gateway clients, Telegram bot | Part of `castord` | Plain HTTP and rules; no reason to keep a second runtime once the worker is Rust |
@@ -41,8 +41,10 @@ static binary per platform with a short, audited dependency list
 
 1. Workspace and encryption (done).
 2. Job queue on Postgres, still consumed by the TypeScript worker.
-3. `castor-node` replacing the node scripts, installed next to them and
-   switched over per node.
+3. `castor-node` replacing the node scripts, switched over per node by
+   re-running its setup script (done; see `rust/README.md`). The dev-only
+   `infra/node/cryptd` (LUKS volumes on the local Docker host) stays shell
+   until the local node moves to ZFS too.
 4. `castord` with the job claim loop, taking job kinds over one by one;
    the TypeScript worker only claims the kinds it still owns.
 5. Monitoring, clients and admin CLIs; then the TypeScript provisioner is
