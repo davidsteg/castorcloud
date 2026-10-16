@@ -1,7 +1,6 @@
 //! The node's LLM gateway (LiteLLM) admin API, as in
-//! `apps/provisioner/src/llm.ts`. Only what suspend needs so far: block.
-
-use std::time::Duration;
+//! `apps/provisioner/src/llm.ts`. Only what castord's job kinds need so
+//! far: block and delete a tenant's key.
 
 use zeroize::Zeroizing;
 
@@ -12,17 +11,12 @@ pub struct Gateway {
 }
 
 impl Gateway {
-    pub fn new(base: &str, master_key: Zeroizing<String>) -> Result<Self, String> {
-        let http = reqwest::Client::builder()
-            .timeout(Duration::from_secs(30))
-            .redirect(reqwest::redirect::Policy::none())
-            .build()
-            .map_err(|e| e.to_string())?;
-        Ok(Self {
+    pub fn new(base: &str, master_key: Zeroizing<String>, http: reqwest::Client) -> Self {
+        Self {
             base: base.trim_end_matches('/').to_owned(),
             master_key,
             http,
-        })
+        }
     }
 
     async fn request(&self, post: bool, path: &str, body: Option<serde_json::Value>) -> Result<(u16, String), String> {
@@ -76,10 +70,19 @@ impl Gateway {
         }
         Ok(())
     }
+
+    /// Tenant deleted: the key goes, with its spend.
+    pub async fn delete(&self, key: &str) -> Result<(), String> {
+        if self.exists(key).await? {
+            self.request(true, "/key/delete", Some(serde_json::json!({ "keys": [key] })))
+                .await?;
+        }
+        Ok(())
+    }
 }
 
 /// encodeURIComponent.
-fn encode(s: &str) -> String {
+pub(crate) fn encode(s: &str) -> String {
     let mut out = String::with_capacity(s.len());
     for b in s.bytes() {
         if b.is_ascii_alphanumeric() || b"-_.!~*'()".contains(&b) {

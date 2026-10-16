@@ -2,7 +2,7 @@
 //! a LUKS file through the pc-cryptd image on the local node, an encrypted
 //! ZFS dataset through castor-zfs on TrueNAS and Mac nodes, and the tenant's
 //! custom-stack dataset on a STACKS node. Only what needs no key so far:
-//! status and close.
+//! status, close and destroy.
 
 use crate::node::{CRYPTD_IMAGE, Node, Role};
 
@@ -76,6 +76,11 @@ impl<'a> TenantStorage<'a> {
     pub async fn close(&self) -> Result<String, String> {
         self.run(&["close", self.slug]).await
     }
+
+    /// Irreversible. The caller then deletes the key (crypto-shredding).
+    pub async fn destroy(&self) -> Result<String, String> {
+        self.run(&["destroy", self.slug]).await
+    }
 }
 
 /// The tenant's custom-stack data on its STACKS node (castor-zfs stacks-*).
@@ -106,6 +111,11 @@ impl<'a> StacksStorage<'a> {
 
     pub async fn close(&self) -> Result<String, String> {
         self.run("stacks-close").await
+    }
+
+    /// Every stack's data. Irreversible.
+    pub async fn destroy(&self) -> Result<String, String> {
+        self.run("stacks-destroy").await
     }
 }
 

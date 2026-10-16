@@ -187,11 +187,11 @@ pub fn compose_args(node: &Node, slug: &str, args: &[&str]) -> Vec<String> {
     out
 }
 
-fn strings(a: &[&str]) -> Vec<String> {
+pub(crate) fn strings(a: &[&str]) -> Vec<String> {
     a.iter().map(|s| (*s).to_owned()).collect()
 }
 
-fn remove_file(path: &std::path::Path) -> Result<(), String> {
+pub(crate) fn remove_file(path: &std::path::Path) -> Result<(), String> {
     match std::fs::remove_file(path) {
         Err(e) if e.kind() != std::io::ErrorKind::NotFound => Err(format!("{}: {e}", path.display())),
         _ => Ok(()),

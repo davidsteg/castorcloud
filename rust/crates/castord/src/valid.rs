@@ -41,6 +41,12 @@ pub fn stack_name(s: &str) -> bool {
     (2..=20).contains(&b.len()) && b[0].is_ascii_lowercase() && all(s, |c| c.is_ascii_lowercase() || c.is_ascii_digit())
 }
 
+/// A pinned image reference as stored on a Stack (repo[:tag][@sha256:...]):
+/// never an option, never a shell word.
+pub fn image(s: &str) -> bool {
+    s.len() <= 512 && !s.starts_with('-') && all(s, |b| b.is_ascii_alphanumeric() || b"._/:@-".contains(&b))
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -55,6 +61,8 @@ mod tests {
         for bad in ["ab", "-ann", "ann-", "an--na", "Anna", "an.na", &"a".repeat(31)] {
             assert!(!slug(bad), "{bad}");
         }
+        assert!(image("ghcr.io/sissbruecker/linkding@sha256:0a1b") && image("nginx:1.27"));
+        assert!(!image("--privileged") && !image("a b") && !image(""));
         assert!(stack_name("linkding") && stack_name("ab1"));
         assert!(!stack_name("a") && !stack_name("1ab") && !stack_name("ab-c") && !stack_name(&"a".repeat(21)));
     }
