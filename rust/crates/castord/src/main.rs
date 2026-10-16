@@ -9,6 +9,7 @@
 //!   TRAEFIK_DYNAMIC_DIR     default infra/control-plane/traefik/dynamic
 //!   LITELLM_MASTER_KEY, LLM_GATEWAY_URL (default http://localhost:4000)
 //!   STACKS_DOMAIN           custom stacks are on when set
+//!   STACKS_CERT_RESOLVER    production: the ACME resolver of the stacks domain's wildcard
 //!   BASE_DOMAIN, PUBLIC_SCHEME, AUTHENTIK_BOOTSTRAP_TOKEN
 //!                           Authentik at <scheme>://auth.<BASE_DOMAIN>
 //!   BRAND_NAME (Castor Cloud), TZ (Europe/Zurich), AUTH_HOST_IP (host-gateway)
@@ -28,6 +29,7 @@ use zeroize::Zeroizing;
 fn handlers(c: &Arc<Control>) -> Vec<Arc<dyn Handler>> {
     vec![
         Arc::new(castord::suspend::Suspend(c.clone())),
+        Arc::new(castord::stacks::run::Stacks(c.clone())),
         Arc::new(castord::delete::Delete(c.clone())),
         Arc::new(castord::revoke::RevokeAccess(c.clone())),
         Arc::new(castord::apply::Provision(c.clone())),
@@ -92,6 +94,11 @@ fn control() -> Result<Control, String> {
         .ok()
         .filter(|r: &f64| r.is_finite() && *r > 0.0)
         .ok_or("AI_USD_PER_CHF must be a positive number")?;
+    let stacks = stacks_domain.map(|domain| castord::stacks::Platform {
+        domain,
+        scheme: scheme.clone(),
+        cert_resolver: var("STACKS_CERT_RESOLVER"),
+    });
     let platform = castord::render::Platform {
         base_domain,
         scheme,
@@ -109,7 +116,7 @@ fn control() -> Result<Control, String> {
         keys: castor_crypto::Keys::from_env().map_err(|e| e.to_string())?,
         llm,
         authentik,
-        stacks: stacks_domain.is_some(),
+        stacks,
         platform,
         versions,
         versions_file,

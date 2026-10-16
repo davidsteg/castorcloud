@@ -124,7 +124,7 @@ impl Handler for Resume {
 /// After the tenant's own stack, its custom stacks, in their own job: a
 /// stacks node outage never fails the tenant's.
 async fn follow_with_stacks(c: &Control, cx: &JobCx, tenant_id: &str) -> Result<(), String> {
-    if !c.stacks {
+    if c.stacks.is_none() {
         return Ok(());
     }
     let has: bool = sqlx::query_scalar(
@@ -400,7 +400,7 @@ pub async fn apply(c: &Control, cx: &JobCx, job: &Job) -> Result<(), String> {
 
 /// Once per node and process: templates, brand assets and the edge proxy
 /// come up to date with this deployment (Nodes.driver in nodes.ts).
-async fn prepare_once(c: &Control, node: &Node) -> Result<(), String> {
+pub(crate) async fn prepare_once(c: &Control, node: &Node) -> Result<(), String> {
     if c.prepared
         .lock()
         .map_err(|_| "prepared nodes: poisoned")?
@@ -435,7 +435,7 @@ async fn healthy(cx: &JobCx, tenant_id: &str, kind: &str, version: Option<&str>)
 }
 
 /// Write then rename, so Traefik never reads a half-written file (routes.ts).
-fn write_route(path: &std::path::Path, content: &str) -> Result<(), String> {
+pub(crate) fn write_route(path: &std::path::Path, content: &str) -> Result<(), String> {
     use std::os::unix::fs::PermissionsExt as _;
     let err = |e: std::io::Error| format!("{}: {e}", path.display());
     let tmp = path.with_extension("yml.tmp");

@@ -261,7 +261,11 @@ pub fn control(exec: Arc<Fake>, traefik: &Path, llm: Option<&str>, authentik: &s
         keys: keys(),
         llm: llm.map(|u| castord::llm::Gateway::new(u, Zeroizing::new("master".into()), http.clone())),
         authentik: castord::authentik::Authentik::new(authentik, Zeroizing::new("ak".into()), http.clone()),
-        stacks: true,
+        stacks: Some(castord::stacks::Platform {
+            domain: "stacks.test".into(),
+            scheme: "http".into(),
+            cert_resolver: None,
+        }),
         platform: platform(),
         versions: castord::render::parse_env_file(include_str!("../../../../../packages/stack-templates/versions.env")),
         versions_file: PathBuf::from("/repo/packages/stack-templates/versions.env"),

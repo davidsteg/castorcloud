@@ -11,7 +11,7 @@ the TypeScript part is removed.
 |---|---|---|
 | `crates/crypto` | `packages/core/src/crypto.ts` | done; format-compatible, tested in both directions |
 | `crates/node` | `infra/node/bin/castor-ssh`, `castor-zfs`, `castor-snap` | done; same commands and output, the scripts stay until every node runs it |
-| `crates/castord` | `apps/provisioner/src/worker.ts` | queue loop done (same SQL as `jobs.ts`); every job kind but `STACKS` and `RESTORE` ported, those two move next |
+| `crates/castord` | `apps/provisioner/src/worker.ts` | queue loop done (same SQL as `jobs.ts`); every job kind but `RESTORE` ported, it moves next |
 
 ```bash
 cd rust
@@ -42,7 +42,8 @@ kind has no live worker.
 | `DELETE` | yes | removes custom stacks, the tenant stack, its data and files, its Authentik apps and groups, LLM key and secrets; deleting the volume key crypto-shreds every copy |
 | `REVOKE_ACCESS` | yes | ends sessions and keys in the booked apps (access.ts commands), Authentik sessions for "sign out everywhere"; waits while the apps are stopped |
 | `PROVISION`, `UPDATE`, `RESUME` | yes | places the tenant, prepares its node once per process, sets up Authentik, opens and sizes the storage, renders the files, starts the stack and waits for it; runs pending revocations; `UPDATE`/`RESUME` queue `STACKS` when the tenant has custom stacks |
-| `STACKS`, `RESTORE` | not yet | |
+| `STACKS` | yes | places the tenant's stacks node and prepares it (egress image, edge proxy, its allowlist); removes, stops or deploys each stack (images pinned by digest, data directories owned by the mapped container user, Docker checked for userns-remap and gVisor right before), its sign-in, node route and the control plane's route |
+| `RESTORE` | not yet | |
 
 castord needs the TypeScript worker's settings for these (`AUTHENTIK_BOOTSTRAP_TOKEN`,
 `BASE_DOMAIN`, `PUBLIC_SCHEME`, `BRAND_NAME`, `TZ`, `AUTH_HOST_IP`, the encryption
@@ -51,9 +52,18 @@ keys, `LITELLM_MASTER_KEY`, `AI_USD_PER_CHF`, `CA_DIR`); in development also
 
 To switch a kind: build castord (`cargo build --release -p castord`), add the
 kind to `CASTORD_KINDS`, restart the TypeScript worker and start castord.
-castord prepares tenant nodes (templates, edge proxy) before it starts a
-tenant there, as the TypeScript worker does; STACKS nodes are still prepared
-by the TypeScript worker.
+castord prepares a node (templates, edge proxy; on a STACKS node the egress
+image and the stacks edge) before it starts anything there, as the
+TypeScript worker does.
+
+Custom stacks: castord checks a stack definition with the same rules as
+`@pc/stacks` (`src/stacks/spec.rs`, held to `tests/fixtures/stacks.json`,
+which CI regenerates from the TypeScript), but it reads only the parsed
+document the portal stores as JSON, never the customer's YAML: two YAML
+parsers could read one file two ways, and the definition is where the
+security checks are. Definitions saved before are converted by the
+TypeScript worker when it starts (`storeDefinitionsAsJson`). Settings:
+`STACKS_DOMAIN`, `STACKS_CERT_RESOLVER`.
 
 ## castor-node on a node
 

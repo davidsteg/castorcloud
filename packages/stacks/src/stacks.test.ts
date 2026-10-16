@@ -3,7 +3,7 @@ import { test } from "node:test";
 import { CATALOG } from "./catalog.ts";
 import { digestFor, parseImageRef, pinned } from "./image.ts";
 import { EDGE_NETWORK_RE, controlPlaneRoutes, nodeRoute, renderCompose, stackNames } from "./render.ts";
-import { SpecError, parseMemory, parseStack, secretNames, specUnits } from "./spec.ts";
+import { SpecError, parseMemory, parseStack, secretNames, specUnits, storedDefinition } from "./spec.ts";
 
 const DIGEST = `sha256:${"a".repeat(64)}`;
 
@@ -206,4 +206,14 @@ test("the root filesystem stays read-only", () => {
   const spec = parseStack(minimal.replace("    image:", "    tmpfs: [/var/cache/nginx]\n    image:"));
   assert.deepEqual(spec.services.app.tmpfs, ["/var/cache/nginx"]);
   assert.throws(() => parseStack(minimal.replace("    image:", "    tmpfs: [/a, /b, /c, /d, /e]\n    image:")), /up to 4/);
+});
+
+test("a definition is stored as the parsed document in JSON, checked as stored", () => {
+  const { definition, spec } = storedDefinition(`${minimal}# a comment\n`);
+  assert.deepEqual(JSON.parse(definition), { services: { app: { image: "nginx:1.29-alpine", mem_limit: "256m", cpus: 0.5 } }, "x-castor": { web: "app:80" } });
+  assert.deepEqual(spec, parseStack(minimal));
+  // What JSON can't carry is checked as JSON has it: .inf becomes null.
+  assert.throws(() => storedDefinition(minimal.replace("    cpus: 0.5", "    cpus: 0.5\n    environment: {X: .inf}")), /X needs a value/);
+  assert.equal(parseStack(minimal.replace("    cpus: 0.5", "    cpus: 0.5\n    environment: {X: .inf}")).services.app.environment.X, "Infinity");
+  assert.throws(() => storedDefinition("x: [" + "a,".repeat(30000) + "a]"), /larger than/);
 });

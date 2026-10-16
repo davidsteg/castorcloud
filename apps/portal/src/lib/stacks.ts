@@ -5,7 +5,7 @@ import {
   MAX_STACK_UNITS, NO_STACK_UNITS, STACK_CPU, STACK_MEMORY, STACK_STORAGE, addUnits, fitsUnits, stackUnits,
   type StackUnits,
 } from "@pc/pricing";
-import { RESERVED_STACK_NAMES, STACK_NAME_RE, SpecError, catalogApp, parseStack, specUnits, stackHost, stackResources } from "@pc/stacks";
+import { RESERVED_STACK_NAMES, STACK_NAME_RE, SpecError, catalogApp, specUnits, stackHost, stackResources, storedDefinition } from "@pc/stacks";
 import { PUBLIC_SCHEME } from "@/lib/config";
 import { itemKeyFromLookup, lineItemsFor, stripe } from "@/lib/stripe";
 
@@ -83,9 +83,9 @@ export async function addStack(tenant: Tenant, actorId: string, input: { name: s
   if (input.catalogKey && !app) return { ok: false, error: "name" };
   const source = app ? app.source : (input.definition ?? "");
 
-  let spec;
+  let spec, definition;
   try {
-    spec = parseStack(source);
+    ({ spec, definition } = storedDefinition(source));
   } catch (err) {
     if (err instanceof SpecError) return { ok: false, error: "invalid", problems: err.problems };
     throw err;
@@ -105,8 +105,9 @@ export async function addStack(tenant: Tenant, actorId: string, input: { name: s
       name,
       source: app ? "CATALOG" : "CUSTOM",
       catalogKey: app?.key,
-      // May hold passwords: sealed like every other tenant secret.
-      definition: sealSecret(tenant.id, definitionKey(name), source),
+      // May hold passwords: sealed like every other tenant secret. Stored as
+      // the parsed document in JSON, which castord reads (storedDefinition).
+      definition: sealSecret(tenant.id, definitionKey(name), definition),
       memoryMb: r.memoryMb,
       cpus: r.cpus,
       storageGb: r.storageGb,

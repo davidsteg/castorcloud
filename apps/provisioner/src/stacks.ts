@@ -10,7 +10,7 @@ import { audit, openSecret, sealSecret } from "@pc/core";
 import { addUnits, fitsUnits, NO_STACK_UNITS, stackStorageMb, type StackUnits } from "@pc/pricing";
 import {
   DEFAULT_TMPFS, STACK_NAME_RE, controlPlaneRoutes, digestFor, nodeRoute, parseImageRef, parseStack, pinned, renderCompose,
-  secretNames, specUnits, stackHost, stackNames, type StackSpec,
+  secretNames, specUnits, stackHost, stackNames, storedDefinition, type StackSpec,
 } from "@pc/stacks";
 import type { Authentik } from "./authentik.ts";
 import type { SshNode } from "./node.ts";
@@ -114,6 +114,36 @@ function removeImages(node: SshNode, images: string[]) {
 }
 
 const needsNames = (user: string) => user.split(":").some((p) => p !== "" && !/^[0-9]+$/.test(p));
+
+/**
+ * Definitions saved before castord ran STACKS are the customer's YAML;
+ * castord reads only the parsed document as JSON (storedDefinition). Run at
+ * startup: converts each such definition once. One that no longer parses
+ * stays as it is and its stack fails as before.
+ */
+export async function storeDefinitionsAsJson() {
+  const stacks = await prisma.stack.findMany({ select: { id: true, tenantId: true, name: true, definition: true } });
+  let converted = 0;
+  for (const s of stacks) {
+    const key = definitionKey(s.name);
+    const source = openSecret(s.tenantId, key, s.definition);
+    try {
+      JSON.parse(source);
+      continue;
+    } catch {
+      // YAML: convert below.
+    }
+    let definition: string;
+    try {
+      ({ definition } = storedDefinition(source));
+    } catch {
+      continue;
+    }
+    await prisma.stack.update({ where: { id: s.id }, data: { definition: sealSecret(s.tenantId, key, definition) } });
+    converted++;
+  }
+  if (converted) console.log(`stored ${converted} stack definition(s) as JSON`);
+}
 
 // ------------------------------------------------------------ the manager
 

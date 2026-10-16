@@ -1,0 +1,4125 @@
+{
+  "comment": "Decided by @pc/stacks and apps/provisioner/src/stacks.ts. Regenerate with gen-stacks.mts",
+  "digest": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+  "docs": [
+    {
+      "name": "minimal",
+      "doc": {
+        "services": {
+          "app": {
+            "image": "nginx:1.29-alpine",
+            "mem_limit": "256m",
+            "cpus": 0.5
+          }
+        },
+        "x-castor": {
+          "web": "app:80"
+        }
+      },
+      "spec": {
+        "services": {
+          "app": {
+            "image": "docker.io/library/nginx:1.29-alpine",
+            "environment": {},
+            "tmpfs": [],
+            "volumes": [],
+            "memoryMb": 256,
+            "cpus": 0.5,
+            "dependsOn": []
+          }
+        },
+        "volumes": [],
+        "web": {
+          "service": "app",
+          "port": 80
+        },
+        "egress": [],
+        "storageGb": 0
+      },
+      "units": {
+        "memoryUnits": 1,
+        "cpuUnits": 2,
+        "storageUnits": 0
+      },
+      "secrets": []
+    },
+    {
+      "name": "rendered",
+      "doc": {
+        "services": {
+          "app": {
+            "image": "nginx:1.29-alpine",
+            "command": [
+              "sh",
+              "-c",
+              "echo $HOME"
+            ],
+            "entrypoint": "/init",
+            "working_dir": "/srv",
+            "user": "1000:1000",
+            "environment": {
+              "PASSWORD": "${secret:db}",
+              "TOKEN": "x${secret:api_key}y${secret:db}",
+              "ORIGIN": "${castor:origin}",
+              "HOST": "${castor:host}",
+              "PRICE": "5$",
+              "REF": "${HOME}",
+              "PORT": 8080,
+              "RATIO": 0.5,
+              "ON": true
+            },
+            "volumes": [
+              "data:/data",
+              {
+                "type": "volume",
+                "source": "cache",
+                "target": "/cache",
+                "read_only": true
+              }
+            ],
+            "tmpfs": "/var/cache/nginx/",
+            "healthcheck": {
+              "test": "wget -q -O- localhost",
+              "interval": "1m30s",
+              "retries": 5
+            },
+            "depends_on": {
+              "db": {
+                "condition": "service_healthy"
+              }
+            },
+            "mem_limit": "256m",
+            "cpus": 0.5
+          },
+          "db": {
+            "image": "postgres:17@sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+            "environment": [
+              "POSTGRES_PASSWORD=${secret:db}",
+              "A=b=c"
+            ],
+            "volumes": [
+              "pg:/var/lib/postgresql/data"
+            ],
+            "healthcheck": {
+              "test": [
+                "CMD",
+                "pg_isready"
+              ],
+              "timeout": "5s",
+              "start_period": "30s"
+            },
+            "deploy": {
+              "resources": {
+                "limits": {
+                  "memory": "1.5GB",
+                  "cpus": "1.25"
+                }
+              }
+            },
+            "restart": "always"
+          }
+        },
+        "volumes": {
+          "data": null,
+          "cache": {},
+          "pg": null
+        },
+        "x-castor": {
+          "web": "app:80",
+          "egress": [
+            "API.example.com",
+            "*.example.org",
+            "api.example.com"
+          ],
+          "storage_gb": 25,
+          "label": "Demo"
+        }
+      },
+      "spec": {
+        "services": {
+          "app": {
+            "image": "docker.io/library/nginx:1.29-alpine",
+            "command": [
+              "sh",
+              "-c",
+              "echo $HOME"
+            ],
+            "entrypoint": "/init",
+            "environment": {
+              "PASSWORD": "${secret:db}",
+              "TOKEN": "x${secret:api_key}y${secret:db}",
+              "ORIGIN": "${castor:origin}",
+              "HOST": "${castor:host}",
+              "PRICE": "5$",
+              "REF": "${HOME}",
+              "PORT": "8080",
+              "RATIO": "0.5",
+              "ON": "true"
+            },
+            "workingDir": "/srv",
+            "user": "1000:1000",
+            "tmpfs": [
+              "/var/cache/nginx"
+            ],
+            "volumes": [
+              {
+                "volume": "data",
+                "target": "/data",
+                "readOnly": false
+              },
+              {
+                "volume": "cache",
+                "target": "/cache",
+                "readOnly": true
+              }
+            ],
+            "memoryMb": 256,
+            "cpus": 0.5,
+            "healthcheck": {
+              "test": [
+                "CMD-SHELL",
+                "wget -q -O- localhost"
+              ],
+              "intervalS": 90,
+              "timeoutS": 10,
+              "retries": 5,
+              "startPeriodS": 0
+            },
+            "dependsOn": [
+              "db"
+            ]
+          },
+          "db": {
+            "image": "docker.io/library/postgres:17@sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+            "environment": {
+              "POSTGRES_PASSWORD": "${secret:db}",
+              "A": "b=c"
+            },
+            "tmpfs": [],
+            "volumes": [
+              {
+                "volume": "pg",
+                "target": "/var/lib/postgresql/data",
+                "readOnly": false
+              }
+            ],
+            "memoryMb": 1536,
+            "cpus": 1.25,
+            "healthcheck": {
+              "test": [
+                "CMD",
+                "pg_isready"
+              ],
+              "intervalS": 30,
+              "timeoutS": 5,
+              "retries": 3,
+              "startPeriodS": 30
+            },
+            "dependsOn": []
+          }
+        },
+        "volumes": [
+          "data",
+          "cache",
+          "pg"
+        ],
+        "web": {
+          "service": "app",
+          "port": 80
+        },
+        "egress": [
+          "api.example.com",
+          "*.example.org"
+        ],
+        "storageGb": 25
+      },
+      "units": {
+        "memoryUnits": 7,
+        "cpuUnits": 7,
+        "storageUnits": 3
+      },
+      "secrets": [
+        "api_key",
+        "db"
+      ]
+    },
+    {
+      "name": "catalog-it-tools",
+      "doc": {
+        "services": {
+          "app": {
+            "image": "corentinth/it-tools:2024.10.22-7ca5933@sha256:8b8128748339583ca951af03dfe02a9a4d7363f61a216226fc28030731a5a61f",
+            "tmpfs": [
+              "/var/cache/nginx"
+            ],
+            "mem_limit": "128m",
+            "cpus": 0.25
+          }
+        },
+        "x-castor": {
+          "web": "app:80"
+        }
+      },
+      "spec": {
+        "services": {
+          "app": {
+            "image": "docker.io/corentinth/it-tools:2024.10.22-7ca5933@sha256:8b8128748339583ca951af03dfe02a9a4d7363f61a216226fc28030731a5a61f",
+            "environment": {},
+            "tmpfs": [
+              "/var/cache/nginx"
+            ],
+            "volumes": [],
+            "memoryMb": 128,
+            "cpus": 0.25,
+            "dependsOn": []
+          }
+        },
+        "volumes": [],
+        "web": {
+          "service": "app",
+          "port": 80
+        },
+        "egress": [],
+        "storageGb": 0
+      },
+      "units": {
+        "memoryUnits": 1,
+        "cpuUnits": 1,
+        "storageUnits": 0
+      },
+      "secrets": []
+    },
+    {
+      "name": "catalog-linkding",
+      "doc": {
+        "services": {
+          "app": {
+            "image": "sissbruecker/linkding:1.47.0@sha256:e35cb50e0581178f245125ffaa909c565416c94c9f22ace305a7d234a4345522",
+            "environment": {
+              "LD_ENABLE_AUTH_PROXY": "True",
+              "LD_AUTH_PROXY_USERNAME_HEADER": "HTTP_X_AUTHENTIK_USERNAME",
+              "LD_CSRF_TRUSTED_ORIGINS": "${castor:origin}"
+            },
+            "volumes": [
+              "data:/etc/linkding/data"
+            ],
+            "mem_limit": "256m",
+            "cpus": 0.5
+          }
+        },
+        "volumes": {
+          "data": null
+        },
+        "x-castor": {
+          "web": "app:9090",
+          "storage_gb": 10
+        }
+      },
+      "spec": {
+        "services": {
+          "app": {
+            "image": "docker.io/sissbruecker/linkding:1.47.0@sha256:e35cb50e0581178f245125ffaa909c565416c94c9f22ace305a7d234a4345522",
+            "environment": {
+              "LD_ENABLE_AUTH_PROXY": "True",
+              "LD_AUTH_PROXY_USERNAME_HEADER": "HTTP_X_AUTHENTIK_USERNAME",
+              "LD_CSRF_TRUSTED_ORIGINS": "${castor:origin}"
+            },
+            "tmpfs": [],
+            "volumes": [
+              {
+                "volume": "data",
+                "target": "/etc/linkding/data",
+                "readOnly": false
+              }
+            ],
+            "memoryMb": 256,
+            "cpus": 0.5,
+            "dependsOn": []
+          }
+        },
+        "volumes": [
+          "data"
+        ],
+        "web": {
+          "service": "app",
+          "port": 9090
+        },
+        "egress": [],
+        "storageGb": 10
+      },
+      "units": {
+        "memoryUnits": 1,
+        "cpuUnits": 2,
+        "storageUnits": 1
+      },
+      "secrets": []
+    },
+    {
+      "name": "catalog-actual",
+      "doc": {
+        "services": {
+          "app": {
+            "image": "actualbudget/actual-server:26.10.0-alpine@sha256:67b1b5e9584e3e143b4f5c41e52b4506ed9cdd1072392d5ab5369f2d4fd0bffd",
+            "volumes": [
+              "data:/data"
+            ],
+            "mem_limit": "256m",
+            "cpus": 0.5
+          }
+        },
+        "volumes": {
+          "data": null
+        },
+        "x-castor": {
+          "web": "app:5006",
+          "storage_gb": 10
+        }
+      },
+      "spec": {
+        "services": {
+          "app": {
+            "image": "docker.io/actualbudget/actual-server:26.10.0-alpine@sha256:67b1b5e9584e3e143b4f5c41e52b4506ed9cdd1072392d5ab5369f2d4fd0bffd",
+            "environment": {},
+            "tmpfs": [],
+            "volumes": [
+              {
+                "volume": "data",
+                "target": "/data",
+                "readOnly": false
+              }
+            ],
+            "memoryMb": 256,
+            "cpus": 0.5,
+            "dependsOn": []
+          }
+        },
+        "volumes": [
+          "data"
+        ],
+        "web": {
+          "service": "app",
+          "port": 5006
+        },
+        "egress": [],
+        "storageGb": 10
+      },
+      "units": {
+        "memoryUnits": 1,
+        "cpuUnits": 2,
+        "storageUnits": 1
+      },
+      "secrets": []
+    },
+    {
+      "name": "svc-0-privileged",
+      "doc": {
+        "services": {
+          "app": {
+            "image": "nginx:1.29-alpine",
+            "mem_limit": "256m",
+            "cpus": 0.5,
+            "privileged": true
+          }
+        },
+        "x-castor": {
+          "web": "app:80"
+        }
+      },
+      "problems": [
+        "services.app: privileged containers are not allowed"
+      ]
+    },
+    {
+      "name": "svc-1-cap_add",
+      "doc": {
+        "services": {
+          "app": {
+            "image": "nginx:1.29-alpine",
+            "mem_limit": "256m",
+            "cpus": 0.5,
+            "cap_add": [
+              "SYS_ADMIN"
+            ]
+          }
+        },
+        "x-castor": {
+          "web": "app:80"
+        }
+      },
+      "problems": [
+        "services.app: extra capabilities are not allowed"
+      ]
+    },
+    {
+      "name": "svc-2-network_mode",
+      "doc": {
+        "services": {
+          "app": {
+            "image": "nginx:1.29-alpine",
+            "mem_limit": "256m",
+            "cpus": 0.5,
+            "network_mode": "host"
+          }
+        },
+        "x-castor": {
+          "web": "app:80"
+        }
+      },
+      "problems": [
+        "services.app: networks are managed by Castor Cloud"
+      ]
+    },
+    {
+      "name": "svc-3-pid",
+      "doc": {
+        "services": {
+          "app": {
+            "image": "nginx:1.29-alpine",
+            "mem_limit": "256m",
+            "cpus": 0.5,
+            "pid": "host"
+          }
+        },
+        "x-castor": {
+          "web": "app:80"
+        }
+      },
+      "problems": [
+        "services.app: not allowed"
+      ]
+    },
+    {
+      "name": "svc-4-devices",
+      "doc": {
+        "services": {
+          "app": {
+            "image": "nginx:1.29-alpine",
+            "mem_limit": "256m",
+            "cpus": 0.5,
+            "devices": [
+              "/dev/kvm:/dev/kvm"
+            ]
+          }
+        },
+        "x-castor": {
+          "web": "app:80"
+        }
+      },
+      "problems": [
+        "services.app: devices are not allowed"
+      ]
+    },
+    {
+      "name": "svc-5-labels",
+      "doc": {
+        "services": {
+          "app": {
+            "image": "nginx:1.29-alpine",
+            "mem_limit": "256m",
+            "cpus": 0.5,
+            "labels": {
+              "traefik.enable": "true"
+            }
+          }
+        },
+        "x-castor": {
+          "web": "app:80"
+        }
+      },
+      "problems": [
+        "services.app: labels are set by Castor Cloud"
+      ]
+    },
+    {
+      "name": "svc-6-ports",
+      "doc": {
+        "services": {
+          "app": {
+            "image": "nginx:1.29-alpine",
+            "mem_limit": "256m",
+            "cpus": 0.5,
+            "ports": [
+              "80:80"
+            ]
+          }
+        },
+        "x-castor": {
+          "web": "app:80"
+        }
+      },
+      "problems": [
+        "services.app: ports are not published; set x-castor.web to the service and port to serve"
+      ]
+    },
+    {
+      "name": "svc-7-security_opt",
+      "doc": {
+        "services": {
+          "app": {
+            "image": "nginx:1.29-alpine",
+            "mem_limit": "256m",
+            "cpus": 0.5,
+            "security_opt": [
+              "seccomp=unconfined"
+            ]
+          }
+        },
+        "x-castor": {
+          "web": "app:80"
+        }
+      },
+      "problems": [
+        "services.app: security options are set by Castor Cloud"
+      ]
+    },
+    {
+      "name": "svc-8-build",
+      "doc": {
+        "services": {
+          "app": {
+            "image": "nginx:1.29-alpine",
+            "mem_limit": "256m",
+            "cpus": 0.5,
+            "build": "."
+          }
+        },
+        "x-castor": {
+          "web": "app:80"
+        }
+      },
+      "problems": [
+        "services.app: builds are not supported; use a published image"
+      ]
+    },
+    {
+      "name": "svc-9-sysctls",
+      "doc": {
+        "services": {
+          "app": {
+            "image": "nginx:1.29-alpine",
+            "mem_limit": "256m",
+            "cpus": 0.5,
+            "sysctls": {
+              "a": 1
+            }
+          }
+        },
+        "x-castor": {
+          "web": "app:80"
+        }
+      },
+      "problems": [
+        "services.app: not allowed"
+      ]
+    },
+    {
+      "name": "svc-10-userns_mode",
+      "doc": {
+        "services": {
+          "app": {
+            "image": "nginx:1.29-alpine",
+            "mem_limit": "256m",
+            "cpus": 0.5,
+            "userns_mode": "host"
+          }
+        },
+        "x-castor": {
+          "web": "app:80"
+        }
+      },
+      "problems": [
+        "services.app: \"userns_mode\" is not supported"
+      ]
+    },
+    {
+      "name": "svc-11-read_only",
+      "doc": {
+        "services": {
+          "app": {
+            "image": "nginx:1.29-alpine",
+            "mem_limit": "256m",
+            "cpus": 0.5,
+            "read_only": false
+          }
+        },
+        "x-castor": {
+          "web": "app:80"
+        }
+      },
+      "problems": [
+        "services.app.read_only: the root filesystem is always read-only; put writable paths on a volume or under tmpfs:"
+      ]
+    },
+    {
+      "name": "svc-12-tmpfs",
+      "doc": {
+        "services": {
+          "app": {
+            "image": "nginx:1.29-alpine",
+            "mem_limit": "256m",
+            "cpus": 0.5,
+            "tmpfs": [
+              "/a",
+              "/b",
+              "/c",
+              "/d",
+              "/e"
+            ]
+          }
+        },
+        "x-castor": {
+          "web": "app:80"
+        }
+      },
+      "problems": [
+        "services.app.tmpfs: must be a list of up to 4 container paths"
+      ]
+    },
+    {
+      "name": "svc-13-tmpfs",
+      "doc": {
+        "services": {
+          "app": {
+            "image": "nginx:1.29-alpine",
+            "mem_limit": "256m",
+            "cpus": 0.5,
+            "tmpfs": [
+              "/proc"
+            ]
+          }
+        },
+        "x-castor": {
+          "web": "app:80"
+        }
+      },
+      "problems": [
+        "services.app.tmpfs: can't mount over /proc"
+      ]
+    },
+    {
+      "name": "svc-14-restart",
+      "doc": {
+        "services": {
+          "app": {
+            "image": "nginx:1.29-alpine",
+            "mem_limit": "256m",
+            "cpus": 0.5,
+            "restart": [
+              "x"
+            ]
+          }
+        },
+        "x-castor": {
+          "web": "app:80"
+        }
+      },
+      "problems": [
+        "services.app.restart: must be a string"
+      ]
+    },
+    {
+      "name": "svc-15-user",
+      "doc": {
+        "services": {
+          "app": {
+            "image": "nginx:1.29-alpine",
+            "mem_limit": "256m",
+            "cpus": 0.5,
+            "user": "root;id"
+          }
+        },
+        "x-castor": {
+          "web": "app:80"
+        }
+      },
+      "problems": [
+        "services.app.user: must be uid[:gid] or name[:group]"
+      ]
+    },
+    {
+      "name": "svc-16-user",
+      "doc": {
+        "services": {
+          "app": {
+            "image": "nginx:1.29-alpine",
+            "mem_limit": "256m",
+            "cpus": 0.5,
+            "user": [
+              1000
+            ]
+          }
+        },
+        "x-castor": {
+          "web": "app:80"
+        }
+      },
+      "spec": {
+        "services": {
+          "app": {
+            "image": "docker.io/library/nginx:1.29-alpine",
+            "environment": {},
+            "user": "1000",
+            "tmpfs": [],
+            "volumes": [],
+            "memoryMb": 256,
+            "cpus": 0.5,
+            "dependsOn": []
+          }
+        },
+        "volumes": [],
+        "web": {
+          "service": "app",
+          "port": 80
+        },
+        "egress": [],
+        "storageGb": 0
+      },
+      "units": {
+        "memoryUnits": 1,
+        "cpuUnits": 2,
+        "storageUnits": 0
+      },
+      "secrets": []
+    },
+    {
+      "name": "svc-17-user",
+      "doc": {
+        "services": {
+          "app": {
+            "image": "nginx:1.29-alpine",
+            "mem_limit": "256m",
+            "cpus": 0.5,
+            "user": 1000
+          }
+        },
+        "x-castor": {
+          "web": "app:80"
+        }
+      },
+      "spec": {
+        "services": {
+          "app": {
+            "image": "docker.io/library/nginx:1.29-alpine",
+            "environment": {},
+            "user": "1000",
+            "tmpfs": [],
+            "volumes": [],
+            "memoryMb": 256,
+            "cpus": 0.5,
+            "dependsOn": []
+          }
+        },
+        "volumes": [],
+        "web": {
+          "service": "app",
+          "port": 80
+        },
+        "egress": [],
+        "storageGb": 0
+      },
+      "units": {
+        "memoryUnits": 1,
+        "cpuUnits": 2,
+        "storageUnits": 0
+      },
+      "secrets": []
+    },
+    {
+      "name": "svc-18-user",
+      "doc": {
+        "services": {
+          "app": {
+            "image": "nginx:1.29-alpine",
+            "mem_limit": "256m",
+            "cpus": 0.5,
+            "user": {
+              "a": 1
+            }
+          }
+        },
+        "x-castor": {
+          "web": "app:80"
+        }
+      },
+      "problems": [
+        "services.app.user: must be uid[:gid] or name[:group]"
+      ]
+    },
+    {
+      "name": "svc-19-working_dir",
+      "doc": {
+        "services": {
+          "app": {
+            "image": "nginx:1.29-alpine",
+            "mem_limit": "256m",
+            "cpus": 0.5,
+            "working_dir": "srv"
+          }
+        },
+        "x-castor": {
+          "web": "app:80"
+        }
+      },
+      "problems": [
+        "services.app.working_dir: must be an absolute path"
+      ]
+    },
+    {
+      "name": "svc-20-command",
+      "doc": {
+        "services": {
+          "app": {
+            "image": "nginx:1.29-alpine",
+            "mem_limit": "256m",
+            "cpus": 0.5,
+            "command": [
+              "a",
+              1,
+              2.5
+            ]
+          }
+        },
+        "x-castor": {
+          "web": "app:80"
+        }
+      },
+      "spec": {
+        "services": {
+          "app": {
+            "image": "docker.io/library/nginx:1.29-alpine",
+            "command": [
+              "a",
+              "1",
+              "2.5"
+            ],
+            "environment": {},
+            "tmpfs": [],
+            "volumes": [],
+            "memoryMb": 256,
+            "cpus": 0.5,
+            "dependsOn": []
+          }
+        },
+        "volumes": [],
+        "web": {
+          "service": "app",
+          "port": 80
+        },
+        "egress": [],
+        "storageGb": 0
+      },
+      "units": {
+        "memoryUnits": 1,
+        "cpuUnits": 2,
+        "storageUnits": 0
+      },
+      "secrets": []
+    },
+    {
+      "name": "svc-21-command",
+      "doc": {
+        "services": {
+          "app": {
+            "image": "nginx:1.29-alpine",
+            "mem_limit": "256m",
+            "cpus": 0.5,
+            "command": {
+              "a": 1
+            }
+          }
+        },
+        "x-castor": {
+          "web": "app:80"
+        }
+      },
+      "problems": [
+        "services.app.command: must be a string or a list of strings"
+      ]
+    },
+    {
+      "name": "svc-22-entrypoint",
+      "doc": {
+        "services": {
+          "app": {
+            "image": "nginx:1.29-alpine",
+            "mem_limit": "256m",
+            "cpus": 0.5,
+            "entrypoint": "a\u0000b"
+          }
+        },
+        "x-castor": {
+          "web": "app:80"
+        }
+      },
+      "problems": [
+        "services.app: contains control characters"
+      ]
+    },
+    {
+      "name": "svc-23-environment",
+      "doc": {
+        "services": {
+          "app": {
+            "image": "nginx:1.29-alpine",
+            "mem_limit": "256m",
+            "cpus": 0.5,
+            "environment": [
+              "NOEQUALS"
+            ]
+          }
+        },
+        "x-castor": {
+          "web": "app:80"
+        }
+      },
+      "problems": [
+        "services.app.environment: list entries must be KEY=value"
+      ]
+    },
+    {
+      "name": "svc-24-environment",
+      "doc": {
+        "services": {
+          "app": {
+            "image": "nginx:1.29-alpine",
+            "mem_limit": "256m",
+            "cpus": 0.5,
+            "environment": {
+              "1BAD": "x",
+              "OK": null,
+              "OBJ": {
+                "a": 1
+              },
+              "HTTPS_PROXY": "x"
+            }
+          }
+        },
+        "x-castor": {
+          "web": "app:80"
+        }
+      },
+      "problems": [
+        "services.app.environment: invalid variable name \"1BAD\"",
+        "services.app.environment: OK needs a value",
+        "services.app.environment: OBJ must be a string",
+        "services.app.environment: HTTPS_PROXY is set by Castor Cloud (egress proxy)"
+      ]
+    },
+    {
+      "name": "svc-25-environment",
+      "doc": {
+        "services": {
+          "app": {
+            "image": "nginx:1.29-alpine",
+            "mem_limit": "256m",
+            "cpus": 0.5,
+            "environment": "x"
+          }
+        },
+        "x-castor": {
+          "web": "app:80"
+        }
+      },
+      "problems": [
+        "services.app.environment: must be a map or a list"
+      ]
+    },
+    {
+      "name": "svc-26-environment",
+      "doc": {
+        "services": {
+          "app": {
+            "image": "nginx:1.29-alpine",
+            "mem_limit": "256m",
+            "cpus": 0.5,
+            "environment": {
+              "LONG": "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"
+            }
+          }
+        },
+        "x-castor": {
+          "web": "app:80"
+        }
+      },
+      "problems": [
+        "services.app.environment: LONG is too long"
+      ]
+    },
+    {
+      "name": "svc-27-environment",
+      "doc": {
+        "services": {
+          "app": {
+            "image": "nginx:1.29-alpine",
+            "mem_limit": "256m",
+            "cpus": 0.5,
+            "environment": {
+              "CTRL": "a\u0007b",
+              "TAB": "a\tb"
+            }
+          }
+        },
+        "x-castor": {
+          "web": "app:80"
+        }
+      },
+      "problems": [
+        "services.app.environment.CTRL: contains control characters"
+      ]
+    },
+    {
+      "name": "svc-28-healthcheck",
+      "doc": {
+        "services": {
+          "app": {
+            "image": "nginx:1.29-alpine",
+            "mem_limit": "256m",
+            "cpus": 0.5,
+            "healthcheck": {
+              "test": [
+                "NOPE",
+                "x"
+              ]
+            }
+          }
+        },
+        "x-castor": {
+          "web": "app:80"
+        }
+      },
+      "problems": [
+        "services.app.healthcheck: test must be a string or [CMD|CMD-SHELL, ...]"
+      ]
+    },
+    {
+      "name": "svc-29-healthcheck",
+      "doc": {
+        "services": {
+          "app": {
+            "image": "nginx:1.29-alpine",
+            "mem_limit": "256m",
+            "cpus": 0.5,
+            "healthcheck": {
+              "test": "x",
+              "interval": "1s",
+              "timeout": "1h",
+              "retries": 0,
+              "start_period": "2h",
+              "extra": 1
+            }
+          }
+        },
+        "x-castor": {
+          "web": "app:80"
+        }
+      },
+      "problems": [
+        "services.app.healthcheck: \"extra\" is not supported",
+        "services.app.healthcheck: retries must be 1-20",
+        "services.app.healthcheck: interval must be between 5s and 3600s",
+        "services.app.healthcheck: timeout must be between 1s and 300s",
+        "services.app.healthcheck: start_period must be between 0s and 3600s"
+      ]
+    },
+    {
+      "name": "svc-30-healthcheck",
+      "doc": {
+        "services": {
+          "app": {
+            "image": "nginx:1.29-alpine",
+            "mem_limit": "256m",
+            "cpus": 0.5,
+            "healthcheck": {
+              "test": "x",
+              "retries": "7",
+              "interval": 90
+            }
+          }
+        },
+        "x-castor": {
+          "web": "app:80"
+        }
+      },
+      "spec": {
+        "services": {
+          "app": {
+            "image": "docker.io/library/nginx:1.29-alpine",
+            "environment": {},
+            "tmpfs": [],
+            "volumes": [],
+            "memoryMb": 256,
+            "cpus": 0.5,
+            "healthcheck": {
+              "test": [
+                "CMD-SHELL",
+                "x"
+              ],
+              "intervalS": 90,
+              "timeoutS": 10,
+              "retries": 7,
+              "startPeriodS": 0
+            },
+            "dependsOn": []
+          }
+        },
+        "volumes": [],
+        "web": {
+          "service": "app",
+          "port": 80
+        },
+        "egress": [],
+        "storageGb": 0
+      },
+      "units": {
+        "memoryUnits": 1,
+        "cpuUnits": 2,
+        "storageUnits": 0
+      },
+      "secrets": []
+    },
+    {
+      "name": "svc-31-healthcheck",
+      "doc": {
+        "services": {
+          "app": {
+            "image": "nginx:1.29-alpine",
+            "mem_limit": "256m",
+            "cpus": 0.5,
+            "healthcheck": "x"
+          }
+        },
+        "x-castor": {
+          "web": "app:80"
+        }
+      },
+      "problems": [
+        "services.app.healthcheck: must be a map"
+      ]
+    },
+    {
+      "name": "svc-32-depends_on",
+      "doc": {
+        "services": {
+          "app": {
+            "image": "nginx:1.29-alpine",
+            "mem_limit": "256m",
+            "cpus": 0.5,
+            "depends_on": [
+              "ghost"
+            ]
+          }
+        },
+        "x-castor": {
+          "web": "app:80"
+        }
+      },
+      "problems": [
+        "services.app.depends_on: unknown service \"ghost\""
+      ]
+    },
+    {
+      "name": "svc-33-depends_on",
+      "doc": {
+        "services": {
+          "app": {
+            "image": "nginx:1.29-alpine",
+            "mem_limit": "256m",
+            "cpus": 0.5,
+            "depends_on": [
+              "app"
+            ]
+          }
+        },
+        "x-castor": {
+          "web": "app:80"
+        }
+      },
+      "problems": [
+        "services.app.depends_on: can't depend on itself"
+      ]
+    },
+    {
+      "name": "svc-34-depends_on",
+      "doc": {
+        "services": {
+          "app": {
+            "image": "nginx:1.29-alpine",
+            "mem_limit": "256m",
+            "cpus": 0.5,
+            "depends_on": "x"
+          }
+        },
+        "x-castor": {
+          "web": "app:80"
+        }
+      },
+      "problems": [
+        "services.app.depends_on: must be a list of service names"
+      ]
+    },
+    {
+      "name": "svc-35-deploy",
+      "doc": {
+        "services": {
+          "app": {
+            "image": "nginx:1.29-alpine",
+            "mem_limit": "256m",
+            "cpus": 0.5,
+            "deploy": "x"
+          }
+        },
+        "x-castor": {
+          "web": "app:80"
+        }
+      },
+      "problems": [
+        "services.app.deploy: must be a map"
+      ]
+    },
+    {
+      "name": "svc-36-deploy",
+      "doc": {
+        "services": {
+          "app": {
+            "image": "nginx:1.29-alpine",
+            "mem_limit": "256m",
+            "cpus": 0.5,
+            "deploy": {
+              "replicas": 2,
+              "resources": {
+                "reservations": {},
+                "limits": {
+                  "memory": "1g",
+                  "pids": 5
+                }
+              }
+            }
+          }
+        },
+        "x-castor": {
+          "web": "app:80"
+        }
+      },
+      "problems": [
+        "services.app.deploy: \"replicas\" is not supported",
+        "services.app.deploy.resources: \"reservations\" is not supported",
+        "services.app.deploy.resources.limits: \"pids\" is not supported"
+      ]
+    },
+    {
+      "name": "svc-37-volumes",
+      "doc": {
+        "services": {
+          "app": {
+            "image": "nginx:1.29-alpine",
+            "mem_limit": "256m",
+            "cpus": 0.5,
+            "volumes": "x"
+          }
+        },
+        "x-castor": {
+          "web": "app:80"
+        }
+      },
+      "problems": [
+        "services.app.volumes: must be a list"
+      ]
+    },
+    {
+      "name": "svc-38-volumes",
+      "doc": {
+        "services": {
+          "app": {
+            "image": "nginx:1.29-alpine",
+            "mem_limit": "256m",
+            "cpus": 0.5,
+            "volumes": [
+              "data"
+            ]
+          }
+        },
+        "x-castor": {
+          "web": "app:80"
+        }
+      },
+      "problems": [
+        "services.app.volumes: \"data\": use volume-name:/path[:ro]"
+      ]
+    },
+    {
+      "name": "no-mem",
+      "doc": {
+        "services": {
+          "app": {
+            "image": "nginx:1.29-alpine",
+            "cpus": 0.5
+          }
+        },
+        "x-castor": {
+          "web": "app:80"
+        }
+      },
+      "problems": [
+        "services.app: needs a memory limit (mem_limit: 512m)"
+      ]
+    },
+    {
+      "name": "no-cpu",
+      "doc": {
+        "services": {
+          "app": {
+            "image": "nginx:1.29-alpine",
+            "mem_limit": "256m"
+          }
+        },
+        "x-castor": {
+          "web": "app:80"
+        }
+      },
+      "problems": [
+        "services.app: needs a CPU limit (cpus: 0.5)"
+      ]
+    },
+    {
+      "name": "big-mem",
+      "doc": {
+        "services": {
+          "app": {
+            "image": "nginx:1.29-alpine",
+            "mem_limit": "64g",
+            "cpus": 0.5
+          }
+        },
+        "x-castor": {
+          "web": "app:80"
+        }
+      },
+      "problems": [
+        "services.app: memory must be between 64 MB and 16 GB"
+      ]
+    },
+    {
+      "name": "tiny-mem",
+      "doc": {
+        "services": {
+          "app": {
+            "image": "nginx:1.29-alpine",
+            "mem_limit": "1000k",
+            "cpus": 0.5
+          }
+        },
+        "x-castor": {
+          "web": "app:80"
+        }
+      },
+      "problems": [
+        "services.app: memory must be between 64 MB and 16 GB"
+      ]
+    },
+    {
+      "name": "mem-bytes",
+      "doc": {
+        "services": {
+          "app": {
+            "image": "nginx:1.29-alpine",
+            "mem_limit": 536870912,
+            "cpus": 0.5
+          }
+        },
+        "x-castor": {
+          "web": "app:80"
+        }
+      },
+      "spec": {
+        "services": {
+          "app": {
+            "image": "docker.io/library/nginx:1.29-alpine",
+            "environment": {},
+            "tmpfs": [],
+            "volumes": [],
+            "memoryMb": 512,
+            "cpus": 0.5,
+            "dependsOn": []
+          }
+        },
+        "volumes": [],
+        "web": {
+          "service": "app",
+          "port": 80
+        },
+        "egress": [],
+        "storageGb": 0
+      },
+      "units": {
+        "memoryUnits": 2,
+        "cpuUnits": 2,
+        "storageUnits": 0
+      },
+      "secrets": []
+    },
+    {
+      "name": "mem-unit-space",
+      "doc": {
+        "services": {
+          "app": {
+            "image": "nginx:1.29-alpine",
+            "mem_limit": " 1.5 GB ",
+            "cpus": 0.5
+          }
+        },
+        "x-castor": {
+          "web": "app:80"
+        }
+      },
+      "spec": {
+        "services": {
+          "app": {
+            "image": "docker.io/library/nginx:1.29-alpine",
+            "environment": {},
+            "tmpfs": [],
+            "volumes": [],
+            "memoryMb": 1536,
+            "cpus": 0.5,
+            "dependsOn": []
+          }
+        },
+        "volumes": [],
+        "web": {
+          "service": "app",
+          "port": 80
+        },
+        "egress": [],
+        "storageGb": 0
+      },
+      "units": {
+        "memoryUnits": 6,
+        "cpuUnits": 2,
+        "storageUnits": 0
+      },
+      "secrets": []
+    },
+    {
+      "name": "mem-bad",
+      "doc": {
+        "services": {
+          "app": {
+            "image": "nginx:1.29-alpine",
+            "mem_limit": "abc",
+            "cpus": 0.5
+          }
+        },
+        "x-castor": {
+          "web": "app:80"
+        }
+      },
+      "problems": [
+        "services.app: needs a memory limit (mem_limit: 512m)"
+      ]
+    },
+    {
+      "name": "many-cpus",
+      "doc": {
+        "services": {
+          "app": {
+            "image": "nginx:1.29-alpine",
+            "mem_limit": "256m",
+            "cpus": 64
+          }
+        },
+        "x-castor": {
+          "web": "app:80"
+        }
+      },
+      "problems": [
+        "services.app: cpus must be between 0.05 and 8"
+      ]
+    },
+    {
+      "name": "cpu-string",
+      "doc": {
+        "services": {
+          "app": {
+            "image": "nginx:1.29-alpine",
+            "mem_limit": "256m",
+            "cpus": " 0.333 "
+          }
+        },
+        "x-castor": {
+          "web": "app:80"
+        }
+      },
+      "spec": {
+        "services": {
+          "app": {
+            "image": "docker.io/library/nginx:1.29-alpine",
+            "environment": {},
+            "tmpfs": [],
+            "volumes": [],
+            "memoryMb": 256,
+            "cpus": 0.33,
+            "dependsOn": []
+          }
+        },
+        "volumes": [],
+        "web": {
+          "service": "app",
+          "port": 80
+        },
+        "egress": [],
+        "storageGb": 0
+      },
+      "units": {
+        "memoryUnits": 1,
+        "cpuUnits": 2,
+        "storageUnits": 0
+      },
+      "secrets": []
+    },
+    {
+      "name": "cpu-true",
+      "doc": {
+        "services": {
+          "app": {
+            "image": "nginx:1.29-alpine",
+            "mem_limit": "256m",
+            "cpus": true
+          }
+        },
+        "x-castor": {
+          "web": "app:80"
+        }
+      },
+      "spec": {
+        "services": {
+          "app": {
+            "image": "docker.io/library/nginx:1.29-alpine",
+            "environment": {},
+            "tmpfs": [],
+            "volumes": [],
+            "memoryMb": 256,
+            "cpus": 1,
+            "dependsOn": []
+          }
+        },
+        "volumes": [],
+        "web": {
+          "service": "app",
+          "port": 80
+        },
+        "egress": [],
+        "storageGb": 0
+      },
+      "units": {
+        "memoryUnits": 1,
+        "cpuUnits": 4,
+        "storageUnits": 0
+      },
+      "secrets": []
+    },
+    {
+      "name": "cpu-hex",
+      "doc": {
+        "services": {
+          "app": {
+            "image": "nginx:1.29-alpine",
+            "mem_limit": "256m",
+            "cpus": "0x2"
+          }
+        },
+        "x-castor": {
+          "web": "app:80"
+        }
+      },
+      "spec": {
+        "services": {
+          "app": {
+            "image": "docker.io/library/nginx:1.29-alpine",
+            "environment": {},
+            "tmpfs": [],
+            "volumes": [],
+            "memoryMb": 256,
+            "cpus": 2,
+            "dependsOn": []
+          }
+        },
+        "volumes": [],
+        "web": {
+          "service": "app",
+          "port": 80
+        },
+        "egress": [],
+        "storageGb": 0
+      },
+      "units": {
+        "memoryUnits": 1,
+        "cpuUnits": 8,
+        "storageUnits": 0
+      },
+      "secrets": []
+    },
+    {
+      "name": "cpu-list",
+      "doc": {
+        "services": {
+          "app": {
+            "image": "nginx:1.29-alpine",
+            "mem_limit": "256m",
+            "cpus": [
+              "1"
+            ]
+          }
+        },
+        "x-castor": {
+          "web": "app:80"
+        }
+      },
+      "spec": {
+        "services": {
+          "app": {
+            "image": "docker.io/library/nginx:1.29-alpine",
+            "environment": {},
+            "tmpfs": [],
+            "volumes": [],
+            "memoryMb": 256,
+            "cpus": 1,
+            "dependsOn": []
+          }
+        },
+        "volumes": [],
+        "web": {
+          "service": "app",
+          "port": 80
+        },
+        "egress": [],
+        "storageGb": 0
+      },
+      "units": {
+        "memoryUnits": 1,
+        "cpuUnits": 4,
+        "storageUnits": 0
+      },
+      "secrets": []
+    },
+    {
+      "name": "image-upper",
+      "doc": {
+        "services": {
+          "app": {
+            "image": "Nginx",
+            "mem_limit": "256m",
+            "cpus": 0.5
+          }
+        },
+        "x-castor": {
+          "web": "app:80"
+        }
+      },
+      "problems": [
+        "services.app.image: invalid repository name"
+      ]
+    },
+    {
+      "name": "registry-lan",
+      "doc": {
+        "services": {
+          "app": {
+            "image": "10.0.0.5:5000/evil",
+            "mem_limit": "256m",
+            "cpus": 0.5
+          }
+        },
+        "x-castor": {
+          "web": "app:80"
+        }
+      },
+      "problems": [
+        "services.app.image: registry 10.0.0.5:5000 is not allowed (allowed: docker.io, ghcr.io, quay.io, lscr.io, registry.gitlab.com, codeberg.org, gcr.io, mcr.microsoft.com)"
+      ]
+    },
+    {
+      "name": "registry-localhost",
+      "doc": {
+        "services": {
+          "app": {
+            "image": "localhost/evil",
+            "mem_limit": "256m",
+            "cpus": 0.5
+          }
+        },
+        "x-castor": {
+          "web": "app:80"
+        }
+      },
+      "problems": [
+        "services.app.image: registry localhost is not allowed (allowed: docker.io, ghcr.io, quay.io, lscr.io, registry.gitlab.com, codeberg.org, gcr.io, mcr.microsoft.com)"
+      ]
+    },
+    {
+      "name": "registry-index",
+      "doc": {
+        "services": {
+          "app": {
+            "image": "index.docker.io/library/nginx",
+            "mem_limit": "256m",
+            "cpus": 0.5
+          }
+        },
+        "x-castor": {
+          "web": "app:80"
+        }
+      },
+      "spec": {
+        "services": {
+          "app": {
+            "image": "docker.io/library/nginx:latest",
+            "environment": {},
+            "tmpfs": [],
+            "volumes": [],
+            "memoryMb": 256,
+            "cpus": 0.5,
+            "dependsOn": []
+          }
+        },
+        "volumes": [],
+        "web": {
+          "service": "app",
+          "port": 80
+        },
+        "egress": [],
+        "storageGb": 0
+      },
+      "units": {
+        "memoryUnits": 1,
+        "cpuUnits": 2,
+        "storageUnits": 0
+      },
+      "secrets": []
+    },
+    {
+      "name": "proxy-env",
+      "doc": {
+        "services": {
+          "app": {
+            "image": "nginx:1.29-alpine",
+            "mem_limit": "256m",
+            "cpus": 0.5,
+            "environment": {
+              "HTTPS_PROXY": "http://x"
+            }
+          }
+        },
+        "x-castor": {
+          "web": "app:80"
+        }
+      },
+      "problems": [
+        "services.app.environment: HTTPS_PROXY is set by Castor Cloud (egress proxy)"
+      ]
+    },
+    {
+      "name": "host-socket",
+      "doc": {
+        "services": {
+          "app": {
+            "image": "nginx:1.29-alpine",
+            "mem_limit": "256m",
+            "cpus": 0.5,
+            "volumes": [
+              "/var/run/docker.sock:/var/run/docker.sock"
+            ]
+          }
+        },
+        "x-castor": {
+          "web": "app:80"
+        },
+        "volumes": {
+          "data": null
+        }
+      },
+      "problems": [
+        "services.app.volumes: \"/var/run/docker.sock\": host paths are not allowed, use a named volume",
+        "x-castor.storage_gb: volumes need storage: set storage_gb (e.g. 10)"
+      ]
+    },
+    {
+      "name": "host-relative",
+      "doc": {
+        "services": {
+          "app": {
+            "image": "nginx:1.29-alpine",
+            "mem_limit": "256m",
+            "cpus": 0.5,
+            "volumes": [
+              "./x:/x"
+            ]
+          }
+        },
+        "x-castor": {
+          "web": "app:80"
+        },
+        "volumes": {
+          "data": null
+        }
+      },
+      "problems": [
+        "services.app.volumes: \"./x\": host paths are not allowed, use a named volume",
+        "x-castor.storage_gb: volumes need storage: set storage_gb (e.g. 10)"
+      ]
+    },
+    {
+      "name": "over-etc",
+      "doc": {
+        "services": {
+          "app": {
+            "image": "nginx:1.29-alpine",
+            "mem_limit": "256m",
+            "cpus": 0.5,
+            "volumes": [
+              "data:/etc/"
+            ]
+          }
+        },
+        "x-castor": {
+          "web": "app:80"
+        },
+        "volumes": {
+          "data": null
+        }
+      },
+      "problems": [
+        "services.app.volumes: can't mount over /etc",
+        "x-castor.storage_gb: volumes need storage: set storage_gb (e.g. 10)"
+      ]
+    },
+    {
+      "name": "dotdot",
+      "doc": {
+        "services": {
+          "app": {
+            "image": "nginx:1.29-alpine",
+            "mem_limit": "256m",
+            "cpus": 0.5,
+            "volumes": [
+              "data:/srv/../etc"
+            ]
+          }
+        },
+        "x-castor": {
+          "web": "app:80"
+        },
+        "volumes": {
+          "data": null
+        }
+      },
+      "problems": [
+        "services.app.volumes: invalid container path \"/srv/../etc\"",
+        "x-castor.storage_gb: volumes need storage: set storage_gb (e.g. 10)"
+      ]
+    },
+    {
+      "name": "bind",
+      "doc": {
+        "services": {
+          "app": {
+            "image": "nginx:1.29-alpine",
+            "mem_limit": "256m",
+            "cpus": 0.5,
+            "volumes": [
+              {
+                "type": "bind",
+                "source": "/",
+                "target": "/host"
+              }
+            ]
+          }
+        },
+        "x-castor": {
+          "web": "app:80"
+        },
+        "volumes": {
+          "data": null
+        }
+      },
+      "problems": [
+        "services.app.volumes: type \"bind\" is not supported (only named volumes)",
+        "x-castor.storage_gb: volumes need storage: set storage_gb (e.g. 10)"
+      ]
+    },
+    {
+      "name": "undeclared",
+      "doc": {
+        "services": {
+          "app": {
+            "image": "nginx:1.29-alpine",
+            "mem_limit": "256m",
+            "cpus": 0.5,
+            "volumes": [
+              "other:/data"
+            ]
+          }
+        },
+        "x-castor": {
+          "web": "app:80"
+        },
+        "volumes": {
+          "data": null
+        }
+      },
+      "problems": [
+        "services.app.volumes: volume \"other\" is not declared under volumes:",
+        "x-castor.storage_gb: volumes need storage: set storage_gb (e.g. 10)"
+      ]
+    },
+    {
+      "name": "no-storage",
+      "doc": {
+        "services": {
+          "app": {
+            "image": "nginx:1.29-alpine",
+            "mem_limit": "256m",
+            "cpus": 0.5,
+            "volumes": [
+              "data:/data"
+            ]
+          }
+        },
+        "x-castor": {
+          "web": "app:80"
+        },
+        "volumes": {
+          "data": null
+        }
+      },
+      "problems": [
+        "x-castor.storage_gb: volumes need storage: set storage_gb (e.g. 10)"
+      ]
+    },
+    {
+      "name": "storage",
+      "doc": {
+        "services": {
+          "app": {
+            "image": "nginx:1.29-alpine",
+            "mem_limit": "256m",
+            "cpus": 0.5,
+            "volumes": [
+              "data:/data:ro"
+            ]
+          }
+        },
+        "x-castor": {
+          "web": "app:80",
+          "storage_gb": 10
+        },
+        "volumes": {
+          "data": null
+        }
+      },
+      "spec": {
+        "services": {
+          "app": {
+            "image": "docker.io/library/nginx:1.29-alpine",
+            "environment": {},
+            "tmpfs": [],
+            "volumes": [
+              {
+                "volume": "data",
+                "target": "/data",
+                "readOnly": true
+              }
+            ],
+            "memoryMb": 256,
+            "cpus": 0.5,
+            "dependsOn": []
+          }
+        },
+        "volumes": [
+          "data"
+        ],
+        "web": {
+          "service": "app",
+          "port": 80
+        },
+        "egress": [],
+        "storageGb": 10
+      },
+      "units": {
+        "memoryUnits": 1,
+        "cpuUnits": 2,
+        "storageUnits": 1
+      },
+      "secrets": []
+    },
+    {
+      "name": "mount-bad-mode",
+      "doc": {
+        "services": {
+          "app": {
+            "image": "nginx:1.29-alpine",
+            "mem_limit": "256m",
+            "cpus": 0.5,
+            "volumes": [
+              "data:/data:rx"
+            ]
+          }
+        },
+        "x-castor": {
+          "web": "app:80"
+        },
+        "volumes": {
+          "data": null
+        }
+      },
+      "problems": [
+        "services.app.volumes: \"data:/data:rx\": use volume-name:/path[:ro]",
+        "x-castor.storage_gb: volumes need storage: set storage_gb (e.g. 10)"
+      ]
+    },
+    {
+      "name": "egress",
+      "doc": {
+        "services": {
+          "app": {
+            "image": "nginx:1.29-alpine",
+            "mem_limit": "256m",
+            "cpus": 0.5
+          }
+        },
+        "x-castor": {
+          "web": "app:80",
+          "egress": [
+            "api.example.com",
+            "*.example.org"
+          ]
+        }
+      },
+      "spec": {
+        "services": {
+          "app": {
+            "image": "docker.io/library/nginx:1.29-alpine",
+            "environment": {},
+            "tmpfs": [],
+            "volumes": [],
+            "memoryMb": 256,
+            "cpus": 0.5,
+            "dependsOn": []
+          }
+        },
+        "volumes": [],
+        "web": {
+          "service": "app",
+          "port": 80
+        },
+        "egress": [
+          "api.example.com",
+          "*.example.org"
+        ],
+        "storageGb": 0
+      },
+      "units": {
+        "memoryUnits": 1,
+        "cpuUnits": 2,
+        "storageUnits": 0
+      },
+      "secrets": []
+    },
+    {
+      "name": "egress-ip",
+      "doc": {
+        "services": {
+          "app": {
+            "image": "nginx:1.29-alpine",
+            "mem_limit": "256m",
+            "cpus": 0.5
+          }
+        },
+        "x-castor": {
+          "web": "app:80",
+          "egress": [
+            "10.0.0.1"
+          ]
+        }
+      },
+      "problems": [
+        "x-castor.egress: invalid host \"10.0.0.1\" (no IPs, no ports; *.example.com allowed)"
+      ]
+    },
+    {
+      "name": "egress-port",
+      "doc": {
+        "services": {
+          "app": {
+            "image": "nginx:1.29-alpine",
+            "mem_limit": "256m",
+            "cpus": 0.5
+          }
+        },
+        "x-castor": {
+          "web": "app:80",
+          "egress": [
+            "example.com:25"
+          ]
+        }
+      },
+      "problems": [
+        "x-castor.egress: invalid host \"example.com:25\" (no IPs, no ports; *.example.com allowed)"
+      ]
+    },
+    {
+      "name": "egress-star",
+      "doc": {
+        "services": {
+          "app": {
+            "image": "nginx:1.29-alpine",
+            "mem_limit": "256m",
+            "cpus": 0.5
+          }
+        },
+        "x-castor": {
+          "web": "app:80",
+          "egress": [
+            "*"
+          ]
+        }
+      },
+      "problems": [
+        "x-castor.egress: invalid host \"*\" (no IPs, no ports; *.example.com allowed)"
+      ]
+    },
+    {
+      "name": "egress-many",
+      "doc": {
+        "services": {
+          "app": {
+            "image": "nginx:1.29-alpine",
+            "mem_limit": "256m",
+            "cpus": 0.5
+          }
+        },
+        "x-castor": {
+          "web": "app:80",
+          "egress": [
+            "h0.example.com",
+            "h1.example.com",
+            "h2.example.com",
+            "h3.example.com",
+            "h4.example.com",
+            "h5.example.com",
+            "h6.example.com",
+            "h7.example.com",
+            "h8.example.com",
+            "h9.example.com",
+            "h10.example.com",
+            "h11.example.com",
+            "h12.example.com",
+            "h13.example.com",
+            "h14.example.com",
+            "h15.example.com",
+            "h16.example.com",
+            "h17.example.com",
+            "h18.example.com",
+            "h19.example.com",
+            "h20.example.com"
+          ]
+        }
+      },
+      "problems": [
+        "x-castor.egress: at most 20 hosts"
+      ]
+    },
+    {
+      "name": "storage-frac",
+      "doc": {
+        "services": {
+          "app": {
+            "image": "nginx:1.29-alpine",
+            "mem_limit": "256m",
+            "cpus": 0.5
+          }
+        },
+        "x-castor": {
+          "web": "app:80",
+          "storage_gb": 1.5
+        }
+      },
+      "problems": [
+        "x-castor.storage_gb: must be a whole number of GB up to 2000"
+      ]
+    },
+    {
+      "name": "storage-str",
+      "doc": {
+        "services": {
+          "app": {
+            "image": "nginx:1.29-alpine",
+            "mem_limit": "256m",
+            "cpus": 0.5
+          }
+        },
+        "x-castor": {
+          "web": "app:80",
+          "storage_gb": "20"
+        }
+      },
+      "spec": {
+        "services": {
+          "app": {
+            "image": "docker.io/library/nginx:1.29-alpine",
+            "environment": {},
+            "tmpfs": [],
+            "volumes": [],
+            "memoryMb": 256,
+            "cpus": 0.5,
+            "dependsOn": []
+          }
+        },
+        "volumes": [],
+        "web": {
+          "service": "app",
+          "port": 80
+        },
+        "egress": [],
+        "storageGb": 20
+      },
+      "units": {
+        "memoryUnits": 1,
+        "cpuUnits": 2,
+        "storageUnits": 2
+      },
+      "secrets": []
+    },
+    {
+      "name": "storage-big",
+      "doc": {
+        "services": {
+          "app": {
+            "image": "nginx:1.29-alpine",
+            "mem_limit": "256m",
+            "cpus": 0.5
+          }
+        },
+        "x-castor": {
+          "web": "app:80",
+          "storage_gb": 3000
+        }
+      },
+      "problems": [
+        "x-castor.storage_gb: must be a whole number of GB up to 2000"
+      ]
+    },
+    {
+      "name": "castor-extra",
+      "doc": {
+        "services": {
+          "app": {
+            "image": "nginx:1.29-alpine",
+            "mem_limit": "256m",
+            "cpus": 0.5
+          }
+        },
+        "x-castor": {
+          "web": "app:80",
+          "ports": [
+            80
+          ]
+        }
+      },
+      "problems": [
+        "x-castor: \"ports\" is not supported"
+      ]
+    },
+    {
+      "name": "web-port-only",
+      "doc": {
+        "services": {
+          "app": {
+            "image": "nginx:1.29-alpine",
+            "mem_limit": "256m",
+            "cpus": 0.5
+          }
+        },
+        "x-castor": {
+          "web": 8080
+        }
+      },
+      "spec": {
+        "services": {
+          "app": {
+            "image": "docker.io/library/nginx:1.29-alpine",
+            "environment": {},
+            "tmpfs": [],
+            "volumes": [],
+            "memoryMb": 256,
+            "cpus": 0.5,
+            "dependsOn": []
+          }
+        },
+        "volumes": [],
+        "web": {
+          "service": "app",
+          "port": 8080
+        },
+        "egress": [],
+        "storageGb": 0
+      },
+      "units": {
+        "memoryUnits": 1,
+        "cpuUnits": 2,
+        "storageUnits": 0
+      },
+      "secrets": []
+    },
+    {
+      "name": "web-port-string",
+      "doc": {
+        "services": {
+          "app": {
+            "image": "nginx:1.29-alpine",
+            "mem_limit": "256m",
+            "cpus": 0.5
+          }
+        },
+        "x-castor": {
+          "web": "8080"
+        }
+      },
+      "spec": {
+        "services": {
+          "app": {
+            "image": "docker.io/library/nginx:1.29-alpine",
+            "environment": {},
+            "tmpfs": [],
+            "volumes": [],
+            "memoryMb": 256,
+            "cpus": 0.5,
+            "dependsOn": []
+          }
+        },
+        "volumes": [],
+        "web": {
+          "service": "app",
+          "port": 8080
+        },
+        "egress": [],
+        "storageGb": 0
+      },
+      "units": {
+        "memoryUnits": 1,
+        "cpuUnits": 2,
+        "storageUnits": 0
+      },
+      "secrets": []
+    },
+    {
+      "name": "web-bad",
+      "doc": {
+        "services": {
+          "app": {
+            "image": "nginx:1.29-alpine",
+            "mem_limit": "256m",
+            "cpus": 0.5
+          }
+        },
+        "x-castor": {
+          "web": "app"
+        }
+      },
+      "problems": [
+        "x-castor.web: must be service:port, e.g. app:8080",
+        "x-castor.web: invalid port"
+      ]
+    },
+    {
+      "name": "web-unknown",
+      "doc": {
+        "services": {
+          "app": {
+            "image": "nginx:1.29-alpine",
+            "mem_limit": "256m",
+            "cpus": 0.5
+          }
+        },
+        "x-castor": {
+          "web": "db:80"
+        }
+      },
+      "problems": [
+        "x-castor.web: unknown service \"db\""
+      ]
+    },
+    {
+      "name": "web-zero",
+      "doc": {
+        "services": {
+          "app": {
+            "image": "nginx:1.29-alpine",
+            "mem_limit": "256m",
+            "cpus": 0.5
+          }
+        },
+        "x-castor": {
+          "web": "app:0"
+        }
+      },
+      "problems": [
+        "x-castor.web: invalid port"
+      ]
+    },
+    {
+      "name": "web-big",
+      "doc": {
+        "services": {
+          "app": {
+            "image": "nginx:1.29-alpine",
+            "mem_limit": "256m",
+            "cpus": 0.5
+          }
+        },
+        "x-castor": {
+          "web": "app:99999"
+        }
+      },
+      "problems": [
+        "x-castor.web: invalid port"
+      ]
+    },
+    {
+      "name": "no-castor",
+      "doc": {
+        "services": {
+          "app": {
+            "image": "nginx:1.29-alpine",
+            "mem_limit": "256m",
+            "cpus": 0.5
+          }
+        }
+      },
+      "problems": [
+        "x-castor: missing: set at least x-castor.web (service:port)"
+      ]
+    },
+    {
+      "name": "two-no-web",
+      "doc": {
+        "services": {
+          "b": {
+            "image": "nginx",
+            "mem_limit": "64m",
+            "cpus": 0.1
+          },
+          "app": {
+            "image": "nginx:1.29-alpine",
+            "mem_limit": "256m",
+            "cpus": 0.5
+          }
+        },
+        "x-castor": {}
+      },
+      "problems": [
+        "x-castor.web: must be service:port, e.g. app:8080",
+        "x-castor.web: unknown service \"\"",
+        "x-castor.web: invalid port"
+      ]
+    },
+    {
+      "name": "networks",
+      "doc": {
+        "services": {
+          "app": {
+            "image": "nginx:1.29-alpine",
+            "mem_limit": "256m",
+            "cpus": 0.5
+          }
+        },
+        "x-castor": {
+          "web": "app:80"
+        },
+        "networks": {
+          "x": {}
+        }
+      },
+      "problems": [
+        "stack: networks are managed by Castor Cloud"
+      ]
+    },
+    {
+      "name": "top-secrets",
+      "doc": {
+        "services": {
+          "app": {
+            "image": "nginx:1.29-alpine",
+            "mem_limit": "256m",
+            "cpus": 0.5
+          }
+        },
+        "x-castor": {
+          "web": "app:80"
+        },
+        "secrets": {},
+        "configs": {},
+        "foo": 1
+      },
+      "problems": [
+        "stack: use environment variables (${secret:name} generates one)",
+        "stack: configs are not supported",
+        "stack: \"foo\" is not supported"
+      ]
+    },
+    {
+      "name": "not-a-map",
+      "doc": [
+        "a",
+        "b"
+      ],
+      "problems": [
+        "the stack must be a map with services:"
+      ]
+    },
+    {
+      "name": "no-services",
+      "doc": {
+        "x-castor": {
+          "web": "app:80"
+        }
+      },
+      "problems": [
+        "services: at least one service is needed",
+        "x-castor.web: unknown service \"app\""
+      ]
+    },
+    {
+      "name": "svc-not-map",
+      "doc": {
+        "services": {
+          "app": "x"
+        },
+        "x-castor": {
+          "web": "app:80"
+        }
+      },
+      "problems": [
+        "services.app: must be a map",
+        "x-castor.web: unknown service \"app\""
+      ]
+    },
+    {
+      "name": "svc-names",
+      "doc": {
+        "services": {
+          "pc-x": {},
+          "castor-y": {},
+          "castor": {},
+          "bad-": {},
+          "Bad": {},
+          "app": {
+            "image": "nginx:1.29-alpine",
+            "mem_limit": "256m",
+            "cpus": 0.5
+          }
+        },
+        "x-castor": {
+          "web": "app:80"
+        }
+      },
+      "problems": [
+        "services: invalid service name \"pc-x\"",
+        "services: invalid service name \"castor-y\"",
+        "services: invalid service name \"castor\"",
+        "services: invalid service name \"bad-\"",
+        "services: invalid service name \"Bad\""
+      ]
+    },
+    {
+      "name": "too-many",
+      "doc": {
+        "services": {
+          "s0": {
+            "image": "nginx",
+            "mem_limit": "64m",
+            "cpus": 0.1
+          },
+          "s1": {
+            "image": "nginx",
+            "mem_limit": "64m",
+            "cpus": 0.1
+          },
+          "s2": {
+            "image": "nginx",
+            "mem_limit": "64m",
+            "cpus": 0.1
+          },
+          "s3": {
+            "image": "nginx",
+            "mem_limit": "64m",
+            "cpus": 0.1
+          },
+          "s4": {
+            "image": "nginx",
+            "mem_limit": "64m",
+            "cpus": 0.1
+          },
+          "s5": {
+            "image": "nginx",
+            "mem_limit": "64m",
+            "cpus": 0.1
+          },
+          "s6": {
+            "image": "nginx",
+            "mem_limit": "64m",
+            "cpus": 0.1
+          },
+          "s7": {
+            "image": "nginx",
+            "mem_limit": "64m",
+            "cpus": 0.1
+          },
+          "app": {
+            "image": "nginx:1.29-alpine",
+            "mem_limit": "256m",
+            "cpus": 0.5
+          }
+        },
+        "x-castor": {
+          "web": "app:80"
+        }
+      },
+      "problems": [
+        "services: at most 8 services"
+      ]
+    },
+    {
+      "name": "vol-driver",
+      "doc": {
+        "services": {
+          "app": {
+            "image": "nginx:1.29-alpine",
+            "mem_limit": "256m",
+            "cpus": 0.5
+          }
+        },
+        "x-castor": {
+          "web": "app:80"
+        },
+        "volumes": {
+          "data": {
+            "driver": "local"
+          },
+          "Bad": null
+        }
+      },
+      "problems": [
+        "volumes.data: driver options are not supported",
+        "volumes: invalid volume name \"Bad\"",
+        "x-castor.storage_gb: volumes need storage: set storage_gb (e.g. 10)"
+      ]
+    },
+    {
+      "name": "vol-not-map",
+      "doc": {
+        "services": {
+          "app": {
+            "image": "nginx:1.29-alpine",
+            "mem_limit": "256m",
+            "cpus": 0.5
+          }
+        },
+        "x-castor": {
+          "web": "app:80"
+        },
+        "volumes": [
+          "a"
+        ]
+      },
+      "problems": [
+        "volumes: must be a map of volume names"
+      ]
+    },
+    {
+      "name": "vol-shared",
+      "doc": {
+        "services": {
+          "b": {
+            "image": "nginx",
+            "mem_limit": "64m",
+            "cpus": 0.1,
+            "volumes": [
+              "data:/b"
+            ]
+          },
+          "app": {
+            "image": "nginx:1.29-alpine",
+            "mem_limit": "256m",
+            "cpus": 0.5,
+            "volumes": [
+              "data:/a"
+            ]
+          }
+        },
+        "x-castor": {
+          "web": "app:80"
+        },
+        "volumes": {
+          "data": null
+        }
+      },
+      "problems": [
+        "services.app.volumes: volume \"data\" is already used by b",
+        "x-castor.storage_gb: volumes need storage: set storage_gb (e.g. 10)"
+      ]
+    },
+    {
+      "name": "numeric-keys",
+      "doc": {
+        "1": 1,
+        "2": 1,
+        "services": {
+          "app": {
+            "image": "nginx:1.29-alpine",
+            "mem_limit": "256m",
+            "cpus": 0.5
+          }
+        },
+        "zz": 1,
+        "x-castor": {
+          "web": "app:80"
+        }
+      },
+      "problems": [
+        "stack: \"1\" is not supported",
+        "stack: \"2\" is not supported",
+        "stack: \"zz\" is not supported"
+      ]
+    },
+    {
+      "name": "version-name",
+      "doc": {
+        "version": "3.8",
+        "name": "demo",
+        "services": {
+          "app": {
+            "image": "nginx:1.29-alpine",
+            "mem_limit": "256m",
+            "cpus": 0.5
+          }
+        },
+        "x-castor": {
+          "web": "app:80"
+        }
+      },
+      "spec": {
+        "services": {
+          "app": {
+            "image": "docker.io/library/nginx:1.29-alpine",
+            "environment": {},
+            "tmpfs": [],
+            "volumes": [],
+            "memoryMb": 256,
+            "cpus": 0.5,
+            "dependsOn": []
+          }
+        },
+        "volumes": [],
+        "web": {
+          "service": "app",
+          "port": 80
+        },
+        "egress": [],
+        "storageGb": 0
+      },
+      "units": {
+        "memoryUnits": 1,
+        "cpuUnits": 2,
+        "storageUnits": 0
+      },
+      "secrets": []
+    }
+  ],
+  "images": [
+    [
+      "nginx",
+      {
+        "registry": "docker.io",
+        "repository": "library/nginx",
+        "tag": "latest",
+        "canonical": "docker.io/library/nginx:latest"
+      }
+    ],
+    [
+      "Nginx",
+      {
+        "error": "invalid repository name"
+      }
+    ],
+    [
+      "nginx:1.29-alpine",
+      {
+        "registry": "docker.io",
+        "repository": "library/nginx",
+        "tag": "1.29-alpine",
+        "canonical": "docker.io/library/nginx:1.29-alpine"
+      }
+    ],
+    [
+      "library/nginx",
+      {
+        "registry": "docker.io",
+        "repository": "library/nginx",
+        "tag": "latest",
+        "canonical": "docker.io/library/nginx:latest"
+      }
+    ],
+    [
+      "docker.io/nginx",
+      {
+        "registry": "docker.io",
+        "repository": "library/nginx",
+        "tag": "latest",
+        "canonical": "docker.io/library/nginx:latest"
+      }
+    ],
+    [
+      "index.docker.io/library/nginx:1",
+      {
+        "registry": "docker.io",
+        "repository": "library/nginx",
+        "tag": "1",
+        "canonical": "docker.io/library/nginx:1"
+      }
+    ],
+    [
+      "registry-1.docker.io/a/b",
+      {
+        "registry": "docker.io",
+        "repository": "a/b",
+        "tag": "latest",
+        "canonical": "docker.io/a/b:latest"
+      }
+    ],
+    [
+      "ghcr.io/immich-app/immich-server:v2",
+      {
+        "registry": "ghcr.io",
+        "repository": "immich-app/immich-server",
+        "tag": "v2",
+        "canonical": "ghcr.io/immich-app/immich-server:v2"
+      }
+    ],
+    [
+      "ghcr.io/a/b@sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      {
+        "registry": "ghcr.io",
+        "repository": "a/b",
+        "digest": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        "canonical": "ghcr.io/a/b@sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+      }
+    ],
+    [
+      "ghcr.io/a/b:v1@sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      {
+        "registry": "ghcr.io",
+        "repository": "a/b",
+        "tag": "v1",
+        "digest": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        "canonical": "ghcr.io/a/b:v1@sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+      }
+    ],
+    [
+      "nginx@sha256:1234",
+      {
+        "error": "invalid digest (expected sha256:<64 hex>)"
+      }
+    ],
+    [
+      "evil.example/x",
+      {
+        "error": "registry evil.example is not allowed (allowed: docker.io, ghcr.io, quay.io, lscr.io, registry.gitlab.com, codeberg.org, gcr.io, mcr.microsoft.com)"
+      }
+    ],
+    [
+      "localhost/x",
+      {
+        "error": "registry localhost is not allowed (allowed: docker.io, ghcr.io, quay.io, lscr.io, registry.gitlab.com, codeberg.org, gcr.io, mcr.microsoft.com)"
+      }
+    ],
+    [
+      "localhost:5000/x",
+      {
+        "error": "registry localhost:5000 is not allowed (allowed: docker.io, ghcr.io, quay.io, lscr.io, registry.gitlab.com, codeberg.org, gcr.io, mcr.microsoft.com)"
+      }
+    ],
+    [
+      "10.0.0.5:5000/evil",
+      {
+        "error": "registry 10.0.0.5:5000 is not allowed (allowed: docker.io, ghcr.io, quay.io, lscr.io, registry.gitlab.com, codeberg.org, gcr.io, mcr.microsoft.com)"
+      }
+    ],
+    [
+      " quay.io/a/b:c ",
+      {
+        "registry": "quay.io",
+        "repository": "a/b",
+        "tag": "c",
+        "canonical": "quay.io/a/b:c"
+      }
+    ],
+    [
+      "a/b/c/d/e/f",
+      {
+        "error": "invalid repository name"
+      }
+    ],
+    [
+      "a/b/c/d/e",
+      {
+        "registry": "docker.io",
+        "repository": "a/b/c/d/e",
+        "tag": "latest",
+        "canonical": "docker.io/a/b/c/d/e:latest"
+      }
+    ],
+    [
+      "a__b/c--d.e_f",
+      {
+        "registry": "docker.io",
+        "repository": "a__b/c--d.e_f",
+        "tag": "latest",
+        "canonical": "docker.io/a__b/c--d.e_f:latest"
+      }
+    ],
+    [
+      "a_/b",
+      {
+        "error": "invalid repository name"
+      }
+    ],
+    [
+      "a:tttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttt",
+      {
+        "registry": "docker.io",
+        "repository": "library/a",
+        "tag": "tttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttt",
+        "canonical": "docker.io/library/a:tttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttt"
+      }
+    ],
+    [
+      "a:ttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttt",
+      {
+        "error": "invalid tag"
+      }
+    ],
+    [
+      "a:-x",
+      {
+        "error": "invalid tag"
+      }
+    ],
+    [
+      "a:",
+      {
+        "error": "invalid tag"
+      }
+    ],
+    [
+      "",
+      {
+        "error": "invalid image reference"
+      }
+    ],
+    [
+      "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx",
+      {
+        "error": "invalid image reference"
+      }
+    ],
+    [
+      "lscr.io/linuxserver/x",
+      {
+        "registry": "lscr.io",
+        "repository": "linuxserver/x",
+        "tag": "latest",
+        "canonical": "lscr.io/linuxserver/x:latest"
+      }
+    ],
+    [
+      "mcr.microsoft.com/dotnet/aspnet:8.0",
+      {
+        "registry": "mcr.microsoft.com",
+        "repository": "dotnet/aspnet",
+        "tag": "8.0",
+        "canonical": "mcr.microsoft.com/dotnet/aspnet:8.0"
+      }
+    ],
+    [
+      "gcr.io/x/y",
+      {
+        "registry": "gcr.io",
+        "repository": "x/y",
+        "tag": "latest",
+        "canonical": "gcr.io/x/y:latest"
+      }
+    ],
+    [
+      "codeberg.org/a/b",
+      {
+        "registry": "codeberg.org",
+        "repository": "a/b",
+        "tag": "latest",
+        "canonical": "codeberg.org/a/b:latest"
+      }
+    ],
+    [
+      "registry.gitlab.com/a/b/c",
+      {
+        "registry": "registry.gitlab.com",
+        "repository": "a/b/c",
+        "tag": "latest",
+        "canonical": "registry.gitlab.com/a/b/c:latest"
+      }
+    ],
+    [
+      "docker.io/library/nginx:1@sha256:AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+      {
+        "error": "invalid digest (expected sha256:<64 hex>)"
+      }
+    ]
+  ],
+  "pinned": "ghcr.io/immich-app/immich-server:v2@sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+  "digests": [
+    {
+      "ref": {
+        "registry": "docker.io",
+        "repository": "library/nginx",
+        "tag": "latest",
+        "canonical": "docker.io/library/nginx:latest"
+      },
+      "list": [
+        "nginx@sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+      ],
+      "digest": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+    },
+    {
+      "ref": {
+        "registry": "docker.io",
+        "repository": "library/nginx",
+        "tag": "latest",
+        "canonical": "docker.io/library/nginx:latest"
+      },
+      "list": [
+        "library/nginx@sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+      ],
+      "digest": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+    },
+    {
+      "ref": {
+        "registry": "docker.io",
+        "repository": "library/nginx",
+        "tag": "latest",
+        "canonical": "docker.io/library/nginx:latest"
+      },
+      "list": [
+        "docker.io/library/nginx@sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+      ],
+      "digest": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+    },
+    {
+      "ref": {
+        "registry": "docker.io",
+        "repository": "library/nginx",
+        "tag": "latest",
+        "canonical": "docker.io/library/nginx:latest"
+      },
+      "list": [
+        "nginx@sha256:12"
+      ],
+      "digest": null
+    },
+    {
+      "ref": {
+        "registry": "ghcr.io",
+        "repository": "immich-app/immich-server",
+        "tag": "v2",
+        "canonical": "ghcr.io/immich-app/immich-server:v2"
+      },
+      "list": [
+        "ghcr.io/other/x@sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+      ],
+      "digest": null
+    },
+    {
+      "ref": {
+        "registry": "ghcr.io",
+        "repository": "immich-app/immich-server",
+        "tag": "v2",
+        "canonical": "ghcr.io/immich-app/immich-server:v2"
+      },
+      "list": [
+        "ghcr.io/immich-app/immich-server@sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+      ],
+      "digest": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+    },
+    {
+      "ref": {
+        "registry": "ghcr.io",
+        "repository": "immich-app/immich-server",
+        "tag": "v2",
+        "canonical": "ghcr.io/immich-app/immich-server:v2"
+      },
+      "list": [
+        "immich-app/immich-server@sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+      ],
+      "digest": null
+    }
+  ],
+  "memory": [
+    [
+      "1.5GB",
+      1536
+    ],
+    [
+      "abc",
+      null
+    ],
+    [
+      "512",
+      1
+    ],
+    [
+      "1k",
+      1
+    ],
+    [
+      "0",
+      null
+    ],
+    [
+      "0.0000001",
+      1
+    ],
+    [
+      " 2 g ",
+      2048
+    ],
+    [
+      "1e3m",
+      null
+    ]
+  ],
+  "render": [
+    {
+      "name": "rendered",
+      "ctx": {
+        "slug": "muster",
+        "stack": "links",
+        "origin": "https://links-muster.castorapps.ch",
+        "dataDir": "/Volumes/castor/s/muster/links/data",
+        "images": {
+          "app": "docker.io/library/nginx:1.29-alpine@sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+          "db": "docker.io/library/postgres:17@sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+        },
+        "secrets": {
+          "db": "s3cr$t",
+          "api_key": "k"
+        },
+        "egressImage": "castor.local/egress:1"
+      },
+      "out": {
+        "name": "pc-s-muster--links",
+        "services": {
+          "app": {
+            "image": "docker.io/library/nginx:1.29-alpine@sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+            "command": [
+              "sh",
+              "-c",
+              "echo $$HOME"
+            ],
+            "entrypoint": "/init",
+            "environment": {
+              "PASSWORD": "s3cr$$t",
+              "TOKEN": "xkys3cr$$t",
+              "ORIGIN": "https://links-muster.castorapps.ch",
+              "HOST": "links-muster.castorapps.ch",
+              "PRICE": "5$$",
+              "REF": "$${HOME}",
+              "PORT": "8080",
+              "RATIO": "0.5",
+              "ON": "true",
+              "HTTP_PROXY": "http://castor-egress:3128",
+              "HTTPS_PROXY": "http://castor-egress:3128",
+              "http_proxy": "http://castor-egress:3128",
+              "https_proxy": "http://castor-egress:3128",
+              "NO_PROXY": "localhost,127.0.0.1,app,db",
+              "no_proxy": "localhost,127.0.0.1,app,db"
+            },
+            "working_dir": "/srv",
+            "user": "1000:1000",
+            "read_only": true,
+            "tmpfs": [
+              "/tmp:size=64m",
+              "/run:size=64m",
+              "/var/tmp:size=64m",
+              "/var/cache/nginx:size=64m"
+            ],
+            "volumes": [
+              {
+                "type": "bind",
+                "source": "/Volumes/castor/s/muster/links/data/data",
+                "target": "/data",
+                "read_only": false,
+                "bind": {
+                  "create_host_path": false
+                }
+              },
+              {
+                "type": "bind",
+                "source": "/Volumes/castor/s/muster/links/data/cache",
+                "target": "/cache",
+                "read_only": true,
+                "bind": {
+                  "create_host_path": false
+                }
+              }
+            ],
+            "cap_drop": [
+              "ALL"
+            ],
+            "cap_add": [
+              "CHOWN",
+              "DAC_OVERRIDE",
+              "FOWNER",
+              "SETGID",
+              "SETUID",
+              "NET_BIND_SERVICE",
+              "KILL"
+            ],
+            "security_opt": [
+              "no-new-privileges:true"
+            ],
+            "mem_limit": "256m",
+            "memswap_limit": "256m",
+            "cpus": 0.5,
+            "pids_limit": 512,
+            "restart": "unless-stopped",
+            "logging": {
+              "driver": "json-file",
+              "options": {
+                "max-size": "10m",
+                "max-file": "3"
+              }
+            },
+            "healthcheck": {
+              "test": [
+                "CMD-SHELL",
+                "wget -q -O- localhost"
+              ],
+              "interval": "90s",
+              "timeout": "10s",
+              "retries": 5,
+              "start_period": "0s"
+            },
+            "depends_on": [
+              "db"
+            ],
+            "networks": {
+              "app": {},
+              "edge": {
+                "aliases": [
+                  "web.pc-s-muster--links"
+                ]
+              }
+            },
+            "labels": {
+              "ch.castorcloud.stack": "muster/links"
+            }
+          },
+          "db": {
+            "image": "docker.io/library/postgres:17@sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+            "environment": {
+              "POSTGRES_PASSWORD": "s3cr$$t",
+              "A": "b=c",
+              "HTTP_PROXY": "http://castor-egress:3128",
+              "HTTPS_PROXY": "http://castor-egress:3128",
+              "http_proxy": "http://castor-egress:3128",
+              "https_proxy": "http://castor-egress:3128",
+              "NO_PROXY": "localhost,127.0.0.1,app,db",
+              "no_proxy": "localhost,127.0.0.1,app,db"
+            },
+            "read_only": true,
+            "tmpfs": [
+              "/tmp:size=64m",
+              "/run:size=64m",
+              "/var/tmp:size=64m"
+            ],
+            "volumes": [
+              {
+                "type": "bind",
+                "source": "/Volumes/castor/s/muster/links/data/pg",
+                "target": "/var/lib/postgresql/data",
+                "read_only": false,
+                "bind": {
+                  "create_host_path": false
+                }
+              }
+            ],
+            "cap_drop": [
+              "ALL"
+            ],
+            "cap_add": [
+              "CHOWN",
+              "DAC_OVERRIDE",
+              "FOWNER",
+              "SETGID",
+              "SETUID",
+              "NET_BIND_SERVICE",
+              "KILL"
+            ],
+            "security_opt": [
+              "no-new-privileges:true"
+            ],
+            "mem_limit": "1536m",
+            "memswap_limit": "1536m",
+            "cpus": 1.25,
+            "pids_limit": 512,
+            "restart": "unless-stopped",
+            "logging": {
+              "driver": "json-file",
+              "options": {
+                "max-size": "10m",
+                "max-file": "3"
+              }
+            },
+            "healthcheck": {
+              "test": [
+                "CMD",
+                "pg_isready"
+              ],
+              "interval": "30s",
+              "timeout": "5s",
+              "retries": 3,
+              "start_period": "30s"
+            },
+            "networks": {
+              "app": {}
+            },
+            "labels": {
+              "ch.castorcloud.stack": "muster/links"
+            }
+          },
+          "castor-egress": {
+            "image": "castor.local/egress:1",
+            "environment": {
+              "EGRESS_ALLOW": "api.example.com,*.example.org",
+              "EGRESS_PORT": "3128"
+            },
+            "user": "65534:65534",
+            "read_only": true,
+            "cap_drop": [
+              "ALL"
+            ],
+            "cap_add": [],
+            "security_opt": [
+              "no-new-privileges:true"
+            ],
+            "mem_limit": "96m",
+            "memswap_limit": "96m",
+            "cpus": 0.25,
+            "pids_limit": 512,
+            "restart": "unless-stopped",
+            "logging": {
+              "driver": "json-file",
+              "options": {
+                "max-size": "10m",
+                "max-file": "3"
+              }
+            },
+            "networks": {
+              "app": {},
+              "out": {}
+            },
+            "labels": {
+              "ch.castorcloud.stack": "muster/links"
+            }
+          }
+        },
+        "networks": {
+          "app": {
+            "name": "pc-s-muster--links",
+            "internal": true
+          },
+          "edge": {
+            "name": "pc-s-muster--links-edge",
+            "internal": true
+          },
+          "out": {
+            "name": "pc-s-muster--links-out"
+          }
+        }
+      }
+    },
+    {
+      "name": "minimal",
+      "ctx": {
+        "slug": "muster",
+        "stack": "links",
+        "origin": "https://links-muster.castorapps.ch",
+        "dataDir": "/Volumes/castor/s/muster/links/data",
+        "images": {
+          "app": "docker.io/library/nginx:1.29-alpine@sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+          "db": "docker.io/library/postgres:17@sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+        },
+        "secrets": {
+          "db": "s3cr$t",
+          "api_key": "k"
+        },
+        "egressImage": "castor.local/egress:1",
+        "runtime": "runsc"
+      },
+      "out": {
+        "name": "pc-s-muster--links",
+        "services": {
+          "app": {
+            "image": "docker.io/library/nginx:1.29-alpine@sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+            "environment": {},
+            "read_only": true,
+            "tmpfs": [
+              "/tmp:size=64m",
+              "/run:size=64m",
+              "/var/tmp:size=64m"
+            ],
+            "volumes": [],
+            "cap_drop": [
+              "ALL"
+            ],
+            "cap_add": [
+              "CHOWN",
+              "DAC_OVERRIDE",
+              "FOWNER",
+              "SETGID",
+              "SETUID",
+              "NET_BIND_SERVICE",
+              "KILL"
+            ],
+            "security_opt": [
+              "no-new-privileges:true"
+            ],
+            "mem_limit": "256m",
+            "memswap_limit": "256m",
+            "cpus": 0.5,
+            "pids_limit": 512,
+            "restart": "unless-stopped",
+            "logging": {
+              "driver": "json-file",
+              "options": {
+                "max-size": "10m",
+                "max-file": "3"
+              }
+            },
+            "runtime": "runsc",
+            "networks": {
+              "app": {},
+              "edge": {
+                "aliases": [
+                  "web.pc-s-muster--links"
+                ]
+              }
+            },
+            "labels": {
+              "ch.castorcloud.stack": "muster/links"
+            }
+          }
+        },
+        "networks": {
+          "app": {
+            "name": "pc-s-muster--links",
+            "internal": true
+          },
+          "edge": {
+            "name": "pc-s-muster--links-edge",
+            "internal": true
+          }
+        }
+      }
+    },
+    {
+      "name": "catalog-linkding",
+      "ctx": {
+        "slug": "muster",
+        "stack": "links",
+        "origin": "https://links-muster.castorapps.ch",
+        "dataDir": "/Volumes/castor/s/muster/links/data",
+        "images": {
+          "app": "docker.io/library/nginx:1.29-alpine@sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+          "db": "docker.io/library/postgres:17@sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+        },
+        "secrets": {
+          "db": "s3cr$t",
+          "api_key": "k"
+        },
+        "egressImage": "castor.local/egress:1"
+      },
+      "out": {
+        "name": "pc-s-muster--links",
+        "services": {
+          "app": {
+            "image": "docker.io/library/nginx:1.29-alpine@sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+            "environment": {
+              "LD_ENABLE_AUTH_PROXY": "True",
+              "LD_AUTH_PROXY_USERNAME_HEADER": "HTTP_X_AUTHENTIK_USERNAME",
+              "LD_CSRF_TRUSTED_ORIGINS": "https://links-muster.castorapps.ch"
+            },
+            "read_only": true,
+            "tmpfs": [
+              "/tmp:size=64m",
+              "/run:size=64m",
+              "/var/tmp:size=64m"
+            ],
+            "volumes": [
+              {
+                "type": "bind",
+                "source": "/Volumes/castor/s/muster/links/data/data",
+                "target": "/etc/linkding/data",
+                "read_only": false,
+                "bind": {
+                  "create_host_path": false
+                }
+              }
+            ],
+            "cap_drop": [
+              "ALL"
+            ],
+            "cap_add": [
+              "CHOWN",
+              "DAC_OVERRIDE",
+              "FOWNER",
+              "SETGID",
+              "SETUID",
+              "NET_BIND_SERVICE",
+              "KILL"
+            ],
+            "security_opt": [
+              "no-new-privileges:true"
+            ],
+            "mem_limit": "256m",
+            "memswap_limit": "256m",
+            "cpus": 0.5,
+            "pids_limit": 512,
+            "restart": "unless-stopped",
+            "logging": {
+              "driver": "json-file",
+              "options": {
+                "max-size": "10m",
+                "max-file": "3"
+              }
+            },
+            "networks": {
+              "app": {},
+              "edge": {
+                "aliases": [
+                  "web.pc-s-muster--links"
+                ]
+              }
+            },
+            "labels": {
+              "ch.castorcloud.stack": "muster/links"
+            }
+          }
+        },
+        "networks": {
+          "app": {
+            "name": "pc-s-muster--links",
+            "internal": true
+          },
+          "edge": {
+            "name": "pc-s-muster--links-edge",
+            "internal": true
+          }
+        }
+      }
+    }
+  ],
+  "names": [
+    {
+      "project": "pc-s-muster--links",
+      "appNetwork": "pc-s-muster--links",
+      "edgeNetwork": "pc-s-muster--links-edge",
+      "outNetwork": "pc-s-muster--links-out",
+      "webAlias": "web.pc-s-muster--links",
+      "authSlug": "stack-muster--links"
+    },
+    {
+      "project": "pc-s-a-b--c",
+      "appNetwork": "pc-s-a-b--c",
+      "edgeNetwork": "pc-s-a-b--c-edge",
+      "outNetwork": "pc-s-a-b--c-out",
+      "webAlias": "web.pc-s-a-b--c",
+      "authSlug": "stack-a-b--c"
+    }
+  ],
+  "node_route": "# Generated by the provisioner: stack links of muster.\nhttp:\n  routers:\n    pc-s-muster--links:\n      rule: 'Host(`links-muster.castorapps.ch`)'\n      entryPoints: [web]\n      middlewares: [castor-control-plane]\n      service: pc-s-muster--links\n  services:\n    pc-s-muster--links:\n      loadBalancer:\n        passHostHeader: true\n        servers:\n          - url: \"http://web.pc-s-muster--links:9090\"\n",
+  "middlewares": "# Generated by the provisioner: requests must come from the control plane.\nhttp:\n  middlewares:\n    castor-control-plane:\n      ipAllowList:\n        sourceRange: [\"10.0.0.1\", \"10.0.0.2\"]\n",
+  "control_plane": [
+    "# Generated by the provisioner: muster's custom stacks, on the node at http://10.0.0.40:8480.\nhttp:\n  routers:\n    pc-s-muster--links:\n      rule: 'Host(`links-muster.castorapps.ch`)'\n      entryPoints: [websecure]\n      middlewares: [castor-stack-strip@file, castor-stack-auth@file]\n      service: pc-s-muster--node\n      tls:\n        certResolver: le\n        domains:\n          - main: 'castorapps.ch'\n            sans: ['*.castorapps.ch']\n    pc-s-muster--links-outpost:\n      rule: 'Host(`links-muster.castorapps.ch`) && PathPrefix(`/outpost.goauthentik.io/`)'\n      entryPoints: [websecure]\n      priority: 10000\n      service: authentik@docker\n      tls:\n        certResolver: le\n        domains:\n          - main: 'castorapps.ch'\n            sans: ['*.castorapps.ch']\n    pc-s-muster--tools:\n      rule: 'Host(`tools-muster.castorapps.ch`)'\n      entryPoints: [websecure]\n      middlewares: [castor-stack-strip@file, castor-stack-auth@file]\n      service: pc-s-muster--node\n      tls:\n        certResolver: le\n        domains:\n          - main: 'castorapps.ch'\n            sans: ['*.castorapps.ch']\n    pc-s-muster--tools-outpost:\n      rule: 'Host(`tools-muster.castorapps.ch`) && PathPrefix(`/outpost.goauthentik.io/`)'\n      entryPoints: [websecure]\n      priority: 10000\n      service: authentik@docker\n      tls:\n        certResolver: le\n        domains:\n          - main: 'castorapps.ch'\n            sans: ['*.castorapps.ch']\n  services:\n    pc-s-muster--node:\n      loadBalancer:\n        passHostHeader: true\n        servers:\n          - url: \"http://10.0.0.40:8480\"\n",
+    "# Generated by the provisioner: muster's custom stacks, on the node at http://10.0.0.40:8480.\nhttp:\n  routers:\n    pc-s-muster--links:\n      rule: 'Host(`links-muster.castor.test`)'\n      entryPoints: [websecure]\n      middlewares: [castor-stack-strip@file, castor-stack-auth@file]\n      service: pc-s-muster--node\n    pc-s-muster--links-outpost:\n      rule: 'Host(`links-muster.castor.test`) && PathPrefix(`/outpost.goauthentik.io/`)'\n      entryPoints: [websecure]\n      priority: 10000\n      service: authentik@docker\n  services:\n    pc-s-muster--node:\n      loadBalancer:\n        passHostHeader: true\n        servers:\n          - url: \"http://10.0.0.40:8480\"\n"
+  ],
+  "passwd": "root:x:0:0:root:/root:/bin/sh\nnode:x:1000:1001::/home/node:/bin/sh\nwww-data:x:33:33::/var/www:/usr/sbin/nologin\nodd:x:1x:2\nnog:x:7:abc\n",
+  "group": "root:x:0:\nnode:x:1001:\nwww-data:x:33:\nstaff:x:50:\n",
+  "ids": {
+    "root": 0,
+    "node": 1000,
+    "www-data": 33,
+    "nog": 7
+  },
+  "users": [
+    [
+      "",
+      {
+        "uid": 0,
+        "gid": 0
+      }
+    ],
+    [
+      "1000",
+      {
+        "uid": 1000,
+        "gid": 1000
+      }
+    ],
+    [
+      "1000:50",
+      {
+        "uid": 1000,
+        "gid": 50
+      }
+    ],
+    [
+      "node",
+      {
+        "uid": 1000,
+        "gid": 1001
+      }
+    ],
+    [
+      "www-data:staff",
+      {
+        "uid": 33,
+        "gid": 50
+      }
+    ],
+    [
+      "nobody",
+      {
+        "error": "user \"nobody\" is not in the image's /etc/passwd; set user: to a number"
+      }
+    ],
+    [
+      "node:nogroup",
+      {
+        "error": "group \"nogroup\" is not in the image's /etc/group; set user: to numbers"
+      }
+    ],
+    [
+      "70000",
+      {
+        "error": "user 70000:70000 is outside the allowed range (0-65535)"
+      }
+    ],
+    [
+      "1:70000",
+      {
+        "error": "user 1:70000 is outside the allowed range (0-65535)"
+      }
+    ],
+    [
+      "nog",
+      {
+        "uid": 7,
+        "gid": 7
+      }
+    ],
+    [
+      "7",
+      {
+        "uid": 7,
+        "gid": 7
+      }
+    ],
+    [
+      ":5",
+      {
+        "uid": 0,
+        "gid": 5
+      }
+    ],
+    [
+      "node",
+      {
+        "error": "user \"node\" is not in the image's /etc/passwd; set user: to a number"
+      }
+    ]
+  ],
+  "uncovered": [
+    {
+      "declared": [
+        "/data",
+        "/var/lib/x/"
+      ],
+      "mounts": [
+        "/data",
+        "/tmp"
+      ],
+      "open": [
+        "/var/lib/x"
+      ]
+    },
+    {
+      "declared": [
+        "/srv/app/data"
+      ],
+      "mounts": [
+        "/srv/app"
+      ],
+      "open": []
+    },
+    {
+      "declared": [
+        "/database"
+      ],
+      "mounts": [
+        "/data"
+      ],
+      "open": [
+        "/database"
+      ]
+    },
+    {
+      "declared": [
+        "/x"
+      ],
+      "mounts": [
+        "/"
+      ],
+      "open": []
+    },
+    {
+      "declared": [
+        "/"
+      ],
+      "mounts": [
+        "/x"
+      ],
+      "open": [
+        "/"
+      ]
+    },
+    {
+      "declared": [
+        "//a//"
+      ],
+      "mounts": [
+        "/a"
+      ],
+      "open": [
+        "//a"
+      ]
+    }
+  ],
+  "stored": [
+    {
+      "definition": "{\"services\":{\"app\":{\"image\":\"nginx:1.29-alpine\",\"mem_limit\":\"256m\",\"cpus\":0.5}},\"x-castor\":{\"web\":\"app:80\"}}",
+      "spec": {
+        "services": {
+          "app": {
+            "image": "docker.io/library/nginx:1.29-alpine",
+            "environment": {},
+            "tmpfs": [],
+            "volumes": [],
+            "memoryMb": 256,
+            "cpus": 0.5,
+            "dependsOn": []
+          }
+        },
+        "volumes": [],
+        "web": {
+          "service": "app",
+          "port": 80
+        },
+        "egress": [],
+        "storageGb": 0
+      }
+    },
+    {
+      "definition": "{\"services\":{\"app\":{\"image\":\"nginx:1.29-alpine\",\"command\":[\"sh\",\"-c\",\"echo $HOME\"],\"entrypoint\":\"/init\",\"working_dir\":\"/srv\",\"user\":\"1000:1000\",\"environment\":{\"PASSWORD\":\"${secret:db}\",\"TOKEN\":\"x${secret:api_key}y${secret:db}\",\"ORIGIN\":\"${castor:origin}\",\"HOST\":\"${castor:host}\",\"PRICE\":\"5$\",\"REF\":\"${HOME}\",\"PORT\":8080,\"RATIO\":0.5,\"ON\":true},\"volumes\":[\"data:/data\",{\"type\":\"volume\",\"source\":\"cache\",\"target\":\"/cache\",\"read_only\":true}],\"tmpfs\":\"/var/cache/nginx/\",\"healthcheck\":{\"test\":\"wget -q -O- localhost\",\"interval\":\"1m30s\",\"retries\":5},\"depends_on\":{\"db\":{\"condition\":\"service_healthy\"}},\"mem_limit\":\"256m\",\"cpus\":0.5},\"db\":{\"image\":\"postgres:17@sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\",\"environment\":[\"POSTGRES_PASSWORD=${secret:db}\",\"A=b=c\"],\"volumes\":[\"pg:/var/lib/postgresql/data\"],\"healthcheck\":{\"test\":[\"CMD\",\"pg_isready\"],\"timeout\":\"5s\",\"start_period\":\"30s\"},\"deploy\":{\"resources\":{\"limits\":{\"memory\":\"1.5GB\",\"cpus\":\"1.25\"}}},\"restart\":\"always\"}},\"volumes\":{\"data\":null,\"cache\":{},\"pg\":null},\"x-castor\":{\"web\":\"app:80\",\"egress\":[\"API.example.com\",\"*.example.org\",\"api.example.com\"],\"storage_gb\":25,\"label\":\"Demo\"}}",
+      "spec": {
+        "services": {
+          "app": {
+            "image": "docker.io/library/nginx:1.29-alpine",
+            "command": [
+              "sh",
+              "-c",
+              "echo $HOME"
+            ],
+            "entrypoint": "/init",
+            "environment": {
+              "PASSWORD": "${secret:db}",
+              "TOKEN": "x${secret:api_key}y${secret:db}",
+              "ORIGIN": "${castor:origin}",
+              "HOST": "${castor:host}",
+              "PRICE": "5$",
+              "REF": "${HOME}",
+              "PORT": "8080",
+              "RATIO": "0.5",
+              "ON": "true"
+            },
+            "workingDir": "/srv",
+            "user": "1000:1000",
+            "tmpfs": [
+              "/var/cache/nginx"
+            ],
+            "volumes": [
+              {
+                "volume": "data",
+                "target": "/data",
+                "readOnly": false
+              },
+              {
+                "volume": "cache",
+                "target": "/cache",
+                "readOnly": true
+              }
+            ],
+            "memoryMb": 256,
+            "cpus": 0.5,
+            "healthcheck": {
+              "test": [
+                "CMD-SHELL",
+                "wget -q -O- localhost"
+              ],
+              "intervalS": 90,
+              "timeoutS": 10,
+              "retries": 5,
+              "startPeriodS": 0
+            },
+            "dependsOn": [
+              "db"
+            ]
+          },
+          "db": {
+            "image": "docker.io/library/postgres:17@sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+            "environment": {
+              "POSTGRES_PASSWORD": "${secret:db}",
+              "A": "b=c"
+            },
+            "tmpfs": [],
+            "volumes": [
+              {
+                "volume": "pg",
+                "target": "/var/lib/postgresql/data",
+                "readOnly": false
+              }
+            ],
+            "memoryMb": 1536,
+            "cpus": 1.25,
+            "healthcheck": {
+              "test": [
+                "CMD",
+                "pg_isready"
+              ],
+              "intervalS": 30,
+              "timeoutS": 5,
+              "retries": 3,
+              "startPeriodS": 30
+            },
+            "dependsOn": []
+          }
+        },
+        "volumes": [
+          "data",
+          "cache",
+          "pg"
+        ],
+        "web": {
+          "service": "app",
+          "port": 80
+        },
+        "egress": [
+          "api.example.com",
+          "*.example.org"
+        ],
+        "storageGb": 25
+      }
+    },
+    {
+      "definition": "{\"services\":{\"app\":{\"image\":\"corentinth/it-tools:2024.10.22-7ca5933@sha256:8b8128748339583ca951af03dfe02a9a4d7363f61a216226fc28030731a5a61f\",\"tmpfs\":[\"/var/cache/nginx\"],\"mem_limit\":\"128m\",\"cpus\":0.25}},\"x-castor\":{\"web\":\"app:80\"}}",
+      "spec": {
+        "services": {
+          "app": {
+            "image": "docker.io/corentinth/it-tools:2024.10.22-7ca5933@sha256:8b8128748339583ca951af03dfe02a9a4d7363f61a216226fc28030731a5a61f",
+            "environment": {},
+            "tmpfs": [
+              "/var/cache/nginx"
+            ],
+            "volumes": [],
+            "memoryMb": 128,
+            "cpus": 0.25,
+            "dependsOn": []
+          }
+        },
+        "volumes": [],
+        "web": {
+          "service": "app",
+          "port": 80
+        },
+        "egress": [],
+        "storageGb": 0
+      }
+    },
+    {
+      "definition": "{\"services\":{\"app\":{\"image\":\"sissbruecker/linkding:1.47.0@sha256:e35cb50e0581178f245125ffaa909c565416c94c9f22ace305a7d234a4345522\",\"environment\":{\"LD_ENABLE_AUTH_PROXY\":\"True\",\"LD_AUTH_PROXY_USERNAME_HEADER\":\"HTTP_X_AUTHENTIK_USERNAME\",\"LD_CSRF_TRUSTED_ORIGINS\":\"${castor:origin}\"},\"volumes\":[\"data:/etc/linkding/data\"],\"mem_limit\":\"256m\",\"cpus\":0.5}},\"volumes\":{\"data\":null},\"x-castor\":{\"web\":\"app:9090\",\"storage_gb\":10}}",
+      "spec": {
+        "services": {
+          "app": {
+            "image": "docker.io/sissbruecker/linkding:1.47.0@sha256:e35cb50e0581178f245125ffaa909c565416c94c9f22ace305a7d234a4345522",
+            "environment": {
+              "LD_ENABLE_AUTH_PROXY": "True",
+              "LD_AUTH_PROXY_USERNAME_HEADER": "HTTP_X_AUTHENTIK_USERNAME",
+              "LD_CSRF_TRUSTED_ORIGINS": "${castor:origin}"
+            },
+            "tmpfs": [],
+            "volumes": [
+              {
+                "volume": "data",
+                "target": "/etc/linkding/data",
+                "readOnly": false
+              }
+            ],
+            "memoryMb": 256,
+            "cpus": 0.5,
+            "dependsOn": []
+          }
+        },
+        "volumes": [
+          "data"
+        ],
+        "web": {
+          "service": "app",
+          "port": 9090
+        },
+        "egress": [],
+        "storageGb": 10
+      }
+    },
+    {
+      "definition": "{\"services\":{\"app\":{\"image\":\"actualbudget/actual-server:26.10.0-alpine@sha256:67b1b5e9584e3e143b4f5c41e52b4506ed9cdd1072392d5ab5369f2d4fd0bffd\",\"volumes\":[\"data:/data\"],\"mem_limit\":\"256m\",\"cpus\":0.5}},\"volumes\":{\"data\":null},\"x-castor\":{\"web\":\"app:5006\",\"storage_gb\":10}}",
+      "spec": {
+        "services": {
+          "app": {
+            "image": "docker.io/actualbudget/actual-server:26.10.0-alpine@sha256:67b1b5e9584e3e143b4f5c41e52b4506ed9cdd1072392d5ab5369f2d4fd0bffd",
+            "environment": {},
+            "tmpfs": [],
+            "volumes": [
+              {
+                "volume": "data",
+                "target": "/data",
+                "readOnly": false
+              }
+            ],
+            "memoryMb": 256,
+            "cpus": 0.5,
+            "dependsOn": []
+          }
+        },
+        "volumes": [
+          "data"
+        ],
+        "web": {
+          "service": "app",
+          "port": 5006
+        },
+        "egress": [],
+        "storageGb": 10
+      }
+    }
+  ],
+  "cover": [
+    {
+      "stacks": [
+        {
+          "id": "a",
+          "units": {
+            "memoryUnits": 2,
+            "cpuUnits": 1,
+            "storageUnits": 0
+          }
+        },
+        {
+          "id": "b",
+          "units": {
+            "memoryUnits": 4,
+            "cpuUnits": 1,
+            "storageUnits": 0
+          }
+        },
+        {
+          "id": "c",
+          "units": {
+            "memoryUnits": 1,
+            "cpuUnits": 1,
+            "storageUnits": 0
+          }
+        }
+      ],
+      "booked": {
+        "memoryUnits": 3,
+        "cpuUnits": 3,
+        "storageUnits": 0
+      },
+      "covered": [
+        "a",
+        "c"
+      ],
+      "over": [
+        "b"
+      ]
+    },
+    {
+      "stacks": [
+        {
+          "id": "a",
+          "units": {
+            "memoryUnits": 1,
+            "cpuUnits": 1,
+            "storageUnits": 1
+          }
+        },
+        {
+          "id": "b",
+          "units": {
+            "memoryUnits": 1,
+            "cpuUnits": 1,
+            "storageUnits": 1
+          }
+        }
+      ],
+      "booked": {
+        "memoryUnits": 9,
+        "cpuUnits": 9,
+        "storageUnits": 1
+      },
+      "covered": [
+        "a"
+      ],
+      "over": [
+        "b"
+      ]
+    },
+    {
+      "stacks": [],
+      "booked": {
+        "memoryUnits": 0,
+        "cpuUnits": 0,
+        "storageUnits": 0
+      },
+      "covered": [],
+      "over": []
+    }
+  ]
+}

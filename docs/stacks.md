@@ -115,7 +115,9 @@ it; data directories are owned by that uid plus the node's userns base.
   keyed with HKDF(volume key, "castor-zfs-stacks-v1"), so the stacks node never
   sees the key of the tenant's own data, and deleting the tenant's volume key
   shreds both. The definition (it may hold passwords) is sealed in the
-  database like other tenant secrets.
+  database like other tenant secrets, as the parsed document in JSON
+  (`storedDefinition`): castord checks and runs exactly what the portal
+  checked, without a YAML parser of its own.
 
 ## Lifecycle
 
