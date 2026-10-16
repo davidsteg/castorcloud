@@ -170,6 +170,22 @@ impl Node {
         }
     }
 
+    /// Removes the tenant's files on the node and on the control plane (delete).
+    pub async fn remove_config(&self, slug: &str) -> Result<(), String> {
+        if !valid::slug(slug) {
+            return Err(format!("invalid tenant slug {slug:?}"));
+        }
+        if !self.is_local() {
+            self.host(vec!["castor-rm".into(), format!("tenants/{slug}")], None)
+                .await?;
+        }
+        let dir = self.root.join(".tenants").join(slug);
+        match std::fs::remove_dir_all(&dir) {
+            Err(e) if e.kind() != std::io::ErrorKind::NotFound => Err(format!("{}: {e}", dir.display())),
+            _ => Ok(()),
+        }
+    }
+
     /// The tenant's env file and compose override, on the control plane.
     pub fn config_dir(&self, slug: &str) -> String {
         self.root.join(".tenants").join(slug).to_string_lossy().into_owned()

@@ -4,8 +4,11 @@
 //! A kind moves here by adding its handler and removing it from the
 //! TypeScript worker's KINDS in the same deploy.
 
+pub mod authentik;
 pub mod db;
+pub mod delete;
 pub mod exec;
+pub mod http;
 pub mod llm;
 pub mod node;
 pub mod queue;
@@ -43,6 +46,7 @@ pub struct Control {
     pub keys: castor_crypto::Keys,
     /// Unset without LITELLM_MASTER_KEY, as in the TypeScript worker.
     pub llm: Option<llm::Gateway>,
+    pub authentik: authentik::Authentik,
     /// Custom stacks are on (STACKS_DOMAIN is set).
     pub stacks: bool,
 }

@@ -11,7 +11,7 @@ the TypeScript part is removed.
 |---|---|---|
 | `crates/crypto` | `packages/core/src/crypto.ts` | done; format-compatible, tested in both directions |
 | `crates/node` | `infra/node/bin/castor-ssh`, `castor-zfs`, `castor-snap` | done; same commands and output, the scripts stay until every node runs it |
-| `crates/castord` | `apps/provisioner/src/worker.ts` | queue loop done (same SQL as `jobs.ts`); `SUSPEND` ported, the other job kinds move one at a time |
+| `crates/castord` | `apps/provisioner/src/worker.ts` | queue loop done (same SQL as `jobs.ts`); `SUSPEND` and `DELETE` ported, the other job kinds move one at a time |
 
 ```bash
 cd rust
@@ -39,7 +39,12 @@ kind has no live worker.
 | Kind | In castord | Notes |
 |---|---|---|
 | `SUSPEND` | yes | stops custom stacks and the tenant stack, locks both datasets, blocks the LLM key |
+| `DELETE` | yes | removes custom stacks, the tenant stack, its data and files, its Authentik apps and groups, LLM key and secrets; deleting the volume key crypto-shreds every copy |
 | others | not yet | |
+
+castord needs the TypeScript worker's settings for these (`AUTHENTIK_BOOTSTRAP_TOKEN`,
+`BASE_DOMAIN`, `PUBLIC_SCHEME`, the encryption keys, `LITELLM_MASTER_KEY`); in
+development also `CASTORD_EXTRA_CA_CERTS=.dev-certs/ca.crt`.
 
 To switch a kind: build castord (`cargo build --release -p castord`), add the
 kind to `CASTORD_KINDS`, restart the TypeScript worker and start castord.

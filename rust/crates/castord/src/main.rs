@@ -9,6 +9,9 @@
 //!   TRAEFIK_DYNAMIC_DIR     default infra/control-plane/traefik/dynamic
 //!   LITELLM_MASTER_KEY, LLM_GATEWAY_URL (default http://localhost:4000)
 //!   STACKS_DOMAIN           custom stacks are on when set
+//!   BASE_DOMAIN, PUBLIC_SCHEME, AUTHENTIK_BOOTSTRAP_TOKEN
+//!                           Authentik at <scheme>://auth.<BASE_DOMAIN>
+//!   CASTORD_EXTRA_CA_CERTS  a CA bundle to trust as well (the dev CA)
 use std::path::PathBuf;
 use std::process::ExitCode;
 use std::sync::Arc;
@@ -20,7 +23,10 @@ use zeroize::Zeroizing;
 
 /// The job kinds castord can run.
 fn handlers(c: &Arc<Control>) -> Vec<Arc<dyn Handler>> {
-    vec![Arc::new(castord::suspend::Suspend(c.clone()))]
+    vec![
+        Arc::new(castord::suspend::Suspend(c.clone())),
+        Arc::new(castord::delete::Delete(c.clone())),
+    ]
 }
 
 fn var(name: &str) -> Option<String> {
@@ -41,19 +47,33 @@ fn control() -> Result<Control, String> {
     let traefik_dir = var("TRAEFIK_DYNAMIC_DIR")
         .map(PathBuf::from)
         .unwrap_or_else(|| root.join("infra/control-plane/traefik/dynamic"));
-    let llm = match var("LITELLM_MASTER_KEY") {
-        Some(k) => Some(castord::llm::Gateway::new(
-            &var("LLM_GATEWAY_URL").unwrap_or_else(|| "http://localhost:4000".into()),
-            Zeroizing::new(k),
-        )?),
+    let extra_ca = match var("CASTORD_EXTRA_CA_CERTS") {
+        Some(p) => Some(std::fs::read(&p).map_err(|e| format!("CASTORD_EXTRA_CA_CERTS {p}: {e}"))?),
         None => None,
     };
+    let http = castord::http::client(extra_ca.as_deref())?;
+    let llm = var("LITELLM_MASTER_KEY").map(|k| {
+        castord::llm::Gateway::new(
+            &var("LLM_GATEWAY_URL").unwrap_or_else(|| "http://localhost:4000".into()),
+            Zeroizing::new(k),
+            http.clone(),
+        )
+    });
+    let scheme = var("PUBLIC_SCHEME").unwrap_or_else(|| "https".into());
+    if scheme != "https" && scheme != "http" {
+        return Err(format!("PUBLIC_SCHEME must be http or https, not {scheme}"));
+    }
+    let base_domain = var("BASE_DOMAIN").unwrap_or_else(|| "brand.localhost".into());
+    let token = var("AUTHENTIK_BOOTSTRAP_TOKEN").ok_or("AUTHENTIK_BOOTSTRAP_TOKEN is not set")?;
+    let authentik =
+        castord::authentik::Authentik::new(&format!("{scheme}://auth.{base_domain}"), Zeroizing::new(token), http);
     Ok(Control {
         root,
         traefik_dir,
         exec: Arc::new(castord::exec::Real),
         keys: castor_crypto::Keys::from_env().map_err(|e| e.to_string())?,
         llm,
+        authentik,
         stacks: var("STACKS_DOMAIN").is_some(),
     })
 }
