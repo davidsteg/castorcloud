@@ -36,12 +36,19 @@ impl Cmd {
 pub trait Exec: Send + Sync {
     /// Stdout, or an error with the end of stderr.
     async fn run(&self, cmd: Cmd) -> Result<String, String>;
+
+    /// Stdout as bytes, for binary output (a tar archive).
+    async fn run_bytes(&self, cmd: Cmd) -> Result<Vec<u8>, String> {
+        self.run(cmd).await.map(String::into_bytes)
+    }
 }
 
 /// No command may outlive a job's lease.
 const TIMEOUT: Duration = Duration::from_secs(20 * 60);
 const ERR_TAIL: usize = 2000;
 const MAX_OUTPUT: usize = 32 * 1024 * 1024;
+/// The templates, brand assets and CA bundle sent to a node (node.ts allows the same).
+const MAX_BYTES: usize = 256 * 1024 * 1024;
 
 pub struct Real;
 
@@ -49,42 +56,59 @@ pub struct Real;
 impl Exec for Real {
     async fn run(&self, cmd: Cmd) -> Result<String, String> {
         let label = cmd.label();
-        let mut child = tokio::process::Command::new(cmd.program)
-            .args(&cmd.args)
-            .envs(cmd.env.iter().map(|(k, v)| (*k, v.as_str())))
-            .stdin(Stdio::piped())
-            .stdout(Stdio::piped())
-            .stderr(Stdio::piped())
-            .kill_on_drop(true)
-            .spawn()
-            .map_err(|e| format!("{label} failed: {e}"))?;
-        if let Some(mut stdin) = child.stdin.take() {
-            if let Some(input) = &cmd.input {
-                stdin
-                    .write_all(input)
-                    .await
-                    .map_err(|e| format!("{label} failed: stdin: {e}"))?;
-            }
-            drop(stdin);
-        }
-        let out = tokio::time::timeout(TIMEOUT, child.wait_with_output())
-            .await
-            .map_err(|_| format!("{label} failed: timed out after {} min", TIMEOUT.as_secs() / 60))?
-            .map_err(|e| format!("{label} failed: {e}"))?;
-        if !out.status.success() {
-            let stderr = String::from_utf8_lossy(&out.stderr);
-            let msg = if stderr.trim().is_empty() {
-                out.status.to_string()
-            } else {
-                tail(stderr.trim(), ERR_TAIL).to_owned()
-            };
-            return Err(format!("{label} failed: {msg}"));
-        }
-        if out.stdout.len() > MAX_OUTPUT {
+        let out = run(cmd).await?;
+        if out.len() > MAX_OUTPUT {
             return Err(format!("{label} failed: output too large"));
         }
-        Ok(String::from_utf8_lossy(&out.stdout).into_owned())
+        Ok(String::from_utf8_lossy(&out).into_owned())
     }
+
+    async fn run_bytes(&self, cmd: Cmd) -> Result<Vec<u8>, String> {
+        let label = cmd.label();
+        let out = run(cmd).await?;
+        if out.len() > MAX_BYTES {
+            return Err(format!("{label} failed: output too large"));
+        }
+        Ok(out)
+    }
+}
+
+/// Stdin is written while stdout is read, so neither side can block the
+/// other; the timeout covers both.
+async fn run(cmd: Cmd) -> Result<Vec<u8>, String> {
+    let label = cmd.label();
+    let mut child = tokio::process::Command::new(cmd.program)
+        .args(&cmd.args)
+        .envs(cmd.env.iter().map(|(k, v)| (*k, v.as_str())))
+        .stdin(Stdio::piped())
+        .stdout(Stdio::piped())
+        .stderr(Stdio::piped())
+        .kill_on_drop(true)
+        .spawn()
+        .map_err(|e| format!("{label} failed: {e}"))?;
+    let stdin = child.stdin.take();
+    let input = cmd.input;
+    let feed = async move {
+        if let (Some(mut stdin), Some(input)) = (stdin, input.as_ref()) {
+            stdin.write_all(input).await?;
+        }
+        Ok::<(), std::io::Error>(())
+    };
+    let (fed, out) = tokio::time::timeout(TIMEOUT, async { tokio::join!(feed, child.wait_with_output()) })
+        .await
+        .map_err(|_| format!("{label} failed: timed out after {} min", TIMEOUT.as_secs() / 60))?;
+    let out = out.map_err(|e| format!("{label} failed: {e}"))?;
+    if !out.status.success() {
+        let stderr = String::from_utf8_lossy(&out.stderr);
+        let msg = if stderr.trim().is_empty() {
+            out.status.to_string()
+        } else {
+            tail(stderr.trim(), ERR_TAIL).to_owned()
+        };
+        return Err(format!("{label} failed: {msg}"));
+    }
+    fed.map_err(|e| format!("{label} failed: stdin: {e}"))?;
+    Ok(out.stdout)
 }
 
 fn tail(s: &str, max: usize) -> &str {
@@ -113,6 +137,13 @@ mod tests {
             Real.run(bad).await.unwrap_err(),
             "sh -c echo nope >&2; exit 3 … failed: nope"
         );
+    }
+
+    #[tokio::test]
+    async fn large_input_and_output_at_once() {
+        let mut echo = Cmd::new("cat", vec![]);
+        echo.input = Some(Zeroizing::new(vec![b'x'; 4 * 1024 * 1024]));
+        assert_eq!(Real.run_bytes(echo).await.unwrap().len(), 4 * 1024 * 1024);
     }
 
     #[test]

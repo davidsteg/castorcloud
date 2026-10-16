@@ -21,6 +21,7 @@ fn node(kind: &str, root: &Path, fake: std::sync::Arc<Fake>) -> Node {
         ssh_host: "10.0.0.5".into(),
         ssh_user: "deploy".into(),
         zfs_pool: Some("tank".into()),
+        ..Default::default()
     };
     Node::new(&row, root, fake).unwrap()
 }
