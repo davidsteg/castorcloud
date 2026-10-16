@@ -1,0 +1,82 @@
+{
+  "comment": "Rendered by apps/provisioner/src/tenant.ts. Regenerate with gen-render.mts",
+  "platform": {
+    "baseDomain": "castor.test",
+    "scheme": "https",
+    "brandName": "Castor Cloud",
+    "timeZone": "Europe/Zurich",
+    "authHostIp": "10.0.0.1"
+  },
+  "secrets": {
+    "IMMICH_DB_PASSWORD": "s000000000",
+    "DB_ROOT_PASSWORD": "s100000000",
+    "PAPERLESS_DB_PASSWORD": "s200000000",
+    "DAWARICH_DB_PASSWORD": "s300000000",
+    "AIRTRAIL_DB_PASSWORD": "s400000000",
+    "PAPERLESS_SECRET_KEY": "s500000000",
+    "PAPERLESS_SERVICE_PASSWORD": "s600000000",
+    "IMMICH_SERVICE_PASSWORD": "s700000000",
+    "PHOTOS_OIDC_CLIENT_SECRET": "s800000000",
+    "DOCS_OIDC_CLIENT_SECRET": "s900000000",
+    "PLACES_OIDC_CLIENT_SECRET": "s1000000000",
+    "FLIGHTS_OIDC_CLIENT_SECRET": "s1100000000",
+    "DAWARICH_SECRET_KEY_BASE": "s1200000000",
+    "ASSISTANT_ADMIN_KEY": "s1300000000",
+    "LLM_VIRTUAL_KEY": "s1400000000"
+  },
+  "versions": {
+    "IMMICH_VERSION": "v3.2.2",
+    "IMMICH_POSTGRES_IMAGE": "ghcr.io/immich-app/postgres:14-vectorchord0.4.3-pgvectors0.2.0@sha256:bcf63357191b76a916ae5eb93464d65c07511da41e3bf7a8416db519b40b1c23",
+    "PAPERLESS_VERSION": "3.2.1",
+    "DAWARICH_VERSION": "1.15.2",
+    "AIRTRAIL_VERSION": "v3.13.0",
+    "POSTGIS_IMAGE": "postgis/postgis:17-3.5-alpine",
+    "VALKEY_IMAGE": "valkey/valkey:9-alpine",
+    "NGINX_IMAGE": "nginx:1.29-alpine",
+    "TIKA_IMAGE": "apache/tika:3.3.1.0",
+    "GOTENBERG_IMAGE": "gotenberg/gotenberg:8.37",
+    "HERMES_IMAGE": "nousresearch/hermes-agent:v2026.9.24",
+    "ASSISTANT_TOOLS_IMAGE": "pc-assistant-tools:1",
+    "LITELLM_IMAGE": "litellm/litellm:v1.103.0",
+    "LITELLM_DB_IMAGE": "postgres:17-alpine"
+  },
+  "immich": "{\n  \"oauth\": {\n    \"enabled\": true,\n    \"issuerUrl\": \"https://auth.castor.test/application/o/anna-photos/\",\n    \"clientId\": \"anna-photos\",\n    \"clientSecret\": \"s800000000\",\n    \"scope\": \"openid email profile\",\n    \"autoLaunch\": true,\n    \"autoRegister\": true,\n    \"buttonText\": \"Continue\",\n    \"tokenEndpointAuthMethod\": \"client_secret_post\",\n    \"signingAlgorithm\": \"RS256\",\n    \"mobileOverrideEnabled\": false\n  },\n  \"passwordLogin\": {\n    \"enabled\": false\n  },\n  \"machineLearning\": {\n    \"urls\": [\n      \"http://pc-node-immich-ml:3003\"\n    ]\n  },\n  \"server\": {\n    \"externalDomain\": \"https://photos-anna.castor.test\"\n  },\n  \"newVersionCheck\": {\n    \"enabled\": false\n  }\n}",
+  "env": "IMMICH_VERSION='v3.2.2'\nIMMICH_POSTGRES_IMAGE='ghcr.io/immich-app/postgres:14-vectorchord0.4.3-pgvectors0.2.0@sha256:bcf63357191b76a916ae5eb93464d65c07511da41e3bf7a8416db519b40b1c23'\nPAPERLESS_VERSION='3.2.1'\nDAWARICH_VERSION='1.15.2'\nAIRTRAIL_VERSION='v3.13.0'\nPOSTGIS_IMAGE='postgis/postgis:17-3.5-alpine'\nVALKEY_IMAGE='valkey/valkey:9-alpine'\nNGINX_IMAGE='nginx:1.29-alpine'\nTIKA_IMAGE='apache/tika:3.3.1.0'\nGOTENBERG_IMAGE='gotenberg/gotenberg:8.37'\nHERMES_IMAGE='nousresearch/hermes-agent:v2026.9.24'\nASSISTANT_TOOLS_IMAGE='pc-assistant-tools:1'\nLITELLM_IMAGE='litellm/litellm:v1.103.0'\nLITELLM_DB_IMAGE='postgres:17-alpine'\nSLUG='anna'\nBASE_DOMAIN='castor.test'\nSCHEME='https'\nBRAND_NAME='Castor Cloud'\nTZ='Europe/Zurich'\nAUTH_HOST='auth.castor.test'\nAUTH_HOST_IP='10.0.0.1'\nPORTAL_ORIGIN='https://anna.castor.test'\nOWNERS_GROUP='cust-anna-owners'\nTENANT_DIR='/n/tenants/anna'\nBRAND_DIR='/n/files/brand'\nCA_DIR='/n/files/ca'\nOAUTH_ALLOW_INSECURE_HTTP='false'\nPLACES_OIDC_CLIENT_ID='anna-places'\nFLIGHTS_OIDC_CLIENT_ID='anna-flights'\nPAPERLESS_SOCIALACCOUNT_PROVIDERS='{\"openid_connect\":{\"SCOPE\":[\"openid\",\"profile\",\"email\"],\"OAUTH_PKCE_ENABLED\":true,\"APPS\":[{\"provider_id\":\"authentik\",\"name\":\"Castor Cloud\",\"client_id\":\"anna-docs\",\"secret\":\"s900000000\",\"settings\":{\"server_url\":\"https://auth.castor.test/application/o/anna-docs/.well-known/openid-configuration\"}}]}}'\nASSISTANT_IMMICH_URL=''\nASSISTANT_IMMICH_DB_URL=''\nASSISTANT_PAPERLESS_URL=''\nASSISTANT_DAWARICH_URL=''\nASSISTANT_DAWARICH_DB_URL=''\nASSISTANT_AIRTRAIL_URL=''\nASSISTANT_AIRTRAIL_DB_URL=''\nIMMICH_DB_PASSWORD='s000000000'\nDB_ROOT_PASSWORD='s100000000'\nPAPERLESS_DB_PASSWORD='s200000000'\nDAWARICH_DB_PASSWORD='s300000000'\nAIRTRAIL_DB_PASSWORD='s400000000'\nPAPERLESS_SECRET_KEY='s500000000'\nPAPERLESS_SERVICE_PASSWORD='s600000000'\nIMMICH_SERVICE_PASSWORD='s700000000'\nPHOTOS_OIDC_CLIENT_SECRET='s800000000'\nDOCS_OIDC_CLIENT_SECRET='s900000000'\nPLACES_OIDC_CLIENT_SECRET='s1000000000'\nFLIGHTS_OIDC_CLIENT_SECRET='s1100000000'\nDAWARICH_SECRET_KEY_BASE='s1200000000'\nASSISTANT_ADMIN_KEY='s1300000000'\nLLM_VIRTUAL_KEY='s1400000000'\n",
+  "env_assistant": "IMMICH_VERSION='v3.2.2'\nIMMICH_POSTGRES_IMAGE='ghcr.io/immich-app/postgres:14-vectorchord0.4.3-pgvectors0.2.0@sha256:bcf63357191b76a916ae5eb93464d65c07511da41e3bf7a8416db519b40b1c23'\nPAPERLESS_VERSION='3.2.1'\nDAWARICH_VERSION='1.15.2'\nAIRTRAIL_VERSION='v3.13.0'\nPOSTGIS_IMAGE='postgis/postgis:17-3.5-alpine'\nVALKEY_IMAGE='valkey/valkey:9-alpine'\nNGINX_IMAGE='nginx:1.29-alpine'\nTIKA_IMAGE='apache/tika:3.3.1.0'\nGOTENBERG_IMAGE='gotenberg/gotenberg:8.37'\nHERMES_IMAGE='nousresearch/hermes-agent:v2026.9.24'\nASSISTANT_TOOLS_IMAGE='pc-assistant-tools:1'\nLITELLM_IMAGE='litellm/litellm:v1.103.0'\nLITELLM_DB_IMAGE='postgres:17-alpine'\nSLUG='anna'\nBASE_DOMAIN='castor.test'\nSCHEME='https'\nBRAND_NAME='Castor Cloud'\nTZ='Europe/Zurich'\nAUTH_HOST='auth.castor.test'\nAUTH_HOST_IP='10.0.0.1'\nPORTAL_ORIGIN='https://anna.castor.test'\nOWNERS_GROUP='cust-anna-owners'\nTENANT_DIR='/n/tenants/anna'\nBRAND_DIR='/n/files/brand'\nCA_DIR='/n/files/ca'\nOAUTH_ALLOW_INSECURE_HTTP='false'\nPLACES_OIDC_CLIENT_ID='anna-places'\nFLIGHTS_OIDC_CLIENT_ID='anna-flights'\nPAPERLESS_SOCIALACCOUNT_PROVIDERS='{\"openid_connect\":{\"SCOPE\":[\"openid\",\"profile\",\"email\"],\"OAUTH_PKCE_ENABLED\":true,\"APPS\":[{\"provider_id\":\"authentik\",\"name\":\"Castor Cloud\",\"client_id\":\"anna-docs\",\"secret\":\"s900000000\",\"settings\":{\"server_url\":\"https://auth.castor.test/application/o/anna-docs/.well-known/openid-configuration\"}}]}}'\nASSISTANT_IMMICH_URL='http://immich-server:2283'\nASSISTANT_IMMICH_DB_URL='postgres://immich:s000000000@immich-db:5432/immich'\nASSISTANT_PAPERLESS_URL=''\nASSISTANT_DAWARICH_URL=''\nASSISTANT_DAWARICH_DB_URL=''\nASSISTANT_AIRTRAIL_URL='http://airtrail:3000'\nASSISTANT_AIRTRAIL_DB_URL='postgres://airtrail:s400000000@db:5432/airtrail'\nIMMICH_DB_PASSWORD='s000000000'\nDB_ROOT_PASSWORD='s100000000'\nPAPERLESS_DB_PASSWORD='s200000000'\nDAWARICH_DB_PASSWORD='s300000000'\nAIRTRAIL_DB_PASSWORD='s400000000'\nPAPERLESS_SECRET_KEY='s500000000'\nPAPERLESS_SERVICE_PASSWORD='s600000000'\nIMMICH_SERVICE_PASSWORD='s700000000'\nPHOTOS_OIDC_CLIENT_SECRET='s800000000'\nDOCS_OIDC_CLIENT_SECRET='s900000000'\nPLACES_OIDC_CLIENT_SECRET='s1000000000'\nFLIGHTS_OIDC_CLIENT_SECRET='s1100000000'\nDAWARICH_SECRET_KEY_BASE='s1200000000'\nASSISTANT_ADMIN_KEY='s1300000000'\nLLM_VIRTUAL_KEY='s1400000000'\n",
+  "edge": "# Generated by the provisioner: anna's services run on the node at http://10.0.0.5:8480.\nhttp:\n  routers:\n    pc-t-anna:\n      rule: 'Host(`photos-anna.castor.test`) || Host(`docs-anna.castor.test`) || Host(`places-anna.castor.test`) || Host(`flights-anna.castor.test`) || Host(`assistant-anna.castor.test`)'\n      entryPoints: [websecure]\n      service: pc-t-anna\n  services:\n    pc-t-anna:\n      loadBalancer:\n        passHostHeader: true\n        servers:\n          - url: \"http://10.0.0.5:8480\"\n",
+  "volumes": "# Generated by the provisioner: volumes live on the tenant's encrypted storage.\nvolumes:\n  db:\n    driver: local\n    driver_opts:\n      type: none\n      o: bind\n      device: /mnt/tank/castor/t/anna/data/db\n  redis:\n    driver: local\n    driver_opts:\n      type: none\n      o: bind\n      device: /mnt/tank/castor/t/anna/data/redis\n  immich-db:\n    driver: local\n    driver_opts:\n      type: none\n      o: bind\n      device: /mnt/tank/castor/t/anna/data/immich-db\n  photos:\n    driver: local\n    driver_opts:\n      type: none\n      o: bind\n      device: /mnt/tank/castor/t/anna/data/photos\n  docs-data:\n    driver: local\n    driver_opts:\n      type: none\n      o: bind\n      device: /mnt/tank/castor/t/anna/data/docs-data\n  docs-media:\n    driver: local\n    driver_opts:\n      type: none\n      o: bind\n      device: /mnt/tank/castor/t/anna/data/docs-media\n  docs-consume:\n    driver: local\n    driver_opts:\n      type: none\n      o: bind\n      device: /mnt/tank/castor/t/anna/data/docs-consume\n  places-public:\n    driver: local\n    driver_opts:\n      type: none\n      o: bind\n      device: /mnt/tank/castor/t/anna/data/places-public\n  places-watched:\n    driver: local\n    driver_opts:\n      type: none\n      o: bind\n      device: /mnt/tank/castor/t/anna/data/places-watched\n  places-storage:\n    driver: local\n    driver_opts:\n      type: none\n      o: bind\n      device: /mnt/tank/castor/t/anna/data/places-storage\n  flights-uploads:\n    driver: local\n    driver_opts:\n      type: none\n      o: bind\n      device: /mnt/tank/castor/t/anna/data/flights-uploads\n  assistant:\n    driver: local\n    driver_opts:\n      type: none\n      o: bind\n      device: /mnt/tank/castor/t/anna/data/assistant\n",
+  "redirects": {
+    "photos": [
+      {
+        "matching_mode": "strict",
+        "url": "https://photos-anna.castor.test/auth/login"
+      },
+      {
+        "matching_mode": "strict",
+        "url": "https://photos-anna.castor.test/user-settings"
+      },
+      {
+        "matching_mode": "strict",
+        "url": "app.immich:///oauth-callback"
+      }
+    ],
+    "docs": [
+      {
+        "matching_mode": "strict",
+        "url": "https://docs-anna.castor.test/accounts/oidc/authentik/login/callback/"
+      }
+    ],
+    "places": [
+      {
+        "matching_mode": "strict",
+        "url": "https://places-anna.castor.test/users/auth/openid_connect/callback"
+      }
+    ],
+    "flights": [
+      {
+        "matching_mode": "strict",
+        "url": "https://flights-anna.castor.test/login"
+      }
+    ]
+  }
+}

@@ -50,6 +50,14 @@ jobs:
 
       - run: npm test
 
+      # castord renders tenant files the way tenant.ts does; a change to one
+      # without the other fails here.
+      - name: castord's render fixture matches tenant.ts
+        working-directory: rust/crates/castord/tests/fixtures
+        run: |
+          node --experimental-strip-types gen-render.mts > render.json
+          git diff --exit-code render.json
+
   rust:
     name: Rust core
     runs-on: ubuntu-latest
