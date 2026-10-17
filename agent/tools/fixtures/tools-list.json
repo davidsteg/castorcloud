@@ -1,0 +1,302 @@
+{
+  "photos": [
+    {
+      "name": "search_photos",
+      "title": "Search photos",
+      "description": "Find the user's photos and videos. `query` is a free-text description of what is in the picture (e.g. 'dog on the beach', 'birthday cake'); combine with person, place and date filters. Returns date, place, people and a link per item, never the image itself.",
+      "inputSchema": {
+        "$schema": "http://json-schema.org/draft-07/schema#",
+        "type": "object",
+        "properties": {
+          "query": {
+            "description": "What the photo shows",
+            "type": "string",
+            "maxLength": 200
+          },
+          "person": {
+            "description": "Name of a person recognised in Photos",
+            "type": "string",
+            "maxLength": 100
+          },
+          "city": {
+            "type": "string",
+            "maxLength": 100
+          },
+          "country": {
+            "type": "string",
+            "maxLength": 100
+          },
+          "from": {
+            "description": "Taken on or after (YYYY-MM-DD)",
+            "type": "string"
+          },
+          "to": {
+            "description": "Taken on or before (YYYY-MM-DD)",
+            "type": "string"
+          },
+          "limit": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 25
+          }
+        }
+      },
+      "annotations": {
+        "readOnlyHint": true,
+        "destructiveHint": false,
+        "openWorldHint": false
+      },
+      "execution": {
+        "taskSupport": "forbidden"
+      }
+    },
+    {
+      "name": "list_people",
+      "title": "List people in photos",
+      "description": "Names of the people the user has named in Photos (face recognition runs locally).",
+      "inputSchema": {
+        "$schema": "http://json-schema.org/draft-07/schema#",
+        "type": "object",
+        "properties": {
+          "limit": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 25
+          }
+        }
+      },
+      "annotations": {
+        "readOnlyHint": true,
+        "destructiveHint": false,
+        "openWorldHint": false
+      },
+      "execution": {
+        "taskSupport": "forbidden"
+      }
+    }
+  ],
+  "docs": [
+    {
+      "name": "search_documents",
+      "title": "Search documents",
+      "description": "Full-text search over the user's scanned documents (invoices, contracts, letters, receipts). Returns title, date, sender, type, tags and a short matching excerpt. Use read_document for more text.",
+      "inputSchema": {
+        "$schema": "http://json-schema.org/draft-07/schema#",
+        "type": "object",
+        "properties": {
+          "query": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 200,
+            "description": "Words to look for, e.g. 'hotel lisbon invoice'"
+          },
+          "from": {
+            "description": "Document date on or after (YYYY-MM-DD)",
+            "type": "string"
+          },
+          "to": {
+            "description": "Document date on or before (YYYY-MM-DD)",
+            "type": "string"
+          },
+          "limit": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 25
+          }
+        },
+        "required": [
+          "query"
+        ]
+      },
+      "annotations": {
+        "readOnlyHint": true,
+        "destructiveHint": false,
+        "openWorldHint": false
+      },
+      "execution": {
+        "taskSupport": "forbidden"
+      }
+    },
+    {
+      "name": "read_document",
+      "title": "Read a document",
+      "description": "Text (OCR) of one document found with search_documents, cut to at most 6000 characters. Use `offset` to continue reading a long document.",
+      "inputSchema": {
+        "$schema": "http://json-schema.org/draft-07/schema#",
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "integer",
+            "exclusiveMinimum": 0,
+            "maximum": 9007199254740991
+          },
+          "offset": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 9007199254740991
+          },
+          "maxChars": {
+            "type": "integer",
+            "minimum": 200,
+            "maximum": 6000
+          }
+        },
+        "required": [
+          "id"
+        ]
+      },
+      "annotations": {
+        "readOnlyHint": true,
+        "destructiveHint": false,
+        "openWorldHint": false
+      },
+      "execution": {
+        "taskSupport": "forbidden"
+      }
+    }
+  ],
+  "places": [
+    {
+      "name": "where_was_i",
+      "title": "Where was I",
+      "description": "Where the user was during a day or period, from their location timeline: the cities/countries with time ranges, plus confirmed visits to named places.",
+      "inputSchema": {
+        "$schema": "http://json-schema.org/draft-07/schema#",
+        "type": "object",
+        "properties": {
+          "date": {
+            "description": "A single day (YYYY-MM-DD)",
+            "type": "string"
+          },
+          "from": {
+            "description": "Start (YYYY-MM-DD)",
+            "type": "string"
+          },
+          "to": {
+            "description": "End (YYYY-MM-DD)",
+            "type": "string"
+          }
+        }
+      },
+      "annotations": {
+        "readOnlyHint": true,
+        "destructiveHint": false,
+        "openWorldHint": false
+      },
+      "execution": {
+        "taskSupport": "forbidden"
+      }
+    },
+    {
+      "name": "list_visits",
+      "title": "List visits",
+      "description": "Visits to places (restaurants, hotels, friends' homes, ...) detected in the timeline for a period.",
+      "inputSchema": {
+        "$schema": "http://json-schema.org/draft-07/schema#",
+        "type": "object",
+        "properties": {
+          "date": {
+            "description": "A single day (YYYY-MM-DD)",
+            "type": "string"
+          },
+          "from": {
+            "description": "Start (YYYY-MM-DD)",
+            "type": "string"
+          },
+          "to": {
+            "description": "End (YYYY-MM-DD)",
+            "type": "string"
+          },
+          "limit": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 25
+          }
+        }
+      },
+      "annotations": {
+        "readOnlyHint": true,
+        "destructiveHint": false,
+        "openWorldHint": false
+      },
+      "execution": {
+        "taskSupport": "forbidden"
+      }
+    },
+    {
+      "name": "travel_stats",
+      "title": "Travel statistics",
+      "description": "Distance travelled and number of countries/cities visited, in total and per year.",
+      "inputSchema": {
+        "$schema": "http://json-schema.org/draft-07/schema#",
+        "type": "object",
+        "properties": {}
+      },
+      "annotations": {
+        "readOnlyHint": true,
+        "destructiveHint": false,
+        "openWorldHint": false
+      },
+      "execution": {
+        "taskSupport": "forbidden"
+      }
+    }
+  ],
+  "flights": [
+    {
+      "name": "list_flights",
+      "title": "List flights",
+      "description": "The user's flights, newest first, optionally filtered by date range and by an airport, city or country (matches departure or arrival).",
+      "inputSchema": {
+        "$schema": "http://json-schema.org/draft-07/schema#",
+        "type": "object",
+        "properties": {
+          "from": {
+            "description": "On or after (YYYY-MM-DD)",
+            "type": "string"
+          },
+          "to": {
+            "description": "On or before (YYYY-MM-DD)",
+            "type": "string"
+          },
+          "airport": {
+            "description": "IATA/ICAO code, airport, city or country",
+            "type": "string",
+            "maxLength": 80
+          },
+          "limit": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 25
+          }
+        }
+      },
+      "annotations": {
+        "readOnlyHint": true,
+        "destructiveHint": false,
+        "openWorldHint": false
+      },
+      "execution": {
+        "taskSupport": "forbidden"
+      }
+    },
+    {
+      "name": "flight_stats",
+      "title": "Flight statistics",
+      "description": "Totals over all of the user's flights: count, distance, time in the air, airports, top route/airline.",
+      "inputSchema": {
+        "$schema": "http://json-schema.org/draft-07/schema#",
+        "type": "object",
+        "properties": {}
+      },
+      "annotations": {
+        "readOnlyHint": true,
+        "destructiveHint": false,
+        "openWorldHint": false
+      },
+      "execution": {
+        "taskSupport": "forbidden"
+      }
+    }
+  ]
+}

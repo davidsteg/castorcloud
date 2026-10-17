@@ -1,0 +1,47 @@
+[package]
+name = "castor-assistant-tools"
+version = "0.1.0"
+edition = "2024"
+rust-version = "1.88"
+license = "UNLICENSED"
+publish = false
+description = "Read-only MCP tools over one tenant's services, for that tenant's assistant (Hermes)"
+
+# Built by castord on each tenant node from the repo root
+# (docker build -f agent/tools/Dockerfile .), so it is not part of the rust/
+# workspace and has its own lockfile.
+[workspace]
+
+[[bin]]
+name = "assistant-tools"
+path = "src/main.rs"
+
+[dependencies]
+base64 = "0.22"
+futures-util = { version = "0.3", default-features = false, features = ["alloc"] }
+getrandom = "0.4.3"
+hex = "0.4.3"
+http-body-util = "0.1"
+hyper = { version = "1", features = ["server", "http1"] }
+hyper-util = { version = "0.1", features = ["tokio"] }
+# The tz database is compiled in: the image has no /usr/share/zoneinfo.
+jiff = { version = "0.2", default-features = false, features = ["std", "tzdb-bundle-always"] }
+reqwest = { version = "0.12", default-features = false, features = ["rustls-tls-webpki-roots"] }
+serde = { version = "1", features = ["derive"] }
+serde_json = { version = "1", features = ["preserve_order"] }
+sha2 = "0.10.9"
+sqlx = { version = "0.8", default-features = false, features = ["runtime-tokio", "tls-rustls-ring-webpki", "postgres"] }
+subtle = "2.6"
+tokio = { version = "1", features = ["rt-multi-thread", "macros", "net", "time", "fs", "sync", "signal", "io-util"] }
+
+[lints.rust]
+unsafe_code = "forbid"
+
+[lints.clippy]
+unwrap_used = "deny"
+expect_used = "deny"
+panic = "deny"
+
+[profile.release]
+overflow-checks = true
+strip = true

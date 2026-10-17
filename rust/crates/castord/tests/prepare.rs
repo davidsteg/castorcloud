@@ -58,7 +58,7 @@ async fn remote_node_gets_files_then_edge_and_tools() {
             format!("{ssh} network inspect pc-edge"),
             format!("{ssh} network create pc-edge"),
             format!("EDGE_PORT=8480 {ssh} compose -p pc-edge -f {r}/infra/node/edge.yml up -d --remove-orphans"),
-            format!("{ssh} build -q -t pc-assistant-tools:1 -f {r}/agent/tools/Dockerfile {r}"),
+            format!("{ssh} build -q -t pc-assistant-tools:2 -f {r}/agent/tools/Dockerfile {r}"),
         ]
     );
     assert_eq!(fake.inputs()[1].as_deref(), Some(&b"TAR"[..]));
@@ -88,7 +88,7 @@ async fn local_node_gets_the_shared_mount_and_images() {
         calls[1..],
         [
             format!("docker build -q -t pc-cryptd:1 {r}/infra/node/cryptd"),
-            format!("docker build -q -t pc-assistant-tools:1 -f {r}/agent/tools/Dockerfile {r}"),
+            format!("docker build -q -t pc-assistant-tools:2 -f {r}/agent/tools/Dockerfile {r}"),
         ]
     );
 }

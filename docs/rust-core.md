@@ -28,6 +28,7 @@ static binary per platform with a short, audited dependency list
 | `apps/provisioner` worker: lifecycle, tenant rendering, placement, storage, nodes, ZFS, volumes, backups, retention, DB dumps | Rust daemon `castord` (tokio, sqlx), ported job kind by job kind (done) | The privileged orchestration; each job kind moved when its Rust version passed the same tests |
 | Monitoring and alert rules, Authentik and LLM-gateway clients, Telegram bot | Part of `castord` (done: `castor-monitor`, `castor-telegram`) | Plain HTTP and rules; no reason to keep a second runtime once the worker is Rust |
 | Admin CLIs (`node`, `backup`, `staff`, `delete-tenant`) | `castor-admin` subcommands (done) | Same code paths as the daemon |
+| Hermes data tools (`agent/tools`, MCP SDK) | Rust crate of its own in `agent/tools` (done), a static binary on an empty image | Runs in every tenant stack with database access to issue API keys; same tools, schemas and answers as before (tested against the TypeScript version). The MCP layer is hand-rolled (four methods, stateless JSON) rather than `rmcp` |
 
 ## What stays as it is
 
@@ -38,7 +39,6 @@ static binary per platform with a short, audited dependency list
 | Shared pricing (`packages/pricing`) | TypeScript | The portal renders it live. The few numbers the worker needs (storage quota) are mirrored in Rust and pinned by shared test fixtures |
 | SSH and Docker transport | OpenSSH and the Docker / Compose CLIs | OpenSSH is the most reviewed SSH implementation there is (known_hosts, key handling); Compose has no Rust implementation. Called with argument vectors, never through a shell |
 | Node setup (`infra/node/macos`, `infra/node/truenas`) | Shell | One-time setup that drives the OS's own tools; nothing runs on it at request time |
-| Hermes data tools (`agent/tools`) | TypeScript for now | Low-privilege MCP server inside each tenant's stack using the official MCP SDK; can move later (official Rust SDK `rmcp`) once the core is done |
 
 ## Order
 

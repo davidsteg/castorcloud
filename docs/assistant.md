@@ -35,7 +35,7 @@ Status: built (phase 5). Web chat, PWA and Telegram work end to end; see
 | Skin allowlist for the Hermes API | `packages/stack-templates/tenant/skin/default.conf.template` |
 | Rendered Hermes config, one profile per member, persona | `rust/crates/castord/src/assistant.rs` |
 | Tenant key + budget on the gateway | `rust/crates/castord/src/llm.rs`, `apply.rs` (`prepare_assistant`) |
-| Read-only MCP tools | `agent/tools/` (image `pc-assistant-tools`, built by the provisioner) |
+| Read-only MCP tools (Rust) | `agent/tools/` (image `pc-assistant-tools`, built on the node by castord) |
 | Gateway + its DB, provider configs | `infra/node/compose.yml`, `infra/node/litellm/*.yaml` |
 | CHF credit → USD budget | `packages/pricing/src/ai-budget.ts` |
 | Portal chat, credit meter, Telegram panel | `apps/portal/src/app/tenant/[slug]/assistant/`, `src/app/api/assistant/`, `src/components/AssistantChat.tsx` |
