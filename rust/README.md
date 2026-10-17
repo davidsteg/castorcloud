@@ -14,6 +14,7 @@ the TypeScript part is removed.
 | `crates/castord` | `apps/provisioner/src/worker.ts` | queue loop done (same SQL as `jobs.ts`); every job kind ported |
 | `castor-monitor` (in `crates/castord`) | `apps/provisioner/src/monitor.ts` | done; same checks, rules, alert table and settings |
 | `castor-telegram` (in `crates/castord`) | `apps/provisioner/src/telegram.ts` | done; same pairing, texts and settings |
+| `castor-admin` (in `crates/castord`) | `node-admin.ts`, `backup-admin.ts`, `staff-admin.ts`, `delete-tenant.ts`, `e2e.ts` | done; same commands and checks |
 
 ```bash
 cd rust
@@ -112,6 +113,28 @@ four languages. Same settings as `npm run telegram` (`TELEGRAM_BOT_TOKEN`,
 `LLM_GATEWAY_URL`, `TZ`); run one of the two, since Telegram hands each update
 to one poller. Answers go back as plain text, and the bot token never
 appears in a log line.
+
+## castor-admin
+
+The operator commands in one binary, with the control plane's `.env`:
+
+```bash
+castor-admin node add <name> <user@host> --pool tank --edge <host:port> --auth-host-ip <ip>
+castor-admin node add <name> <user@host> --role stacks --pool tank --edge <host> --control-plane-ip <ip>
+castor-admin node list | drain <name> | enable <name>
+castor-admin backup status | list <slug> | run <slug> | verify | restore <slug> [gen@snap] [--node <name>] | discard <slug> <tag>
+castor-admin backup db-keygen | db-dump | db-list | db-get <name> <out-file>
+castor-admin backup db-open <file> <secret-key-file> <out.sql.gz>
+castor-admin staff list | add <email> | remove <email>
+castor-admin delete-tenant <slug>
+castor-admin e2e [--delete]
+```
+
+It replaces `npm run node`, `backup`, `staff`, `delete-tenant` and `e2e`
+with the same arguments. `node add` probes the node and refuses it unless
+its pool is ONLINE (a stacks node also needs Docker with userns-remap and
+gVisor, or `--no-gvisor`), then prepares it. Files with secrets
+(`db-get`, `db-open`) are written with mode 0600.
 
 ## castor-node on a node
 

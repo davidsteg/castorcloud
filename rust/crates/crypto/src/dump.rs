@@ -40,6 +40,22 @@ pub fn public_key(b64: &str) -> Result<[u8; 32], Error> {
         .ok_or_else(|| Error::BadKey("BACKUP_DB_PUBLIC_KEY (base64url)".into()))
 }
 
+/// A new key pair: BACKUP_DB_PUBLIC_KEY (base64url) and the offline secret
+/// key ("castor-db-secret-<d>.<x>", the JWK fields db-dump.ts writes).
+pub fn key_pair() -> Result<(String, Zeroizing<String>), Error> {
+    let secret = StaticSecret::from(*random::<32>()?);
+    let public = PublicKey::from(&secret);
+    let d = Zeroizing::new(secret.to_bytes());
+    Ok((
+        B64.encode(public.as_bytes()),
+        Zeroizing::new(format!(
+            "castor-db-secret-{}.{}",
+            B64.encode(d.as_ref()),
+            B64.encode(public.as_bytes())
+        )),
+    ))
+}
+
 /// Seals `plain` to the recipient's public key with a fresh ephemeral key.
 pub fn seal(plain: &[u8], recipient: &[u8; 32]) -> Result<Vec<u8>, Error> {
     let eph = StaticSecret::from(*random::<32>()?);
@@ -104,6 +120,14 @@ pub fn open(sealed: &[u8], secret_key: &str) -> Result<Zeroizing<Vec<u8>>, Error
 mod tests {
     #![allow(clippy::unwrap_used)]
     use super::*;
+
+    #[test]
+    fn new_key_pairs_seal_and_open() {
+        let (public, secret) = key_pair().unwrap();
+        let sealed = seal(b"dump", &public_key(&public).unwrap()).unwrap();
+        assert_eq!(open(&sealed, &secret).unwrap().as_slice(), b"dump");
+        assert_ne!(key_pair().unwrap().0, public);
+    }
 
     /// A throwaway key pair and a dump sealed by db-dump.ts with it.
     const FIXTURE: &str = include_str!("../tests/fixtures/db-dump.json");

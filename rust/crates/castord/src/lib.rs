@@ -4,10 +4,12 @@
 //! A kind moves here by adding its handler and removing it from the
 //! TypeScript worker's KINDS in the same deploy.
 
+pub mod admin;
 pub mod apply;
 pub mod assistant;
 pub mod authentik;
 pub mod backup;
+pub mod config;
 pub mod db;
 pub mod delete;
 pub mod exec;

@@ -210,23 +210,54 @@ impl WatchNodes {
     }
 }
 
+/// What `castor-zfs pool`, `castor-info` and Docker say of a node.
+#[derive(Debug, Clone)]
+pub struct Probed {
+    pub pool_size_mb: i32,
+    pub pool_used_mb: i32,
+    pub pool_health: String,
+    pub os: String,
+    pub memory_mb: i32,
+    pub cpus: i32,
+    pub docker: String,
+}
+
+pub async fn probe_host(node: &Node) -> Result<Probed, String> {
+    let pool = node.host(strings(&["castor-zfs", "pool"]), None).await?;
+    let info = node.host(strings(&["castor-info"]), None).await?;
+    let (Some((pool_size_mb, pool_used_mb, pool_health)), Some((memory_mb, cpus))) =
+        (parse_pool(&pool), parse_info(&info))
+    else {
+        return Err(format!("unexpected probe output from {}", node.name));
+    };
+    let docker = node
+        .docker(strings(&["version", "--format", "{{.Server.Version}}"]), false)
+        .await?
+        .trim()
+        .to_owned();
+    Ok(Probed {
+        pool_size_mb,
+        pool_used_mb,
+        pool_health,
+        os: info.split_whitespace().nth(1).unwrap_or("").to_owned(),
+        memory_mb,
+        cpus,
+        docker,
+    })
+}
+
 /// Pool size, use and health, memory and CPUs. A stacks node is measured by
 /// its Docker engine (on a Mac: the VM) and must still isolate containers;
 /// the runtime it was registered with is never downgraded here.
 async fn probe(node: &Node, row: &NodeRow) -> Result<(i32, i32, String, i32, i32), String> {
-    let pool = node.host(strings(&["castor-zfs", "pool"]), None).await?;
-    let info = node.host(strings(&["castor-info"]), None).await?;
-    let (Some((size, used, health)), Some((mut memory, mut cpus))) = (parse_pool(&pool), parse_info(&info)) else {
-        return Err(format!("unexpected probe output from {}", node.name));
-    };
-    node.docker(strings(&["version", "--format", "{{.Server.Version}}"]), false)
-        .await?;
+    let p = probe_host(node).await?;
+    let (mut memory, mut cpus) = (p.memory_mb, p.cpus);
     if node.role == Role::Stacks {
         let f = crate::stacks::edge::check(node, row.stack_runtime.as_deref()).await?;
         memory = i32::try_from(f.memory_mb).map_err(|e| e.to_string())?;
         cpus = i32::try_from(f.cpus).map_err(|e| e.to_string())?;
     }
-    Ok((size, used, health, memory, cpus))
+    Ok((p.pool_size_mb, p.pool_used_mb, p.pool_health, memory, cpus))
 }
 
 // ------------------------------------------------------------ measure-storage

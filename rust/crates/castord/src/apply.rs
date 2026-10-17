@@ -400,7 +400,7 @@ pub async fn apply(c: &Control, cx: &JobCx, job: &Job) -> Result<(), String> {
 
 /// Once per node and process: templates, brand assets and the edge proxy
 /// come up to date with this deployment (Nodes.driver in nodes.ts).
-pub(crate) async fn prepare_once(c: &Control, node: &Node) -> Result<(), String> {
+pub async fn prepare_once(c: &Control, node: &Node) -> Result<(), String> {
     if c.prepared
         .lock()
         .map_err(|_| "prepared nodes: poisoned")?

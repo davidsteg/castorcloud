@@ -172,20 +172,32 @@ pub async fn heartbeat(db: &PgPool, worker: &str, kinds: &[&str]) -> sqlx::Resul
 
 /// Queues a job for the tenant (enqueueTenantJob in jobs.ts).
 pub async fn enqueue(db: &PgPool, tenant_id: &str, kind: &str) -> Result<(), String> {
+    enqueue_with(db, tenant_id, kind, None).await.map(|_| ())
+}
+
+/// A job with parameters (RESTORE's backup); its id.
+pub async fn enqueue_with(
+    db: &PgPool,
+    tenant_id: &str,
+    kind: &str,
+    params: Option<serde_json::Value>,
+) -> Result<String, String> {
     if !ALL_KINDS.contains(&kind) {
         return Err(format!("unknown job kind {kind}"));
     }
+    let id = crate::db::new_id()?;
     sqlx::query(
-        r#"INSERT INTO "Job" (id, "tenantId", kind, "createdAt", "runAfter")
-           VALUES ($1, $2, $3::"JobKind", now() AT TIME ZONE 'UTC', now() AT TIME ZONE 'UTC')"#,
+        r#"INSERT INTO "Job" (id, "tenantId", kind, params, "createdAt", "runAfter")
+           VALUES ($1, $2, $3::"JobKind", $4::jsonb, now() AT TIME ZONE 'UTC', now() AT TIME ZONE 'UTC')"#,
     )
-    .bind(crate::db::new_id()?)
+    .bind(&id)
     .bind(tenant_id)
     .bind(kind)
+    .bind(params.map(|p| p.to_string()))
     .execute(db)
     .await
     .map_err(|e| format!("enqueue {kind}: {e}"))?;
-    Ok(())
+    Ok(id)
 }
 
 /// Appends a line to the job's log, which the portal shows.
