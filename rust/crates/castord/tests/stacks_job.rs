@@ -182,7 +182,7 @@ async fn deploys_like_the_typescript_worker() {
     let expect = vec![
         // The node, once per process.
         format!("{ssh} info --format {{{{json .}}}}"),
-        format!("{ssh} build -q -t castor.local/egress:1 {r}/infra/node/egress"),
+        format!("{ssh} build -q -t castor.local/egress:2 {r}/infra/node/egress"),
         format!(
             "EDGE_PORT=8480 CONTROL_PLANE_IPS=10.0.0.1,10.0.0.2 {ssh} compose -p pc-stacks-edge -f {r}/infra/node/stacks-edge.yml up -d --remove-orphans"
         ),

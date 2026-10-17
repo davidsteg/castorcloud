@@ -15,7 +15,7 @@ use crate::suspend::strings;
 /// Container name of the stacks edge proxy (compose project pc-stacks-edge, service traefik).
 pub const STACKS_EDGE: &str = "pc-stacks-edge-traefik-1";
 /// Built on each STACKS node from infra/node/egress; no registry serves "castor.local/".
-pub const EGRESS_IMAGE: &str = "castor.local/egress:1";
+pub const EGRESS_IMAGE: &str = "castor.local/egress:2";
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Facts {
