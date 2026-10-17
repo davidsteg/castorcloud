@@ -18,7 +18,7 @@ use crate::valid;
 /// The tag the pc-cryptd image is built as.
 pub const CRYPTD_IMAGE: &str = "pc-cryptd:1";
 /// Same tag as ASSISTANT_TOOLS_IMAGE in packages/stack-templates/versions.env.
-pub const ASSISTANT_TOOLS_IMAGE: &str = "pc-assistant-tools:1";
+pub const ASSISTANT_TOOLS_IMAGE: &str = "pc-assistant-tools:2";
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum Role {

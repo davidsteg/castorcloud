@@ -96,7 +96,7 @@ packages/stack-templates/ compose + env templates per service, pinned versions
 packages/sdk/           typed clients for Immich/Paperless/Dawarich/AirTrail APIs (dashboard + agent)
 infra/control-plane/    docker-compose: traefik, authentik, postgres (portal and castord run on the host)
 infra/node/             node bootstrap (docker, traefik, skin proxy, shared ML/tika/gotenberg)
-agent/tools/            read-only MCP servers for the assistant (Hermes runs from its upstream image)
+agent/tools/            read-only MCP servers for the assistant, in Rust (Hermes runs from its upstream image)
 ```
 
 ## Phases

@@ -20,7 +20,7 @@ use crate::node::{Node, NodeRow};
 use crate::suspend::compose_args;
 use crate::{Control, Handler, Job, JobCx, valid};
 
-/// Name of the keys the assistant's tools issue (agent/tools/src/db.ts KEY_NAME).
+/// Name of the keys the assistant's tools issue (agent/tools/src/db.rs KEY_NAME).
 pub const ASSISTANT_KEY_NAME: &str = "Castor assistant (read-only)";
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]

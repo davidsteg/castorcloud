@@ -43,6 +43,7 @@ encrypted stack; one portal embeds all services behind one login.
 | `packages/stack-templates` | Per-tenant compose (one profile per service), skin proxy, pinned versions |
 | `infra/control-plane` | Traefik, Postgres, Authentik (+ blueprints) |
 | `infra/node` | Shared node services, `cryptd` volume helper |
+| `agent/tools` | Read-only MCP tools of the tenant assistant (Rust, a crate of its own, image `pc-assistant-tools`) |
 | `infra/dev-certs` | Local CA + wildcard certificate for development |
 
 ## Local development
