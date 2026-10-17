@@ -27,7 +27,7 @@ use std::sync::atomic::{AtomicBool, Ordering};
 
 use castord::tasks::Task;
 use castord::{Control, Handler, Worker};
-use sqlx::postgres::{PgConnectOptions, PgPoolOptions};
+use sqlx::postgres::PgPoolOptions;
 use zeroize::Zeroizing;
 
 /// The job kinds castord can run.
@@ -135,35 +135,6 @@ fn control() -> Result<Control, String> {
     })
 }
 
-/// Prisma's URLs carry `?schema=...`, which Postgres doesn't know: it
-/// becomes the search_path here.
-fn connect_options(url: &str) -> Result<PgConnectOptions, String> {
-    let (base, query) = url.split_once('?').unwrap_or((url, ""));
-    let mut schema = None;
-    let rest: Vec<&str> = query
-        .split('&')
-        .filter(|p| !p.is_empty())
-        .filter(|p| match p.strip_prefix("schema=") {
-            Some(s) => {
-                schema = Some(s.to_owned());
-                false
-            }
-            None => true,
-        })
-        .collect();
-    let url = if rest.is_empty() {
-        base.to_owned()
-    } else {
-        format!("{base}?{}", rest.join("&"))
-    };
-    let opts: PgConnectOptions = url.parse().map_err(|e| format!("DATABASE_URL: {e}"))?;
-    Ok(match schema {
-        Some(s) if s.bytes().all(|b| b.is_ascii_alphanumeric() || b == b'_') => opts.options([("search_path", s)]),
-        Some(_) => return Err("DATABASE_URL: bad schema".into()),
-        None => opts,
-    })
-}
-
 #[tokio::main]
 async fn main() -> ExitCode {
     match run().await {
@@ -252,7 +223,7 @@ async fn run() -> Result<(), String> {
     let tasks = tasks(&control, &task_names)?;
     let db = PgPoolOptions::new()
         .max_connections(4)
-        .connect_with(connect_options(&url)?)
+        .connect_with(castord::db::connect_options(&url)?)
         .await
         .map_err(|e| e.to_string())?;
     let host = std::fs::read_to_string("/etc/hostname")
@@ -299,18 +270,4 @@ async fn run() -> Result<(), String> {
     }
     db.close().await;
     Ok(())
-}
-
-#[cfg(test)]
-mod tests {
-    #![allow(clippy::unwrap_used)]
-    use super::*;
-
-    #[test]
-    fn prisma_schema_param_becomes_search_path() {
-        assert!(connect_options("postgresql://pc:pw@localhost:5432/portal?schema=public").is_ok());
-        assert!(connect_options("postgresql://pc:pw@localhost:5432/portal?schema=public&sslmode=require").is_ok());
-        assert!(connect_options("postgresql://pc:pw@localhost:5432/portal").is_ok());
-        assert!(connect_options("postgresql://pc:pw@localhost:5432/portal?schema=a;drop").is_err());
-    }
 }

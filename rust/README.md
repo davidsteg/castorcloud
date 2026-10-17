@@ -12,6 +12,7 @@ the TypeScript part is removed.
 | `crates/crypto` | `packages/core/src/crypto.ts` | done; format-compatible, tested in both directions |
 | `crates/node` | `infra/node/bin/castor-ssh`, `castor-zfs`, `castor-snap` | done; same commands and output, the scripts stay until every node runs it |
 | `crates/castord` | `apps/provisioner/src/worker.ts` | queue loop done (same SQL as `jobs.ts`); every job kind ported |
+| `castor-monitor` (in `crates/castord`) | `apps/provisioner/src/monitor.ts` | done; same checks, rules, alert table and settings |
 
 ```bash
 cd rust
@@ -81,6 +82,25 @@ TypeScript worker when it starts (`storeDefinitionsAsJson`). Settings:
 Restores need `BACKUP_TARGET` (the backup box's user@host) as for the
 TypeScript worker. The stream goes from one ssh to the other through
 castord, still encrypted with the tenant's key, which castord never sends.
+
+## castor-monitor
+
+The monitor of docs/monitoring.md in Rust: the same checks (platform, nodes,
+services, jobs, backups, certificates, Authentik, audit log), the same rules
+(`monitor/rules.rs`, tested against the cases of `monitor-rules.test.ts`), the
+same `Alert` rows and the same settings. Run it instead of
+`npm run monitor` (never both: each would send its own digest):
+
+```bash
+cargo build --release -p castord
+set -a; . ./.env; set +a
+rust/target/release/castor-monitor test     # then: run, once, status
+```
+
+E-mail goes only over TLS (smtps://, or smtp:// with STARTTLS required); the
+certificate check reads a bad certificate too, but reports it untrusted, and
+sends nothing over the connection. In development set
+`CASTORD_EXTRA_CA_CERTS=.dev-certs/ca.crt`.
 
 ## castor-node on a node
 

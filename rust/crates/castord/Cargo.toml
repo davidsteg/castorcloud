@@ -9,7 +9,7 @@ publish.workspace = true
 
 [dependencies]
 sqlx = { version = "0.8", default-features = false, features = ["runtime-tokio", "tls-rustls-ring-webpki", "postgres", "macros"] }
-tokio = { version = "1", features = ["macros", "rt-multi-thread", "signal", "time", "process", "io-util", "net"] }
+tokio = { version = "1", features = ["macros", "rt-multi-thread", "signal", "time", "process", "io-util", "net", "sync"] }
 thiserror = "2.0.21"
 async-trait = "0.1"
 castor-crypto = { path = "../crypto" }
@@ -21,6 +21,10 @@ serde = { version = "1", features = ["derive"] }
 serde_json = { version = "1", features = ["preserve_order"] }
 zeroize = "1.9.1"
 flate2 = "1.1.10"
+tokio-rustls = { version = "0.26.6", default-features = false, features = ["ring", "tls12"] }
+webpki-roots = "1.0.9"
+x509-parser = "0.18.1"
+lettre = { version = "0.11.23", default-features = false, features = ["smtp-transport", "tokio1", "tokio1-rustls", "ring", "webpki-roots", "builder"] }
 
 [lints]
 workspace = true
