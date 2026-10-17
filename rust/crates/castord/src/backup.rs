@@ -65,15 +65,81 @@ pub async fn list(c: &Control, s: &Settings) -> Result<Vec<(String, Vec<Snapshot
     Ok(retention::parse_list(&on_box(c, s, &["list"]).await?))
 }
 
+/// The box's pool: size and use in MB, health.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct Pool {
+    pub size_mb: u64,
+    pub used_mb: u64,
+    pub health: String,
+}
+
 /// "pool <size-mb> <alloc-mb> <health>".
-pub async fn pool_health(c: &Control, s: &Settings) -> Result<String, String> {
+pub async fn pool(c: &Control, s: &Settings) -> Result<Pool, String> {
     let out = on_box(c, s, &["pool"]).await?;
     let w: Vec<&str> = out.split_whitespace().collect();
     match w.as_slice() {
-        ["pool", _, _, health, ..] => Ok((*health).to_owned()),
-        ["pool", _, _] => Ok("UNKNOWN".into()),
+        ["pool", size, used, rest @ ..] => Ok(Pool {
+            size_mb: size.parse().unwrap_or(0),
+            used_mb: used.parse().unwrap_or(0),
+            health: rest.first().map_or_else(|| "UNKNOWN".to_owned(), |h| (*h).to_owned()),
+        }),
         _ => Err("unexpected output from the backup box".into()),
     }
+}
+
+pub async fn pool_health(c: &Control, s: &Settings) -> Result<String, String> {
+    Ok(pool(c, s).await?.health)
+}
+
+/// The database dumps on the box: (name, bytes), oldest first.
+pub async fn db_list(c: &Control, s: &Settings) -> Result<Vec<(String, u64)>, String> {
+    Ok(on_box(c, s, &["db-list"])
+        .await?
+        .lines()
+        .filter_map(|l| {
+            let (name, bytes) = l.split_once(' ')?;
+            Some((name.to_owned(), bytes.trim().parse().unwrap_or(0)))
+        })
+        .collect())
+}
+
+/// The command that writes one dump (still sealed) to stdout.
+pub fn db_get_cmd(s: &Settings, name: &str) -> Result<Cmd, String> {
+    let ok = name.starts_with("cp-")
+        && name.ends_with(".sql.gz.enc")
+        && name.len() <= 64
+        && name
+            .bytes()
+            .all(|b| b.is_ascii_alphanumeric() || b == b'-' || b == b'.');
+    if !ok {
+        return Err(format!("not a dump name: {name:?} (see db-list)"));
+    }
+    box_cmd(s, &["db-get", name])
+}
+
+/// Removes data a restore set aside on the tenant's node ("before-restore-…").
+pub async fn discard(c: &Control, db: &PgPool, tenant_id: &str, tag: &str) -> Result<String, String> {
+    let ok = (1..=64).contains(&tag.len())
+        && tag
+            .bytes()
+            .all(|b| b.is_ascii_lowercase() || b.is_ascii_digit() || b == b'-');
+    if !ok {
+        return Err(format!("invalid tag {tag:?}"));
+    }
+    let (slug, node_id): (String, Option<String>) =
+        sqlx::query_as(r#"SELECT slug, "nodeId" FROM "Tenant" WHERE id = $1"#)
+            .bind(tenant_id)
+            .fetch_one(db)
+            .await
+            .map_err(|e| e.to_string())?;
+    if !crate::valid::slug(&slug) {
+        return Err(format!("invalid tenant slug {slug:?}"));
+    }
+    let node_id = node_id.ok_or_else(|| format!("{slug} has no node"))?;
+    let node = Node::new(&NodeRow::load(db, &node_id).await?, &c.root, c.exec.clone())?;
+    node.host(strings(&["castor-snap", "discard", &slug, tag]), None)
+        .await?;
+    Ok(slug)
 }
 
 #[derive(sqlx::FromRow)]
@@ -147,6 +213,37 @@ pub async fn run_all(c: &Control, db: &PgPool, s: &Settings) -> Result<(), Strin
     }
     eprintln!("[backup-tenants] backed up {ok} tenant(s)");
     prune(c, db, s).await
+}
+
+/// One tenant now (the admin CLI's `run <slug>`); Ok(false) when it failed.
+pub async fn backup_one(c: &Control, db: &PgPool, s: &Settings, tenant_id: &str) -> Result<bool, String> {
+    let t = sqlx::query_as::<_, Backed>(
+        r#"SELECT t.id, t.slug, t."nodeId", b.generation, b."lastSnapshot", b.failures
+           FROM "Tenant" t LEFT JOIN "TenantBackup" b ON b."tenantId" = t.id
+           WHERE t.id = $1 AND t."nodeId" IS NOT NULL"#,
+    )
+    .bind(tenant_id)
+    .fetch_optional(db)
+    .await
+    .map_err(|e| e.to_string())?
+    .ok_or("the tenant has no node")?;
+    let node = Node::new(&NodeRow::load(db, &t.node_id).await?, &c.root, c.exec.clone())?;
+    if node.is_local() {
+        return Err(format!("{} isn't on a ZFS node", t.slug));
+    }
+    if busy(db, &t.id).await? {
+        return Err(format!(
+            "{} has a job queued or running; try again when it's done",
+            t.slug
+        ));
+    }
+    let listing = list(c, s).await?;
+    let empty = Vec::new();
+    let on = listing
+        .iter()
+        .find(|(slug, _)| *slug == t.slug)
+        .map_or(&empty, |(_, l)| l);
+    backup_tenant(c, db, s, &t, &node, on).await
 }
 
 /// Snapshot, send (incremental when the chain is intact), bookmark. Records
