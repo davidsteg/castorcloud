@@ -1,0 +1,28 @@
+[package]
+name = "castor-egress"
+version = "0.1.0"
+edition = "2024"
+rust-version = "1.88"
+license = "UNLICENSED"
+publish = false
+description = "Egress proxy of one custom stack: CONNECT and plain HTTP to allowlisted public hosts only"
+
+# Built on each STACKS node from this directory alone (Dockerfile), so it is
+# not part of the rust/ workspace.
+[workspace]
+
+[dependencies]
+httparse = "1.10"
+tokio = { version = "1", features = ["rt", "net", "io-util", "time", "macros", "sync"] }
+
+[lints.rust]
+unsafe_code = "forbid"
+
+[lints.clippy]
+unwrap_used = "deny"
+expect_used = "deny"
+panic = "deny"
+
+[profile.release]
+overflow-checks = true
+strip = true

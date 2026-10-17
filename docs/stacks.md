@@ -105,7 +105,9 @@ it; data directories are owned by that uid plus the node's userns base.
 - **LAN and control plane**: the egress proxy (`infra/node/egress`) resolves
   each name itself, refuses private, loopback, link-local, CGNAT, multicast and
   documentation ranges, and connects to the address it checked (no DNS
-  rebinding). Raw IPs are refused; only ports 443 (CONNECT) and 80.
+  rebinding). Raw IPs are refused; only ports 443 (CONNECT) and 80. Plain
+  HTTP carries one request per connection, so a second request can't reach
+  a host that wasn't checked. It is a static Rust binary on an empty image.
 - **Cookies**: stacks are served under `STACKS_DOMAIN`, a registrable domain
   of its own. Under `*.castorcloud.ch` a stack could set cookies for the whole
   domain (cookie tossing) and interfere with portal and Authentik sessions.
