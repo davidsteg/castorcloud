@@ -1,3 +1,11 @@
 # CodeQL findings accepted after review (Security workflow). One per line:
 #   <rule id> <file>
 # Each entry covers that rule in that file only; say why above it.
+
+# Key::from_hex starts from a zeroed buffer that hex::decode_to_slice fills
+# from the environment; no key is hard-coded (a bad value is an error).
+rust/hard-coded-cryptographic-value rust/crates/crypto/src/lib.rs
+
+# Assistant API keys are 30 random bytes (240 bits), not passwords: a fast
+# hash is right for them, and a slow one would add nothing.
+rust/weak-sensitive-data-hashing agent/tools/src/db.rs
