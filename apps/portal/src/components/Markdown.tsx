@@ -23,10 +23,16 @@ function inline(text: string): ReactNode[] {
 }
 
 function A({ href, children }: { href: string; children: ReactNode }) {
-  let internal = false;
+  let url: URL;
   try {
-    internal = typeof window !== "undefined" && new URL(href).origin === window.location.origin;
-  } catch {}
+    url = new URL(href);
+  } catch {
+    return <>{children}</>;
+  }
+  // INLINE only matches http(s) links; checked again so no other scheme can become a link.
+  if (url.protocol !== "https:" && url.protocol !== "http:") return <>{children}</>;
+  href = url.href;
+  const internal = typeof window !== "undefined" && url.origin === window.location.origin;
   return internal ? <a href={href}>{children}</a> : <a href={href} target="_blank" rel="noopener noreferrer">{children}</a>;
 }
 

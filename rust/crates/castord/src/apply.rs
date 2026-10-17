@@ -408,7 +408,7 @@ pub async fn prepare_once(c: &Control, node: &Node) -> Result<(), String> {
     {
         return Ok(());
     }
-    node.prepare(&c.ca_dir).await?;
+    node.prepare(&c.ca_dir, &c.images).await?;
     c.prepared
         .lock()
         .map_err(|_| "prepared nodes: poisoned")?

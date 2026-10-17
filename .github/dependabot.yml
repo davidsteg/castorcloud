@@ -1,0 +1,45 @@
+# Keeps pinned actions, base image digests, npm packages and crates current.
+# Security updates arrive as soon as an advisory is published; the rest weekly.
+version: 2
+updates:
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: weekly
+    groups:
+      actions:
+        patterns: ["*"]
+
+  - package-ecosystem: docker
+    directories:
+      - /
+      - /agent/tools
+      - /infra/node/cryptd
+      - /infra/node/egress
+    schedule:
+      interval: weekly
+    groups:
+      base-images:
+        patterns: ["*"]
+
+  - package-ecosystem: npm
+    directory: /
+    schedule:
+      interval: weekly
+    open-pull-requests-limit: 5
+    groups:
+      minor-and-patch:
+        update-types: [minor, patch]
+
+  # The Rust workspace and the two crates with their own lockfiles.
+  - package-ecosystem: cargo
+    directories:
+      - /rust
+      - /agent/tools
+      - /infra/node/egress
+    schedule:
+      interval: weekly
+    open-pull-requests-limit: 5
+    groups:
+      minor-and-patch:
+        update-types: [minor, patch]

@@ -9,6 +9,7 @@ use serde_json::Value;
 use zeroize::Zeroizing;
 
 use super::render;
+use crate::images::{Images, NodeImage};
 use crate::node::Node;
 use crate::suspend::strings;
 
@@ -126,20 +127,18 @@ pub async fn disconnect(node: &Node, network: &str) -> Result<(), String> {
     Ok(())
 }
 
-/// Once per process: builds the egress proxy image, (re)starts the edge
-/// proxy, writes its allowlist and reconnects it to every stack.
-pub async fn prepare(node: &Node) -> Result<(), String> {
+/// Once per process: builds (or pulls signed) the egress proxy image,
+/// (re)starts the edge proxy, writes its allowlist and reconnects it to every stack.
+pub async fn prepare(node: &Node, images: &Images) -> Result<(), String> {
     if node.control_plane_ips.is_empty() {
         return Err(format!("{}: stacks node without control-plane addresses", node.name));
     }
     check(node, None).await?;
     let infra = node.root().join("infra/node");
     let infra = infra.to_string_lossy();
-    node.docker(
-        strings(&["build", "-q", "-t", EGRESS_IMAGE, &format!("{infra}/egress")]),
-        false,
-    )
-    .await?;
+    images
+        .install(node, NodeImage::Egress, EGRESS_IMAGE, vec![format!("{infra}/egress")])
+        .await?;
     node.docker_env(
         strings(&[
             "compose",

@@ -292,6 +292,7 @@ pub fn control(exec: Arc<Fake>, traefik: &Path, llm: Option<&str>, authentik: &s
         versions_file: PathBuf::from("/repo/packages/stack-templates/versions.env"),
         usd_per_chf: 1.1,
         ca_dir: PathBuf::from("/repo/.dev-certs"),
+        images: castord::images::Images::build(),
         prepared: Default::default(),
         http,
         health_timeout: std::time::Duration::from_secs(2),

@@ -292,7 +292,7 @@ pub async fn node_add(c: &Control, db: &PgPool, a: &Args) -> Result<String, Stri
     } else {
         "syncing templates and starting the edge proxy…\n"
     });
-    node.prepare(&c.ca_dir).await?;
+    node.prepare(&c.ca_dir, &c.images).await?;
     let mut details = json!({ "name": name, "target": target, "pool": pool });
     if stacks {
         details["role"] = json!("STACKS");

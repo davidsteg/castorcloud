@@ -59,6 +59,10 @@ test("host paths, sockets and system paths can't be mounted", () => {
   assert.match(problems(withVol("./x:/x")), /host paths are not allowed/);
   assert.match(problems(withVol("data:/etc")), /can't mount over \/etc/);
   assert.match(problems(withVol("data:/srv/../etc")), /invalid container path/);
+  // A path that once made the check backtrack for hours fails at once.
+  const started = Date.now();
+  assert.match(problems(withVol(`data:/${"+".repeat(60)}!`)), /invalid container path/);
+  assert.ok(Date.now() - started < 1000);
   assert.match(problems(withVol("{type: bind, source: /, target: /host}")), /only named volumes/);
   assert.match(problems(withVol("other:/data")), /not declared/);
   // Volumes need storage booked.
