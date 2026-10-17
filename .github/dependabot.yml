@@ -21,6 +21,10 @@ updates:
     groups:
       base-images:
         patterns: ["*"]
+    # Node majors move by hand, LTS to LTS; odd releases never reach production.
+    ignore:
+      - dependency-name: node
+        update-types: ["version-update:semver-major"]
 
   - package-ecosystem: npm
     directory: /

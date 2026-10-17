@@ -12,7 +12,7 @@
 # Only BASE_DOMAIN is baked in (into the portal's client bundle); everything
 # else comes from the environment at run time (see .env.example).
 
-FROM rust:1.91-alpine@sha256:45c1c35cd364b8055e9e86f8ecd3e8c874b2dcb658d8a4f94b5d111aa0d651a2 AS rust
+FROM rust:1.98-alpine@sha256:7cc1c22d77d9432f7fe012a70e6d3e555af54c2a6832700ed7d553f1769ae89f AS rust
 WORKDIR /src
 COPY rust/Cargo.toml rust/Cargo.lock ./
 COPY rust/crates crates
@@ -20,7 +20,7 @@ RUN cargo build --release --locked -p castord --bins \
  && mkdir /out \
  && cp target/release/castord target/release/castor-admin target/release/castor-monitor target/release/castor-telegram /out/
 
-FROM node:24-alpine@sha256:ebfe2f90462722a7a4de65e91990e97fe0d401c70e0e762c5b53302f905ec1c1 AS portal
+FROM node:24-alpine@sha256:44fce696f38ba8c987c4db89954051000bbd05ffd8d8659ba15ed4a8602e937f AS portal
 WORKDIR /app
 COPY package.json package-lock.json turbo.json tsconfig.base.json ./
 COPY apps/portal/package.json apps/portal/
@@ -42,7 +42,7 @@ ENV BASE_DOMAIN=$BASE_DOMAIN NEXT_TELEMETRY_DISABLED=1
 RUN npm run build -w @pc/portal && rm -rf apps/portal/.next/cache \
     node_modules/@next/swc-*-gnu node_modules/@img/sharp-linux-* node_modules/@img/sharp-libvips-linux-*
 
-FROM node:24-alpine@sha256:ebfe2f90462722a7a4de65e91990e97fe0d401c70e0e762c5b53302f905ec1c1
+FROM node:24-alpine@sha256:44fce696f38ba8c987c4db89954051000bbd05ffd8d8659ba15ed4a8602e937f
 # castord drives nodes with the docker CLI and OpenSSH. The runtime never
 # installs packages, so npm, corepack and yarn go (and their CVEs with them).
 RUN apk add --no-cache docker-cli docker-cli-compose openssh-client tar \
