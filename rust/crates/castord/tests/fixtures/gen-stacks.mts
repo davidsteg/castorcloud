@@ -1,8 +1,7 @@
-// Writes stacks.json: what @pc/stacks and apps/provisioner/src/stacks.ts
-// decide for fixed inputs; castord's stacks module must decide the same.
+// Writes stacks.json: what @pc/stacks (the portal's checks) decides for
+// fixed inputs; castord's stacks module must decide the same.
 //   node --experimental-strip-types gen-stacks.mts > stacks.json
 import { parse as parseYaml } from "yaml";
-import { coveredStacks, parseIds, resolveUser, uncoveredVolumes } from "../../../../../apps/provisioner/src/stacks.ts";
 import {
   CATALOG, SpecError, checkStack, controlPlaneRoutes, digestFor, nodeMiddlewares, nodeRoute, parseImageRef, parseMemory, pinned,
   renderCompose, secretNames, specUnits, stackNames, storedDefinition,
@@ -185,23 +184,8 @@ const spec = (name: string) => {
   return d.spec!;
 };
 
-const passwd = "root:x:0:0:root:/root:/bin/sh\nnode:x:1000:1001::/home/node:/bin/sh\nwww-data:x:33:33::/var/www:/usr/sbin/nologin\nodd:x:1x:2\nnog:x:7:abc\n";
-const group = "root:x:0:\nnode:x:1001:\nwww-data:x:33:\nstaff:x:50:\n";
-const user = (u: string, files?: { passwd: string; group: string }) => {
-  try {
-    return resolveUser(u, files);
-  } catch (err) {
-    return { error: (err as Error).message };
-  }
-};
-const s = (id: string, memoryUnits: number, cpuUnits = 1, storageUnits = 0) => ({ id, units: { memoryUnits, cpuUnits, storageUnits } });
-const cover = (stacks: ReturnType<typeof s>[], booked: ReturnType<typeof s>["units"]) => {
-  const r = coveredStacks(stacks, booked);
-  return { stacks, booked, covered: r.covered.map((x) => x.id), over: r.over.map((x) => x.id) };
-};
-
 console.log(JSON.stringify({
-  comment: "Decided by @pc/stacks and apps/provisioner/src/stacks.ts. Regenerate with gen-stacks.mts",
+  comment: "Decided by @pc/stacks. Regenerate with gen-stacks.mts",
   digest: DIGEST,
   docs,
   images,
@@ -220,24 +204,6 @@ console.log(JSON.stringify({
     controlPlaneRoutes({ slug: "muster", stacks: [{ stack: "links", host: "links-muster.castorapps.ch" }, { stack: "tools", host: "tools-muster.castorapps.ch" }], edgeUrl: "http://10.0.0.40:8480", stacksDomain: "castorapps.ch", certResolver: "le" }),
     controlPlaneRoutes({ slug: "muster", stacks: [{ stack: "links", host: "links-muster.castor.test" }], edgeUrl: "http://10.0.0.40:8480", stacksDomain: "castor.test" }),
   ],
-  passwd,
-  group,
-  ids: Object.fromEntries(parseIds(passwd)),
-  users: [
-    ["", user("")], ["1000", user("1000")], ["1000:50", user("1000:50")], ["node", user("node", { passwd, group })],
-    ["www-data:staff", user("www-data:staff", { passwd, group })], ["nobody", user("nobody", { passwd, group })],
-    ["node:nogroup", user("node:nogroup", { passwd, group })], ["70000", user("70000")], ["1:70000", user("1:70000")],
-    ["nog", user("nog", { passwd, group })], ["7", user("7", { passwd, group })], [":5", user(":5")], ["node", user("node")],
-  ],
-  uncovered: [
-    [["/data", "/var/lib/x/"], ["/data", "/tmp"]], [["/srv/app/data"], ["/srv/app"]], [["/database"], ["/data"]],
-    [["/x"], ["/"]], [["/"], ["/x"]], [["//a//"], ["/a"]],
-  ].map(([declared, mounts]) => ({ declared, mounts, open: uncoveredVolumes(declared, mounts) })),
   // What the portal stores (and castord reads) for a definition.
   stored: [minimal, rendered, ...CATALOG.map((a) => a.source)].map((source) => storedDefinition(source)),
-  cover: [
-    cover([s("a", 2), s("b", 4), s("c", 1)], { memoryUnits: 3, cpuUnits: 3, storageUnits: 0 }),
-    cover([s("a", 1, 1, 1), s("b", 1, 1, 1)], { memoryUnits: 9, cpuUnits: 9, storageUnits: 1 }),
-    cover([], { memoryUnits: 0, cpuUnits: 0, storageUnits: 0 }),
-  ],
 }, null, 2));

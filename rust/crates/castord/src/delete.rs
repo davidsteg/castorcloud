@@ -1,5 +1,4 @@
-//! DELETE: the same steps as `Lifecycle.delete` and `Stacks.deleteAll` in
-//! apps/provisioner/src. Irreversible: the volume key goes, so every copy of
+//! DELETE: removes a tenant and its custom stacks. Irreversible: the volume key goes, so every copy of
 //! the tenant's data (and its backups) can no longer be read. Each step can
 //! run again, so a retry after a failure halfway finishes the job.
 //!
@@ -20,10 +19,10 @@ use crate::storage::{StacksStorage, TenantStorage};
 use crate::suspend::{ALL_PROFILES, STACKS_EDGE, compose_args, remove_file, strings};
 use crate::{Control, Handler, Job, JobCx, valid};
 
-/// The node's shared services, joined to each tenant's shared network (lifecycle.ts).
+/// The node's shared services, joined to each tenant's shared network.
 pub const SHARED_CONTAINERS: [&str; 3] = ["pc-node-immich-ml", "pc-node-tika", "pc-node-gotenberg"];
 pub const LLM_GATEWAY: &str = "pc-node-llm-gateway";
-/// Services with their own OIDC application (STACK_SERVICES in tenant.ts).
+/// Services with their own OIDC application (STACK_SERVICES).
 pub const STACK_SERVICES: [&str; 4] = ["photos", "docs", "places", "flights"];
 
 pub struct Delete(pub Arc<Control>);

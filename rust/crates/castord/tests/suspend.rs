@@ -1,6 +1,5 @@
 // SUSPEND against the real schema, with Docker and SSH faked: the commands
-// must be the ones the TypeScript worker runs (lifecycle.ts, stacks.ts),
-// and the rows must end the same. Runs when TEST_DATABASE_URL is set.
+// it runs and the rows it leaves. Runs when TEST_DATABASE_URL is set.
 #![allow(clippy::unwrap_used, clippy::expect_used, clippy::panic)]
 
 mod common;

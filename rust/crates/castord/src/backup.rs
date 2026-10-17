@@ -1,4 +1,4 @@
-//! Tenant backups: raw ZFS sends from each node to the backup box (backup.ts).
+//! Tenant backups: raw ZFS sends from each node to the backup box.
 //!
 //!   node (castor-snap)  ──ssh──►  castord  ──ssh──►  backup box (castor-backup)
 //!   zfs send -w (ciphertext)      pipes the stream     zfs receive -u, no key
@@ -547,7 +547,7 @@ pub async fn dump_database(c: &Control, s: &Settings) -> Result<String, String> 
     let plain = Zeroizing::new(gz.finish().map_err(|e| format!("gzip: {e}"))?);
     let sealed = castor_crypto::dump::seal(&plain, &recipient).map_err(|e| e.to_string())?;
     let stamp = retention::snapshot_name(now());
-    // cp-20261016t0230.sql.gz.enc, as stamp() in backup.ts.
+    // cp-20261016t0230.sql.gz.enc.
     let name = format!(
         "cp-{}.sql.gz.enc",
         stamp.trim_start_matches("cb-").trim_end_matches('Z').to_lowercase()
@@ -573,7 +573,7 @@ impl Task for BackupTenants {
     }
 
     fn every(&self) -> Every {
-        // As backup.ts: whole milliseconds of the interval.
+        // Whole milliseconds of the interval.
         #[allow(clippy::cast_possible_truncation)]
         Every::Ms((self.1.interval_hours * 3_600_000.0) as i64)
     }

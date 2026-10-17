@@ -1,5 +1,5 @@
-// The render module against what apps/provisioner/src/tenant.ts renders for
-// the same inputs (fixtures/render.json, made by fixtures/gen-render.mts).
+// The render module against fixtures/render.json: what the TypeScript worker
+// rendered for the same inputs before castord replaced it.
 #![allow(clippy::unwrap_used, clippy::expect_used, clippy::panic)]
 
 use castord::render::*;

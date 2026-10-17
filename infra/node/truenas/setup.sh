@@ -111,5 +111,5 @@ ip=$(midclt call interface.ip_in_use | python3 -c 'import json, sys; print(next(
 cat <<DONE
 
 Node ready. On the control plane:
-  npm run node -w @pc/provisioner -- add <name> $USER_NAME@${ip:-<nas-ip>} --kind truenas --pool $pool --edge ${ip:-<nas-ip>}:$EDGE_PORT --auth-host-ip <control-plane-ip>
+  castor-admin node add <name> $USER_NAME@${ip:-<nas-ip>} --kind truenas --pool $pool --edge ${ip:-<nas-ip>}:$EDGE_PORT --auth-host-ip <control-plane-ip>
 DONE

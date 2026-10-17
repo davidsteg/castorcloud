@@ -1,4 +1,4 @@
-// Setting up a tenant's Authentik objects, as authentik.ts does: the same
+// Setting up a tenant's Authentik objects: the
 // requests against an Authentik that has nothing yet, and only updates
 // against one that has everything.
 #![allow(clippy::unwrap_used, clippy::expect_used, clippy::panic)]

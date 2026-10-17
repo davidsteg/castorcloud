@@ -45,9 +45,9 @@ The admin console is only for users with `User.isStaff`; everyone else gets a
 person must have signed in to the portal once):
 
 ```sh
-npm run staff -w @pc/provisioner -- add you@example.ch
-npm run staff -w @pc/provisioner -- list
-npm run staff -w @pc/provisioner -- remove you@example.ch
+castor-admin staff add you@example.ch
+castor-admin staff list
+castor-admin staff remove you@example.ch
 ```
 
 ## Newsletter

@@ -1,6 +1,6 @@
 //! The tenant job queue in Postgres: the same contract and the same SQL as
-//! `packages/core/src/jobs.ts`, so this worker and the TypeScript one can
-//! share the queue, each taking only the job kinds it runs.
+//! `packages/core/src/jobs.ts` (the portal enqueues with it), so several
+//! workers can share the queue, each taking only the job kinds it runs.
 //!
 //!   claim     QUEUED, runAfter passed, a kind it runs, no older QUEUED job of
 //!             the same tenant, no RUNNING one (a unique index enforces that
@@ -20,14 +20,14 @@ use std::time::Duration;
 
 use sqlx::PgPool;
 
-/// A job's lease. As long as the TypeScript worker's, which a lapse would
-/// hand the job to a second worker while the first still runs it.
+/// A job's lease (as jobs.ts). A lapse would hand the job to a second
+/// worker while the first still runs it.
 pub const LEASE: Duration = Duration::from_secs(30 * 60);
 pub const RENEW: Duration = Duration::from_secs(60);
 /// First retry after this, doubling per attempt.
 const BACKOFF_MS: f64 = 15_000.0;
 
-/// Postgres' enum "JobKind", as the TypeScript side names them.
+/// Postgres' enum "JobKind" (packages/db's schema).
 pub const ALL_KINDS: [&str; 8] = [
     "PROVISION",
     "UPDATE",

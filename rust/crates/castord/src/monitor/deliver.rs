@@ -1,4 +1,4 @@
-//! Alert channels (monitor.ts): Telegram gets every round's digest; e-mail
+//! Alert channels: Telegram gets every round's digest; e-mail
 //! gets those with anything critical in them (or everything, without
 //! Telegram). Plain text everywhere, so nothing in an alert is interpreted.
 

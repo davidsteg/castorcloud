@@ -1,5 +1,4 @@
-//! RESTORE: a tenant's data back from the backup box (worker.ts, with
-//! `Lifecycle.stop` and `Backups.restore`), then the stack starts again as
+//! RESTORE: a tenant's data back from the backup box, then the stack starts again as
 //! after an UPDATE.
 //!
 //!   1. the stack stops and its volume is locked;
@@ -43,7 +42,7 @@ pub fn generation(s: &str) -> bool {
         .is_some_and(|n| (1..=9).contains(&n.len()) && !n.starts_with('0') && n.bytes().all(|b| b.is_ascii_digit()))
 }
 
-/// cb-<...> as castor-backup names snapshots (snapshotName in retention.ts).
+/// cb-<...> as castor-backup names snapshots.
 pub fn snapshot(s: &str) -> bool {
     s.strip_prefix("cb-")
         .is_some_and(|r| (1..=64).contains(&r.len()) && r.bytes().all(|b| b.is_ascii_alphanumeric() || b == b'-'))

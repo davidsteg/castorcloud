@@ -1,5 +1,4 @@
-//! REVOKE_ACCESS: ends a person's access in the tenant's apps now, as
-//! `Lifecycle.revokeAccess` and `access.ts` in apps/provisioner/src. None of
+//! REVOKE_ACCESS: ends a person's access in the tenant's apps now. None of
 //! the apps has an admin API for this, so each command works on the app's
 //! own database or runtime inside the tenant stack. Values reach SQL only as
 //! psql variables, and code only as environment variables.
@@ -284,7 +283,7 @@ impl Handler for RevokeAccess {
 }
 
 /// Carries out the tenant's pending AccessRevocations in the booked apps
-/// (processRevocations in lifecycle.ts); also run by every apply.
+///; also run by every apply.
 pub(crate) async fn process(
     c: &Control,
     cx: &JobCx,

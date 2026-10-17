@@ -8,7 +8,7 @@ import { BASE_DOMAIN } from "@/lib/config";
 import { staffUser } from "@/lib/session";
 import { SiteHeader } from "@/components/site/SiteHeader";
 
-// Staff console (User.isStaff, set with `npm run staff -w @pc/provisioner`).
+// Staff console (User.isStaff, set with `castor-admin staff add`).
 // Everyone else gets a 404. Every action re-checks staff and is audited.
 export const metadata: Metadata = { robots: { index: false } };
 

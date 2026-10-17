@@ -1,5 +1,5 @@
 // Backups against the real schema, with SSH and the backup box faked: the
-// commands of backup.ts and the rows it leaves. Runs when TEST_DATABASE_URL is set.
+// commands and the rows it leaves. Runs when TEST_DATABASE_URL is set.
 #![allow(clippy::unwrap_used, clippy::expect_used, clippy::panic)]
 
 mod common;

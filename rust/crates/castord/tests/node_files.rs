@@ -1,4 +1,4 @@
-// Tenant files, as node.ts writes them: the env file and compose override on
+// Tenant files: the env file and compose override on
 // the control plane (owner-only), files the containers mount on the node
 // (castor-put over ssh, owner-only unless readable), and nothing outside the
 // tenant's directory.

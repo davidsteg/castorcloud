@@ -1,6 +1,5 @@
 // DELETE against the real schema, with Docker, SSH, Authentik and the LLM
-// gateway faked: the same commands and calls as the TypeScript worker
-// (lifecycle.ts, stacks.ts), the same rows afterwards, and a retry after a
+// gateway faked: the commands and calls it makes, the rows afterwards, and a retry after a
 // failure halfway finishes the job. Runs when TEST_DATABASE_URL is set.
 #![allow(clippy::unwrap_used, clippy::expect_used, clippy::panic)]
 

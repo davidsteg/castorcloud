@@ -1,4 +1,4 @@
-//! What the monitor measures (monitor.ts): each check gathers its inputs and
+//! What the monitor measures: each check gathers its inputs and
 //! hands them to the rules.
 
 use std::collections::HashSet;
@@ -530,7 +530,7 @@ impl Check for Platform {
             Ok(Ok(None)) => {
                 out.push(Finding::new(queue, Severity::Critical, "The provisioner worker is not running").after(2))
             }
-            // The TypeScript and Rust workers split the kinds: one of them is down.
+            // Workers limited to some kinds (CASTORD_KINDS): one of them is down.
             Ok(Ok(Some((missing, workers)))) if !missing.is_empty() => out.push(
                 Finding::new(
                     queue,

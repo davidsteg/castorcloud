@@ -2,16 +2,16 @@
 
 Plan and reasons: [docs/rust-core.md](../docs/rust-core.md).
 
-The control-plane core, moving from TypeScript (`packages/core`,
-`apps/provisioner`) to Rust one module at a time. Each crate stays
-compatible with the TypeScript it replaces, so both run side by side until
-the TypeScript part is removed.
+The control-plane core: the worker that runs tenant jobs and recurring
+tasks, the monitor, the Telegram bot, the operator CLI and the node tools.
+It replaced the TypeScript worker `apps/provisioner`; the portal (Next.js)
+enqueues jobs and seals secrets in formats these crates read.
 
 | Crate | Replaces | State |
 |---|---|---|
 | `crates/crypto` | `packages/core/src/crypto.ts` | done; format-compatible, tested in both directions |
 | `crates/node` | `infra/node/bin/castor-ssh`, `castor-zfs`, `castor-snap` | done; same commands and output, the scripts stay until every node runs it |
-| `crates/castord` | `apps/provisioner/src/worker.ts` | queue loop done (same SQL as `jobs.ts`); every job kind ported |
+| `crates/castord` | `apps/provisioner/src/worker.ts` | done; every job kind and task (same queue SQL as `jobs.ts`) |
 | `castor-monitor` (in `crates/castord`) | `apps/provisioner/src/monitor.ts` | done; same checks, rules, alert table and settings |
 | `castor-telegram` (in `crates/castord`) | `apps/provisioner/src/telegram.ts` | done; same pairing, texts and settings |
 | `castor-admin` (in `crates/castord`) | `node-admin.ts`, `backup-admin.ts`, `staff-admin.ts`, `delete-tenant.ts`, `e2e.ts` | done; same commands and checks |
@@ -31,67 +31,70 @@ and never `Debug`-printable.
 
 ## castord
 
-Runs next to the TypeScript worker on the same queue, with the control
-plane's `.env` (`set -a; . ./.env; set +a; castord` from the repository, or
-`CASTOR_ROOT` pointing at it). `CASTORD_KINDS` lists the job kinds it takes;
-the TypeScript worker reads the same setting and leaves those kinds alone, so
-one line in `.env` moves a kind, and emptying it moves it back. castord refuses
-a kind it has no handler for, and the monitor raises `platform:queue` when a
-kind has no live worker.
+The worker, with the control plane's `.env`:
 
-| Kind | In castord | Notes |
-|---|---|---|
-| `SUSPEND` | yes | stops custom stacks and the tenant stack, locks both datasets, blocks the LLM key |
-| `DELETE` | yes | removes custom stacks, the tenant stack, its data and files, its Authentik apps and groups, LLM key and secrets; deleting the volume key crypto-shreds every copy |
-| `REVOKE_ACCESS` | yes | ends sessions and keys in the booked apps (access.ts commands), Authentik sessions for "sign out everywhere"; waits while the apps are stopped |
-| `PROVISION`, `UPDATE`, `RESUME` | yes | places the tenant, prepares its node once per process, sets up Authentik, opens and sizes the storage, renders the files, starts the stack and waits for it; runs pending revocations; `UPDATE`/`RESUME` queue `STACKS` when the tenant has custom stacks |
-| `STACKS` | yes | places the tenant's stacks node and prepares it (egress image, edge proxy, its allowlist); removes, stops or deploys each stack (images pinned by digest, data directories owned by the mapped container user, Docker checked for userns-remap and gVisor right before), its sign-in, node route and the control plane's route |
-| `RESTORE` | yes | stops the stack and locks its volume, sets the current dataset aside, pipes the backup box's raw stream into the node's `zfs receive` (a failure puts the old dataset back), then applies as `UPDATE`; a retry once the data is back only restarts the stack |
+```bash
+cargo build --release -p castord
+set -a; . ./.env; set +a
+rust/target/release/castord        # from the repository, or with CASTOR_ROOT
+```
 
-Recurring tasks move the same way, with `CASTORD_TASKS`. Each runs once per
-slot across every worker (the `Schedule` table, as `schedule.ts`), so either
-worker can hold it:
+It takes every job kind and runs every recurring task. `CASTORD_KINDS` and
+`CASTORD_TASKS` limit one castord to some (a comma list, or `none`), for
+example to run the backups on a second one; a job kind no castord takes
+raises the monitor's `platform:queue`. When it starts it applies the
+self-registration flow in Authentik and records the Docker host it runs on
+as the node `local` (taking tenants unless `LOCAL_NODE=off`).
 
-| Task | In castord | Notes |
-|---|---|---|
-| `watch-nodes` | yes | every 5 min: probes remote nodes (pool, memory, CPUs; a stacks node by its Docker engine, checked for userns-remap and gVisor), records the facts or the error, and reopens active tenants whose storage or stacks came back locked |
-| `measure-storage` | yes | hourly: every active tenant's storage use, for the portal |
-| `sweep-deletions` | yes | hourly: queues `DELETE` for tenants whose grace period has ended |
-| `backup-tenants` | yes | every `BACKUP_INTERVAL_HOURS`: snapshot each active tenant on a ZFS node and pipe it to the box (incremental while the chain is intact, else a full send into a new generation), record the outcome, then the retention policy of `retention.ts` and forgetting deleted tenants |
-| `backup-database` | yes | 02:30: `pg_dumpall` of the control plane, gzipped and sealed to `BACKUP_DB_PUBLIC_KEY` (the format of `db-dump.ts`, opened by `npm run backup -- db-get` either way) |
-| `verify-backups` | yes | Sundays 04:00: the box reads every tenant's newest backup back |
+| Kind | Notes |
+|---|---|
+| `SUSPEND` | stops custom stacks and the tenant stack, locks both datasets, blocks the LLM key |
+| `DELETE` | removes custom stacks, the tenant stack, its data and files, its Authentik apps and groups, LLM key and secrets; deleting the volume key crypto-shreds every copy |
+| `REVOKE_ACCESS` | ends sessions and keys in the booked apps, Authentik sessions for "sign out everywhere"; waits while the apps are stopped |
+| `PROVISION`, `UPDATE`, `RESUME` | places the tenant, prepares its node once per process, sets up Authentik, opens and sizes the storage, renders the files, starts the stack and waits for it; runs pending revocations; `UPDATE`/`RESUME` queue `STACKS` when the tenant has custom stacks |
+| `STACKS` | places the tenant's stacks node and prepares it (egress image, edge proxy, its allowlist); removes, stops or deploys each stack (images pinned by digest, data directories owned by the mapped container user, Docker checked for userns-remap and gVisor right before), its sign-in, node route and the control plane's route |
+| `RESTORE` | stops the stack and locks its volume, sets the current dataset aside, pipes the backup box's raw stream into the node's `zfs receive` (a failure puts the old dataset back), then applies as `UPDATE`; a retry once the data is back only restarts the stack |
 
-castord needs the TypeScript worker's settings for these (`AUTHENTIK_BOOTSTRAP_TOKEN`,
+Each recurring task runs once per slot across every worker (the `Schedule`
+table); the backups run in a loop of their own, so a long first send never
+holds up the node watcher:
+
+| Task | Notes |
+|---|---|
+| `watch-nodes` | every 5 min: probes remote nodes (pool, memory, CPUs; a stacks node by its Docker engine, checked for userns-remap and gVisor), records the facts or the error, and reopens active tenants whose storage or stacks came back locked |
+| `measure-storage` | hourly: every active tenant's storage use, for the portal |
+| `sweep-deletions` | hourly: queues `DELETE` for tenants whose grace period has ended |
+| `backup-tenants` | every `BACKUP_INTERVAL_HOURS`: snapshot each active tenant on a ZFS node and pipe it to the box (incremental while the chain is intact, else a full send into a new generation), record the outcome, then the retention policy (`src/retention.rs`) and forgetting deleted tenants |
+| `backup-database` | 02:30: `pg_dumpall` of the control plane, gzipped and sealed to `BACKUP_DB_PUBLIC_KEY` (fetched with `castor-admin backup db-get`, opened offline with `db-open`) |
+| `verify-backups` | Sundays 04:00: the box reads every tenant's newest backup back |
+
+Settings (`src/main.rs` lists them all): `AUTHENTIK_BOOTSTRAP_TOKEN`,
 `BASE_DOMAIN`, `PUBLIC_SCHEME`, `BRAND_NAME`, `TZ`, `AUTH_HOST_IP`, the encryption
-keys, `LITELLM_MASTER_KEY`, `AI_USD_PER_CHF`, `CA_DIR`); in development also
+keys, `LITELLM_MASTER_KEY`, `AI_USD_PER_CHF`, `CA_DIR`; in development also
 `CASTORD_EXTRA_CA_CERTS=.dev-certs/ca.crt`.
 
-To switch a kind: build castord (`cargo build --release -p castord`), add the
-kind to `CASTORD_KINDS`, restart the TypeScript worker and start castord.
 castord prepares a node (templates, edge proxy; on a STACKS node the egress
-image and the stacks edge) before it starts anything there, as the
-TypeScript worker does.
+image and the stacks edge) before it starts anything there.
 
 Custom stacks: castord checks a stack definition with the same rules as
 `@pc/stacks` (`src/stacks/spec.rs`, held to `tests/fixtures/stacks.json`,
-which CI regenerates from the TypeScript), but it reads only the parsed
+which CI regenerates from `@pc/stacks`), but it reads only the parsed
 document the portal stores as JSON, never the customer's YAML: two YAML
 parsers could read one file two ways, and the definition is where the
-security checks are. Definitions saved before are converted by the
-TypeScript worker when it starts (`storeDefinitionsAsJson`). Settings:
+security checks are. Definitions saved as YAML before that are converted
+once with `npm run stacks:json -w @pc/portal`. Settings:
 `STACKS_DOMAIN`, `STACKS_CERT_RESOLVER`.
 
-Restores need `BACKUP_TARGET` (the backup box's user@host) as for the
-TypeScript worker. The stream goes from one ssh to the other through
+Restores need `BACKUP_TARGET` (the backup box's user@host). The stream goes from one ssh to the other through
 castord, still encrypted with the tenant's key, which castord never sends.
 
 ## castor-monitor
 
 The monitor of docs/monitoring.md in Rust: the same checks (platform, nodes,
 services, jobs, backups, certificates, Authentik, audit log), the same rules
-(`monitor/rules.rs`, tested against the cases of `monitor-rules.test.ts`), the
-same `Alert` rows and the same settings. Run it instead of
-`npm run monitor` (never both: each would send its own digest):
+(`monitor/rules.rs`, tested against the cases of the TypeScript monitor), the
+same `Alert` rows and the same settings. Run one (each sends its own
+digest):
 
 ```bash
 cargo build --release -p castord
@@ -108,10 +111,9 @@ sends nothing over the connection. In development set
 
 The assistant's Telegram bot in Rust: pairing codes from the portal, one
 conversation per linked member, `/new`, `/disconnect`, the same texts in the
-four languages. Same settings as `npm run telegram` (`TELEGRAM_BOT_TOKEN`,
-`DATABASE_URL`, the encryption keys, `BASE_DOMAIN`, `PUBLIC_SCHEME`,
-`LLM_GATEWAY_URL`, `TZ`); run one of the two, since Telegram hands each update
-to one poller. Answers go back as plain text, and the bot token never
+four languages. Settings: `TELEGRAM_BOT_TOKEN`, `DATABASE_URL`, the
+encryption keys, `BASE_DOMAIN`, `PUBLIC_SCHEME`, `LLM_GATEWAY_URL`, `TZ`; run
+one, since Telegram hands each update to one poller. Answers go back as plain text, and the bot token never
 appears in a log line.
 
 ## castor-admin
@@ -130,8 +132,8 @@ castor-admin delete-tenant <slug>
 castor-admin e2e [--delete]
 ```
 
-It replaces `npm run node`, `backup`, `staff`, `delete-tenant` and `e2e`
-with the same arguments. `node add` probes the node and refuses it unless
+It replaced the TypeScript `npm run node`, `backup`, `staff`,
+`delete-tenant` and `e2e`, with the same arguments. `node add` probes the node and refuses it unless
 its pool is ONLINE (a stacks node also needs Docker with userns-remap and
 gVisor, or `--no-gvisor`), then prepares it. Files with secrets
 (`db-get`, `db-open`) are written with mode 0600.

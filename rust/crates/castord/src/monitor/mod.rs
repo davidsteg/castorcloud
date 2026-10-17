@@ -1,7 +1,7 @@
-//! The monitor (monitor.ts): checks the platform every few minutes and alerts
+//! The monitor: checks the platform every few minutes and alerts
 //! the operator on Telegram and/or by e-mail (docs/monitoring.md). Its own
 //! process (castor-monitor), so it keeps reporting when the workers are down.
-//! Alert state is the Alert table, shared with the TypeScript monitor.
+//! Alert state is the Alert table.
 
 pub mod checks;
 pub mod deliver;
@@ -51,7 +51,7 @@ pub fn now_ms() -> i64 {
         .map_or(0, |d| i64::try_from(d.as_millis()).unwrap_or(i64::MAX))
 }
 
-/// Every check of the TypeScript monitor, in its order.
+/// Every check, in the order the digest lists them.
 pub fn all_checks(db: &PgPool, http: &reqwest::Client, s: &Arc<Settings>) -> Vec<Arc<dyn Check>> {
     vec![
         Arc::new(checks::Platform {

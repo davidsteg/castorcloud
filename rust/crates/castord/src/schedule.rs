@@ -1,7 +1,6 @@
 //! Recurring tasks, once per slot however many workers are up
 //! (packages/core/src/schedule.ts): a worker runs a task only after moving its
-//! nextRunAt forward in one UPDATE, and only one worker's UPDATE matches. The
-//! TypeScript worker claims the same rows, so a task can move between the two.
+//! nextRunAt forward in one UPDATE, and only one worker's UPDATE matches.
 //!
 //! Times of day are computed by Postgres, whose time zone data handles DST.
 

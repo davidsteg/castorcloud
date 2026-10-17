@@ -1,10 +1,13 @@
 # Moving the core to Rust
 
-The control-plane core moves from TypeScript to Rust one module at a time,
-one pull request per step. Every step stays compatible with what it
-replaces, so the TypeScript and Rust parts run side by side until the
-TypeScript part is deleted. The rule: as much as possible in Rust, but
-where something else is clearly better, use that, and say why here.
+The control-plane core moved from TypeScript to Rust one module at a time,
+one pull request per step. Every step stayed compatible with what it
+replaced, so the TypeScript and Rust parts ran side by side until the
+TypeScript part was deleted. The migration is complete: the TypeScript
+worker (`apps/provisioner`) is gone, and `castord`, `castor-admin`,
+`castor-monitor` and `castor-telegram` (`rust/README.md`) do its work. The
+rule: as much as possible in Rust, but where something else is clearly
+better, use that, and say why here.
 
 ## Why Rust for the core
 
@@ -17,14 +20,14 @@ static binary per platform with a short, audited dependency list
 
 ## Module by module
 
-| Today | Becomes | Why |
+| Was | Became | Why |
 |---|---|---|
 | `packages/core/src/crypto.ts` | Rust `crates/crypto` (done) | Holds the keys; byte-compatible format, tested in both directions |
 | `infra/node/bin/castor-ssh`, `castor-zfs`, `castor-snap` | One Rust binary `castor-node` (done, `crates/node`) | Runs as root behind the SSH forced command: parsed, typed arguments instead of shell `case` patterns, unit tests for every refusal |
 | BullMQ + Redis job queue (`packages/core/src/jobs.ts`) | Postgres queue (done): the `Job` table, claimed with `FOR UPDATE SKIP LOCKED`, leases, and a `Schedule` table for recurring tasks | Postgres is already the source of truth; Redis is gone (one service and one unauthenticated port less), and a Rust worker claims jobs with the same SQL. The portal enqueues by inserting a row |
-| `apps/provisioner` worker: lifecycle, tenant rendering, placement, storage, nodes, ZFS, volumes, backups, retention, DB dumps | Rust daemon `castord` (tokio, sqlx), ported job kind by job kind | The privileged orchestration; each job kind moves when its Rust version passes the same tests |
-| Monitoring and alert rules, Authentik and LLM-gateway clients, Telegram bot | Part of `castord` | Plain HTTP and rules; no reason to keep a second runtime once the worker is Rust |
-| Admin CLIs (`node`, `backup`, `staff`, `delete-tenant`) | `castorctl` subcommands | Same code paths as the daemon |
+| `apps/provisioner` worker: lifecycle, tenant rendering, placement, storage, nodes, ZFS, volumes, backups, retention, DB dumps | Rust daemon `castord` (tokio, sqlx), ported job kind by job kind (done) | The privileged orchestration; each job kind moved when its Rust version passed the same tests |
+| Monitoring and alert rules, Authentik and LLM-gateway clients, Telegram bot | Part of `castord` (done: `castor-monitor`, `castor-telegram`) | Plain HTTP and rules; no reason to keep a second runtime once the worker is Rust |
+| Admin CLIs (`node`, `backup`, `staff`, `delete-tenant`) | `castor-admin` subcommands (done) | Same code paths as the daemon |
 
 ## What stays as it is
 
@@ -48,14 +51,14 @@ static binary per platform with a short, audited dependency list
    re-running its setup script (done; see `rust/README.md`). The dev-only
    `infra/node/cryptd` (LUKS volumes on the local Docker host) stays shell
    until the local node moves to ZFS too.
-4. `castord` with the job claim loop, taking job kinds over one by one;
-   the TypeScript worker only claims the kinds it still owns. The loop is
-   in place (`rust/crates/castord`, tested against the same Postgres schema).
-   Every kind has a Rust handler; `CASTORD_KINDS` in `.env`
-   decides which worker runs it. The monitor raises `platform:queue` when a job
-   kind has no live worker, so a kind can't be left unrun between the two.
-5. Monitoring, clients and admin CLIs; then the TypeScript provisioner is
-   removed.
+4. `castord` with the job claim loop, taking job kinds over one by one
+   while the TypeScript worker claimed the kinds it still owned (done;
+   `rust/crates/castord`, tested against the same Postgres schema). castord
+   now takes every job kind and recurring task; `CASTORD_KINDS` /
+   `CASTORD_TASKS` in `.env` can narrow that. The monitor raises
+   `platform:queue` when a job kind has no live worker.
+5. Monitoring, clients and admin CLIs; then the TypeScript provisioner was
+   removed (done).
 
-Work in flight elsewhere (custom stacks, GitHub login) lands in
-TypeScript first and is ported in the step that covers its module.
+Custom stacks and GitHub login landed in TypeScript first and were ported
+in the step that covered their module.

@@ -1,4 +1,4 @@
-//! The Castor Telegram bot (telegram.ts): one bot for all tenants. Members
+//! The Castor Telegram bot: one bot for all tenants. Members
 //! opt in from the portal (Assistant → Telegram), which shows a one-time
 //! pairing code; sending that code to the bot links their Telegram account to
 //! their own assistant. After that, every text message is forwarded to the
@@ -446,7 +446,7 @@ mod tests {
 
     #[test]
     fn codes_and_commands() {
-        // As pairingCodeHash in assistant.ts.
+        // As the portal hashes pairing codes.
         assert_eq!(pairing_code_hash("k7m3-q9tx"), pairing_code_hash("K7M3Q9TX"));
         assert_eq!(
             pairing_code_hash("K7M3Q9TX"),

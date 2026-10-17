@@ -1,8 +1,7 @@
-//! The tenant assistant (Hermes Agent): what is rendered for it, as
-//! `apps/provisioner/src/assistant.ts`. One Hermes profile per household
+//! The tenant assistant (Hermes Agent): what is rendered for it. One Hermes profile per household
 //! member, each with its own API key and its own token for the read-only
 //! data tools, so a member's assistant only ever sees that member's data.
-//! The outputs are checked against the TypeScript ones (tests/fixtures/render.json).
+//! The outputs are held to tests/fixtures/render.json.
 
 use sha2::{Digest, Sha256};
 

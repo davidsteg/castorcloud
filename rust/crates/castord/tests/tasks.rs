@@ -1,5 +1,5 @@
 // Recurring tasks against the real schema, with SSH faked: the slots of
-// schedule.ts and what worker.ts's maintenance tasks do.
+// schedule.ts and what the maintenance tasks do.
 // Runs when TEST_DATABASE_URL is set.
 #![allow(clippy::unwrap_used, clippy::expect_used, clippy::panic)]
 

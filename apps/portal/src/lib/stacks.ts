@@ -20,7 +20,7 @@ export const MAX_STACKS = 10;
 
 export const stackOrigin = (slug: string, name: string) => `${PUBLIC_SCHEME}://${stackHost(slug, name, STACKS_DOMAIN)}`;
 
-/** Must match the provisioner's sealing (apps/provisioner/src/stacks.ts definitionKey). */
+/** Must match the provisioner's sealing (rust/crates/castord/src/stacks/run.rs definition_key). */
 const definitionKey = (name: string) => `stack-definition:${name}`;
 
 export type AddResult = { ok: true } | { ok: false; error: "name" | "invalid" | "taken" | "limit" | "billing" | "too-big" | "unavailable"; problems?: string[] };

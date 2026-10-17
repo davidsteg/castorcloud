@@ -6,17 +6,15 @@ self-hosted and adds no service to run: no Prometheus, no Grafana, no
 third-party monitoring SaaS.
 
 ```
-npm run monitor -w @pc/provisioner              # run (every MONITOR_INTERVAL_S)
-npm run monitor -w @pc/provisioner -- once      # one round, then exit
-npm run monitor -w @pc/provisioner -- status    # open alerts, with details
-npm run monitor -w @pc/provisioner -- test      # send a test alert
+castor-monitor              # run (every MONITOR_INTERVAL_S)
+castor-monitor once         # one round, then exit
+castor-monitor status       # open alerts, with details
+castor-monitor test         # send a test alert
 ```
 
-The same monitor exists in Rust (`castor-monitor`, rust/README.md), with the
-same settings and alert state; run one of the two.
-
-It runs next to the provisioner worker on the control plane but as its own
-process, so it can still report a stopped worker, a lost database or a
+`castor-monitor` is built with castord (rust/README.md) and reads the same
+control-plane `.env`. It runs next to the worker (`castord`) on the control
+plane but as its own process, so it can still report a stopped worker, a lost database or a
 database it can't reach.
 
 ## What it checks
@@ -90,8 +88,8 @@ unset.
 3. E-mail (recommended for critical alerts): `MONITOR_SMTP_URL`
    (`smtps://user:pass@host:465`), `MONITOR_EMAIL_TO`, and optionally
    `MONITOR_EMAIL_FROM`.
-4. Run `npm run monitor -w @pc/provisioner -- test` and check that the test
-   alert arrives, then keep `npm run monitor -w @pc/provisioner` running the
+4. Run `castor-monitor test` and check that the test
+   alert arrives, then keep `castor-monitor` running the
    same way as the worker.
 5. Recommended: a dead-man's switch. Point `MONITOR_HEARTBEAT_URL` at a
    heartbeat check (a self-hosted Healthchecks instance on another machine,
@@ -111,4 +109,4 @@ reachable from the LAN, e.g. pfSense without NAT reflection), and
   it), nor is the backup box's free space.
 - Host-level metrics of the control plane itself (disk, memory) and container
   restarts on nodes.
-- Thresholds are fixed in `apps/provisioner/src/monitor-rules.ts`.
+- Thresholds are fixed in `rust/crates/castord/src/monitor/rules.rs`.

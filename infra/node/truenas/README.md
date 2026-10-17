@@ -5,7 +5,7 @@ The proof of concept runs tenant stacks on TrueNAS SCALE. Mac minis
 control plane: a Docker host with a ZFS pool, reached over SSH through the
 same gate (`../bin/castor-ssh`) and the same dataset helper
 (`../bin/castor-zfs`). Only the paths differ, and they are kept in
-`apps/provisioner/src/layout.ts` and the node's `castor.conf`.
+`rust/crates/castord/src/node.rs` and the node's `castor.conf`.
 
 ```
  control plane (provisioner)                    TrueNAS SCALE
@@ -65,7 +65,7 @@ the UI.
    registration command.
 3. **Register it** from the control plane with the printed command:
    ```sh
-   npm run node -w @pc/provisioner -- add nas-1 castor@10.0.0.5 --kind truenas --pool tank --edge 10.0.0.5:8480 --auth-host-ip <control-plane-ip>
+   castor-admin node add nas-1 castor@10.0.0.5 --kind truenas --pool tank --edge 10.0.0.5:8480 --auth-host-ip <control-plane-ip>
    ```
 
 Routing and DNS work as for the Macs: `*.castorcloud.ch` points at the

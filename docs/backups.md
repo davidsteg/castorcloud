@@ -56,7 +56,7 @@ floor.
 ## Retention
 
 Everything from the last 48 hours, then the newest backup of each of the last
-14 days, 8 weeks and 12 months (`apps/provisioner/src/retention.ts`). With a
+14 days, 8 weeks and 12 months (`rust/crates/castord/src/retention.rs`). With a
 6-hour interval that's about 40 backups per tenant. Incrementals only store
 what changed.
 
@@ -67,7 +67,7 @@ what changed.
 - The audit log gets `backup.failed` (first failure), `backup.recovered`,
   `backup.verify_failed`, `backup.box_unhealthy`, `backup.restored`.
 - After every run the worker logs tenants with problems: failing, no success
-  for two intervals, or failed verification. `npm run backup -- status` shows
+  for two intervals, or failed verification. `castor-admin backup status` shows
   the same, plus the box's pool and the newest database dump.
 - Weekly, the box reads every tenant's newest backup back (`zfs send` to
   `/dev/null`), which checks every block's checksum. Schedule a monthly scrub
@@ -76,9 +76,9 @@ what changed.
 ## Restore
 
 ```sh
-npm run backup -w @pc/provisioner -- list alpha                 # what's there
-npm run backup -w @pc/provisioner -- restore alpha               # newest
-npm run backup -w @pc/provisioner -- restore alpha g1@cb-20260928T0600Z
+castor-admin backup list alpha                  # what's there
+castor-admin backup restore alpha               # newest
+castor-admin backup restore alpha g1@cb-20260928T0600Z
 ```
 
 `restore` queues a `RESTORE` job on the tenant's queue, so it never overlaps
@@ -90,7 +90,7 @@ set-aside dataset is put back. Once the customer confirms the restored data,
 free the space:
 
 ```sh
-npm run backup -w @pc/provisioner -- discard alpha before-restore-20260928t1800
+castor-admin backup discard alpha before-restore-20260928t1800
 ```
 
 **The node is lost:** `restore alpha --node mini-2` moves the tenant to
@@ -101,14 +101,14 @@ another node and restores there. Its routes follow on apply.
 The tenants' keys are in the control-plane database (wrapped with
 `VOLUME_KEK`). Without it no backup can be restored, so the database is backed
 up too: nightly at 02:30, `pg_dumpall` (portal and Authentik), gzipped, and
-sealed to an X25519 public key (`apps/provisioner/src/db-dump.ts`). Only the
+sealed to an X25519 public key (`rust/crates/crypto/src/dump.rs`). Only the
 public key is on the control plane; the secret key is kept **offline**. The
 box keeps dumps for 30 days (never fewer than the newest three).
 
 Set it up once:
 
 ```sh
-npm run backup -w @pc/provisioner -- db-keygen
+castor-admin backup db-keygen
 ```
 
 Put `BACKUP_DB_PUBLIC_KEY` in `.env`. Store the secret key offline, in a
@@ -117,9 +117,9 @@ password manager and on paper, **together with** `VOLUME_KEK` and
 needs all three:
 
 ```sh
-npm run backup -w @pc/provisioner -- db-list
-npm run backup -w @pc/provisioner -- db-get cp-20260928t0230.sql.gz.enc dump.enc
-npm run backup -w @pc/provisioner -- db-open dump.enc secret.txt dump.sql.gz   # on a trusted machine
+castor-admin backup db-list
+castor-admin backup db-get cp-20260928t0230.sql.gz.enc dump.enc
+castor-admin backup db-open dump.enc secret.txt dump.sql.gz   # on a trusted machine
 gunzip -c dump.sql.gz | docker exec -i pc-control-plane-postgres-1 psql -U pc -d postgres
 ```
 
@@ -137,7 +137,7 @@ deletion is gone: 30 days after deletion at most.
    `BACKUP_DB_PUBLIC_KEY=…`, optionally `BACKUP_INTERVAL_HOURS` (default 6)
    and `BACKUP_PG_CONTAINER`. The provisioner's SSH key must be in
    `~/.ssh/config` for the box, as for the nodes.
-4. `npm run backup -w @pc/provisioner -- run`, then `status`.
+4. `castor-admin backup run`, then `status`.
 
 Needs pool feature `bookmark_v2` (raw incrementals from bookmarks), on by
 default in OpenZFS 2.x and TrueNAS SCALE.

@@ -1,6 +1,5 @@
 //! STACKS: one idempotent job converges a tenant's custom stacks on its
-//! STACKS node to what the database says (Stacks.apply in
-//! apps/provisioner/src/stacks.ts): deploy new and changed ones, stop what
+//! STACKS node to what the database says: deploy new and changed ones, stop what
 //! the booking no longer covers, remove what the owner removed. Nothing from
 //! the customer is trusted: the stored definition is checked again here,
 //! images are pulled and pinned to a digest, and the compose file is

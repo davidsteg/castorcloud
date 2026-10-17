@@ -35,10 +35,10 @@ encrypted stack; one portal embeds all services behind one login.
 | Path | What |
 |---|---|
 | `apps/portal` | Next.js: marketing site, signup, account, tenant shell, Stripe webhook |
-| `apps/provisioner` | Worker executing tenant lifecycle jobs (queued in Postgres) + e2e test |
 | `packages/pricing` | Price list (CHF) and the transparent breakdown – shared by site and checkout |
 | `packages/core` | Envelope encryption (secrets, volume keys), job queue, audit log |
 | `packages/db` | Prisma schema of the control plane |
+| `rust` | `castord` worker executing tenant lifecycle jobs (queued in Postgres) and recurring tasks; `castor-admin`, `castor-monitor`, `castor-telegram` CLIs; `castor-node` gate on the nodes ([rust/README.md](rust/README.md)) |
 | `packages/brand` | Brand tokens, skin CSS injected into services, iframe bridge |
 | `packages/stack-templates` | Per-tenant compose (one profile per service), skin proxy, pinned versions |
 | `infra/control-plane` | Traefik, Postgres, Authentik (+ blueprints) |
@@ -47,7 +47,7 @@ encrypted stack; one portal embeds all services behind one login.
 
 ## Local development
 
-Requires Docker Desktop and Node 24. `*.brand.localhost` resolves to your machine.
+Requires Docker Desktop, Node 24 and a Rust toolchain. `*.brand.localhost` resolves to your machine.
 
 ```bash
 cp .env.example .env                                   # replace every change-me value
@@ -56,7 +56,8 @@ bash infra/dev-certs/generate.sh brand.localhost       # dev CA + *.brand.localh
 npm run cp:up                                          # Traefik, Postgres, Authentik
 npm run db:migrate
 npm run dev -w @pc/portal                              # portal on :3000 (via Traefik)
-npm run worker -w @pc/provisioner                      # provisioning worker
+cargo build --release -p castord --manifest-path rust/Cargo.toml
+set -a; . ./.env; set +a; rust/target/release/castord # provisioning worker
 ```
 
 Trust the dev CA once (current user only), then restart the browser:
@@ -98,7 +99,7 @@ separate GitHub App, `GITHUB_APP_*`. Both are described in
 ### Provisioning test
 
 ```bash
-npm run e2e -w @pc/provisioner -- --delete   # provision a test tenant, verify, delete
+rust/target/release/castor-admin e2e --delete   # provision a test tenant, verify, delete
 ```
 
 ## Notes

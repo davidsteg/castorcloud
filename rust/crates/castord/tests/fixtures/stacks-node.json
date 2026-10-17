@@ -1,0 +1,248 @@
+{
+  "comment": "Cases from the TypeScript worker's stacks.ts, kept as castord's own since it was removed.",
+  "passwd": "root:x:0:0:root:/root:/bin/sh\nnode:x:1000:1001::/home/node:/bin/sh\nwww-data:x:33:33::/var/www:/usr/sbin/nologin\nodd:x:1x:2\nnog:x:7:abc\n",
+  "group": "root:x:0:\nnode:x:1001:\nwww-data:x:33:\nstaff:x:50:\n",
+  "ids": {
+    "root": 0,
+    "node": 1000,
+    "www-data": 33,
+    "nog": 7
+  },
+  "users": [
+    [
+      "",
+      {
+        "uid": 0,
+        "gid": 0
+      }
+    ],
+    [
+      "1000",
+      {
+        "uid": 1000,
+        "gid": 1000
+      }
+    ],
+    [
+      "1000:50",
+      {
+        "uid": 1000,
+        "gid": 50
+      }
+    ],
+    [
+      "node",
+      {
+        "uid": 1000,
+        "gid": 1001
+      }
+    ],
+    [
+      "www-data:staff",
+      {
+        "uid": 33,
+        "gid": 50
+      }
+    ],
+    [
+      "nobody",
+      {
+        "error": "user \"nobody\" is not in the image's /etc/passwd; set user: to a number"
+      }
+    ],
+    [
+      "node:nogroup",
+      {
+        "error": "group \"nogroup\" is not in the image's /etc/group; set user: to numbers"
+      }
+    ],
+    [
+      "70000",
+      {
+        "error": "user 70000:70000 is outside the allowed range (0-65535)"
+      }
+    ],
+    [
+      "1:70000",
+      {
+        "error": "user 1:70000 is outside the allowed range (0-65535)"
+      }
+    ],
+    [
+      "nog",
+      {
+        "uid": 7,
+        "gid": 7
+      }
+    ],
+    [
+      "7",
+      {
+        "uid": 7,
+        "gid": 7
+      }
+    ],
+    [
+      ":5",
+      {
+        "uid": 0,
+        "gid": 5
+      }
+    ],
+    [
+      "node",
+      {
+        "error": "user \"node\" is not in the image's /etc/passwd; set user: to a number"
+      }
+    ]
+  ],
+  "uncovered": [
+    {
+      "declared": [
+        "/data",
+        "/var/lib/x/"
+      ],
+      "mounts": [
+        "/data",
+        "/tmp"
+      ],
+      "open": [
+        "/var/lib/x"
+      ]
+    },
+    {
+      "declared": [
+        "/srv/app/data"
+      ],
+      "mounts": [
+        "/srv/app"
+      ],
+      "open": []
+    },
+    {
+      "declared": [
+        "/database"
+      ],
+      "mounts": [
+        "/data"
+      ],
+      "open": [
+        "/database"
+      ]
+    },
+    {
+      "declared": [
+        "/x"
+      ],
+      "mounts": [
+        "/"
+      ],
+      "open": []
+    },
+    {
+      "declared": [
+        "/"
+      ],
+      "mounts": [
+        "/x"
+      ],
+      "open": [
+        "/"
+      ]
+    },
+    {
+      "declared": [
+        "//a//"
+      ],
+      "mounts": [
+        "/a"
+      ],
+      "open": [
+        "//a"
+      ]
+    }
+  ],
+  "cover": [
+    {
+      "stacks": [
+        {
+          "id": "a",
+          "units": {
+            "memoryUnits": 2,
+            "cpuUnits": 1,
+            "storageUnits": 0
+          }
+        },
+        {
+          "id": "b",
+          "units": {
+            "memoryUnits": 4,
+            "cpuUnits": 1,
+            "storageUnits": 0
+          }
+        },
+        {
+          "id": "c",
+          "units": {
+            "memoryUnits": 1,
+            "cpuUnits": 1,
+            "storageUnits": 0
+          }
+        }
+      ],
+      "booked": {
+        "memoryUnits": 3,
+        "cpuUnits": 3,
+        "storageUnits": 0
+      },
+      "covered": [
+        "a",
+        "c"
+      ],
+      "over": [
+        "b"
+      ]
+    },
+    {
+      "stacks": [
+        {
+          "id": "a",
+          "units": {
+            "memoryUnits": 1,
+            "cpuUnits": 1,
+            "storageUnits": 1
+          }
+        },
+        {
+          "id": "b",
+          "units": {
+            "memoryUnits": 1,
+            "cpuUnits": 1,
+            "storageUnits": 1
+          }
+        }
+      ],
+      "booked": {
+        "memoryUnits": 9,
+        "cpuUnits": 9,
+        "storageUnits": 1
+      },
+      "covered": [
+        "a"
+      ],
+      "over": [
+        "b"
+      ]
+    },
+    {
+      "stacks": [],
+      "booked": {
+        "memoryUnits": 0,
+        "cpuUnits": 0,
+        "storageUnits": 0
+      },
+      "covered": [],
+      "over": []
+    }
+  ]
+}

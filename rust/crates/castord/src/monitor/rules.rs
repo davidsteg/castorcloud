@@ -1,4 +1,4 @@
-//! The monitor's rules (monitor-rules.ts): turn measured state into findings,
+//! The monitor's rules: turn measured state into findings,
 //! and findings into alert changes and notifications. Pure functions, so they
 //! are tested without a database or network (the monitor gathers the inputs).
 //!
