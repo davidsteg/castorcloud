@@ -17,7 +17,7 @@ name = "assistant-tools"
 path = "src/main.rs"
 
 [dependencies]
-base64 = "0.22"
+base64 = "0.23"
 futures-util = { version = "0.3", default-features = false, features = ["alloc"] }
 getrandom = "0.4.3"
 hex = "0.4.3"
