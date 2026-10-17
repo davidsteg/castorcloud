@@ -1,6 +1,6 @@
-//! What a tenant stack consists of and how its config files are rendered,
-//! as `apps/provisioner/src/tenant.ts`. The outputs are checked against the
-//! TypeScript ones (tests/fixtures/render.json, made by gen-render.mts).
+//! What a tenant stack consists of and how its config files are rendered.
+//! The outputs are held to tests/fixtures/render.json (what the TypeScript
+//! worker rendered before castord replaced it).
 
 use serde_json::{Value, json};
 

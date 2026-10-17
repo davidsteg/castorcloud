@@ -1,8 +1,7 @@
-//! castord: the control plane's worker in Rust. It takes tenant lifecycle
-//! jobs from the Postgres queue next to the TypeScript worker, and runs only
-//! the job kinds it has a handler for and is told to take (CASTORD_KINDS).
-//! A kind moves here by adding its handler and removing it from the
-//! TypeScript worker's KINDS in the same deploy.
+//! castord: the control plane's worker. It takes tenant lifecycle jobs from
+//! the Postgres queue (the portal enqueues them) and runs the recurring
+//! tasks. Several castords can share the queue; CASTORD_KINDS limits one to
+//! some kinds.
 
 pub mod admin;
 pub mod apply;
@@ -25,6 +24,7 @@ pub mod retention;
 pub mod revoke;
 pub mod schedule;
 pub mod stacks;
+pub mod startup;
 pub mod storage;
 pub mod suspend;
 pub mod tasks;
@@ -59,7 +59,7 @@ pub struct Control {
     pub traefik_dir: PathBuf,
     pub exec: Arc<dyn exec::Exec>,
     pub keys: castor_crypto::Keys,
-    /// Unset without LITELLM_MASTER_KEY, as in the TypeScript worker.
+    /// Unset without LITELLM_MASTER_KEY: tenants can't book the assistant.
     pub llm: Option<llm::Gateway>,
     pub authentik: authentik::Authentik,
     /// Custom stacks are on when STACKS_DOMAIN is set.
@@ -130,8 +130,7 @@ pub struct Worker {
 
 impl Worker {
     /// `take`: the kinds this worker is told to run (CASTORD_KINDS). Each
-    /// must be a real kind with a handler, so a typo can't leave jobs unrun
-    /// while the TypeScript worker no longer takes them.
+    /// must be a real kind with a handler, so a typo can't leave jobs unrun.
     pub fn new(id: String, db: PgPool, handlers: Vec<Arc<dyn Handler>>, take: &[&str]) -> Result<Self, ConfigError> {
         let handlers: HashMap<_, _> = handlers.into_iter().map(|h| (h.kind(), h)).collect();
         let mut kinds = Vec::new();
@@ -170,7 +169,7 @@ impl Worker {
                 "[{} {}] attempt {} lost: its worker stopped",
                 r.job.kind, r.job.tenant_id, r.job.attempts
             );
-            // Only for kinds this worker owns; the TypeScript worker handles its own.
+            // Only for kinds this worker runs; another worker handles its own.
             if r.failed
                 && let Some(h) = self.handlers.get(r.job.kind.as_str())
                 && self.kinds.contains(&h.kind())

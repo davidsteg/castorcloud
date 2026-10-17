@@ -56,7 +56,7 @@ We therefore never claim "zero knowledge" or "we cannot read your data".
 | `LITELLM_MASTER_KEY` | control plane + node env | The one key that also lives on nodes (the gateway needs it). It manages LLM keys and budgets only, it cannot unlock data. The portal and bot use each tenant's own key |
 | `TELEGRAM_BOT_TOKEN` | control plane env | Whoever holds it can read and answer messages sent to the bot |
 | `GITHUB_APP_PRIVATE_KEY` | control plane env | Mints read tokens for every customer repository connected to the GitHub App. Rotate in the app settings if exposed |
-| Database dump secret key | **offline only** | Opens the control-plane database dumps (`npm run backup -- db-keygen`). Keep it with offline copies of `VOLUME_KEK` and `SECRETS_ENCRYPTION_KEY`: restoring a lost control plane needs all three |
+| Database dump secret key | **offline only** | Opens the control-plane database dumps (`castor-admin backup db-keygen`). Keep it with offline copies of `VOLUME_KEK` and `SECRETS_ENCRYPTION_KEY`: restoring a lost control plane needs all three |
 
 Never store these on data-plane nodes.
 
@@ -81,7 +81,7 @@ Never store these on data-plane nodes.
 ### Ending access
 
 The apps keep their own sessions and keys after the SSO login, so ending
-access has to reach into each app (`apps/provisioner/src/access.ts`, queued
+access has to reach into each app (`rust/crates/castord/src/revoke.rs`, queued
 as `AccessRevocation` rows and run by the `REVOKE_ACCESS` job, or by the next
 start of a suspended tenant):
 

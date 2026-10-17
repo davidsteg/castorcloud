@@ -1,4 +1,4 @@
-//! What the bot says, in the four portal languages (telegram.ts).
+//! What the bot says, in the four portal languages.
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Lang {

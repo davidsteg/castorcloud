@@ -55,14 +55,16 @@ jobs:
 
       - run: npm test
 
-      # castord renders tenant files the way tenant.ts does and checks stacks
-      # the way @pc/stacks does; a change to one without the other fails here.
-      - name: castord's fixtures match tenant.ts and @pc/stacks
+      # The stacks nodes' egress proxy (plain Node, no package of its own).
+      - run: node --test infra/node/egress/proxy.test.mjs
+
+      # castord checks stacks the way @pc/stacks (the portal) does; a change to
+      # one without the other fails here.
+      - name: castord's stack checks match @pc/stacks
         working-directory: rust/crates/castord/tests/fixtures
         run: |
-          node --experimental-strip-types gen-render.mts > render.json
           node --experimental-strip-types gen-stacks.mts > stacks.json
-          git diff --exit-code render.json stacks.json
+          git diff --exit-code stacks.json
 
   rust:
     name: Rust core

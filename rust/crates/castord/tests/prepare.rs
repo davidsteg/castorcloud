@@ -1,5 +1,4 @@
-// Node preparation and placement, as node.ts and nodes.ts do them: the
-// commands that bring a node up to date, and a tenant placed once.
+// Node preparation and placement: the commands that bring a node up to date, and a tenant placed once.
 #![allow(clippy::unwrap_used, clippy::expect_used, clippy::panic)]
 
 mod common;

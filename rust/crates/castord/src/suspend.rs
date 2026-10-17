@@ -1,5 +1,4 @@
-//! SUSPEND: the same steps as `Lifecycle.suspend` and `Stacks.stopAll` in
-//! apps/provisioner/src. Every step can run again: a retry after a failure
+//! SUSPEND: stops a tenant and its custom stacks. Every step can run again: a retry after a failure
 //! halfway stops what is still running and locks what is still open.
 //!
 //!   1. custom stacks (when STACKS_DOMAIN is set): the control plane's route
@@ -18,7 +17,7 @@ use crate::node::{Node, NodeRow};
 use crate::storage::{StacksStorage, Status, TenantStorage};
 use crate::{Control, Handler, Job, JobCx, valid};
 
-/// Compose profiles: one per stack service, plus the assistant (ALL_PROFILES in lifecycle.ts).
+/// Compose profiles: one per stack service, plus the assistant (ALL_PROFILES).
 pub const ALL_PROFILES: [&str; 5] = ["photos", "docs", "places", "flights", "assistant"];
 pub use crate::stacks::edge::STACKS_EDGE;
 

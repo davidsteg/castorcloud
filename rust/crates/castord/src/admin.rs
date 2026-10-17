@@ -1,6 +1,5 @@
-//! The ops CLIs of apps/provisioner (node-admin.ts, backup-admin.ts,
-//! staff-admin.ts, delete-tenant.ts), as functions returning what they
-//! print: castor-admin calls them, the tests check them.
+//! The operator commands (nodes, backups, staff, deleting a tenant, the
+//! end-to-end check), as functions returning what they print: castor-admin calls them, the tests check them.
 
 use std::collections::HashMap;
 use std::fmt::Write as _;

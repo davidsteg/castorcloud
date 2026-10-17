@@ -1,5 +1,5 @@
-//! castor-monitor: the monitor in Rust (docs/monitoring.md). Same settings,
-//! commands and alert state as the TypeScript monitor; run one of the two.
+//! castor-monitor: the platform monitor (docs/monitoring.md). Run one: each
+//! sends its own digest.
 //!
 //!   castor-monitor            every MONITOR_INTERVAL_S
 //!   castor-monitor once       one round, then exit

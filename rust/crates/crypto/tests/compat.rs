@@ -134,7 +134,7 @@ fn rejects_bad_keys() {
     );
 }
 
-/// hkdfSync("sha256", bytes 0..63, empty salt, label, 32) in Node (zfs.ts).
+/// hkdfSync("sha256", bytes 0..63, empty salt, label, 32) in Node.
 #[test]
 fn dataset_keys_match_zfs_ts() {
     let volume_key: Vec<u8> = (0u8..64).collect();

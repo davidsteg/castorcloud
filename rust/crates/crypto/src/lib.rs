@@ -1,8 +1,7 @@
 //! Envelope encryption for everything sensitive the control plane stores.
 //!
-//! Byte-compatible with `packages/core/src/crypto.ts`: values sealed by the
-//! TypeScript worker open here and the other way round, so both can run side
-//! by side while the core moves to Rust.
+//! Byte-compatible with `packages/core/src/crypto.ts`: values the portal
+//! seals open here and the other way round.
 //!
 //!   SECRETS_ENCRYPTION_KEY  encrypts tenant secrets (DB passwords, OIDC secrets)
 //!   VOLUME_KEK              wraps each tenant's volume data-encryption key (DEK)
@@ -165,7 +164,7 @@ impl Keys {
     }
 }
 
-/// What a ZFS dataset key is derived for (zfs.ts): the tenant's own data, or
+/// What a ZFS dataset key is derived for: the tenant's own data, or
 /// its custom stacks on a STACKS node, which never holds the other key.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum Dataset {
@@ -174,7 +173,7 @@ pub enum Dataset {
 }
 
 /// ZFS wants a 32-byte key; volume keys are 64 random bytes. HKDF-SHA256 with
-/// an empty salt, as `datasetKey` and `stacksDatasetKey` in zfs.ts, so deleting
+/// an empty salt, as `datasetKey` and `stacksDatasetKey` (the TypeScript worker's names), so deleting
 /// the one volume key still shreds both datasets. Hex with a newline is what
 /// `keyformat=hex` reads from stdin.
 pub fn dataset_key(volume_key: &[u8], dataset: Dataset) -> Result<Zeroizing<Vec<u8>>, Error> {

@@ -1,4 +1,4 @@
-//! The Authentik API, as `apps/provisioner/src/authentik.ts` uses it: tenant
+//! The Authentik API as castord uses it: tenant
 //! groups and their members, one OIDC provider and application per tenant
 //! service, a forward-auth application per custom-stack host, and policy
 //! bindings that keep each application to the tenant's group. Every call is
@@ -384,6 +384,67 @@ impl Authentik {
                 self.request(Method::Delete, &format!("/oauth2/refresh_tokens/{id}/"), None)
                     .await?;
             }
+        }
+        Ok(())
+    }
+
+    /// Applies one of Authentik's bundled blueprints under `name` and waits
+    /// for the flow it creates; then re-applies the blueprint `reapply`
+    /// (ours, which points the brand at that flow).
+    pub async fn ensure_blueprint_instance(
+        &self,
+        name: &str,
+        path: &str,
+        flow_slug: &str,
+        reapply: Option<&str>,
+    ) -> Result<(), String> {
+        let body = match self.find_pk("/managed/blueprints/", &[("name", name)]).await? {
+            Some(pk) => {
+                self.request(
+                    Method::Patch,
+                    &format!("/managed/blueprints/{}/", segment(&pk)?),
+                    Some(json!({ "path": path, "enabled": true })),
+                )
+                .await?
+            }
+            None => {
+                self.request(
+                    Method::Post,
+                    "/managed/blueprints/",
+                    Some(json!({ "name": name, "path": path, "enabled": true, "context": {} })),
+                )
+                .await?
+            }
+        };
+        let pk = body
+            .as_ref()
+            .and_then(pk)
+            .ok_or("Authentik: blueprint instance without pk")?;
+        self.request(
+            Method::Post,
+            &format!("/managed/blueprints/{}/apply/", segment(&pk)?),
+            None,
+        )
+        .await?;
+        for _ in 0..30 {
+            if self
+                .find_one("/flows/instances/", &[("slug", flow_slug)])
+                .await?
+                .is_some()
+            {
+                break;
+            }
+            tokio::time::sleep(std::time::Duration::from_secs(2)).await;
+        }
+        if let Some(other) = reapply
+            && let Some(pk) = self.find_pk("/managed/blueprints/", &[("name", other)]).await?
+        {
+            self.request(
+                Method::Post,
+                &format!("/managed/blueprints/{}/apply/", segment(&pk)?),
+                None,
+            )
+            .await?;
         }
         Ok(())
     }

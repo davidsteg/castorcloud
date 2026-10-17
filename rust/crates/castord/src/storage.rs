@@ -1,4 +1,4 @@
-//! A tenant's encrypted storage on its node (storage.ts, volume.ts, zfs.ts):
+//! A tenant's encrypted storage on its node:
 //! a LUKS file through the pc-cryptd image on the local node, an encrypted
 //! ZFS dataset through castor-zfs on TrueNAS and Mac nodes, and the tenant's
 //! custom-stack dataset on a STACKS node.
@@ -68,7 +68,7 @@ pub fn parse_usage(text: &str) -> Vec<(String, u64)> {
         .collect()
 }
 
-/// Used MB per service, from the per-directory usage (usageByService in lifecycle.ts).
+/// Used MB per service, from the per-directory usage.
 pub fn usage_by_service(by_dir: &[(String, u64)]) -> serde_json::Value {
     let mut out: Vec<(&str, u64)> = STACK_SERVICES.iter().map(|s| (s.key(), 0)).collect();
     out.push(("system", 0));
@@ -234,8 +234,8 @@ impl<'a> TenantStorage<'a> {
     }
 }
 
-/// Records the tenant's storage usage, total and per service (measure in
-/// lifecycle.ts). Read-only on the node; closed storage is skipped.
+/// Records the tenant's storage usage, total and per service.
+/// Read-only on the node; closed storage is skipped.
 pub async fn measure(db: &PgPool, tenant_id: &str, storage: &TenantStorage<'_>) -> Result<(), String> {
     let Status::Open { used_mb, volume_mb, .. } = storage.status().await? else {
         return Ok(());

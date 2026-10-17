@@ -1,5 +1,5 @@
 # Edge proxy of a STACKS node (customers' own stacks, docs/stacks.md).
-# Started by the provisioner over ssh:// (stacks.ts). Unlike the tenant
+# Started by castord over ssh:// (rust/crates/castord/src/stacks/edge.rs). Unlike the tenant
 # nodes' edge (edge.yml) it has no Docker socket and no Docker provider:
 # container labels come from images we don't control, so a stack could
 # otherwise claim another stack's host name. Routes are files the

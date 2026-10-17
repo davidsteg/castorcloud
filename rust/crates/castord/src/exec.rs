@@ -1,4 +1,4 @@
-//! Running the Docker and SSH CLIs, as `apps/provisioner/src/node.ts` does.
+//! Running the Docker and SSH CLIs.
 //! Behind a trait so tests can record what would run.
 
 use std::process::Stdio;
@@ -25,7 +25,7 @@ impl Cmd {
         }
     }
 
-    /// The same short form node.ts puts in its errors.
+    /// A short form for errors.
     pub fn label(&self) -> String {
         let head: Vec<&str> = self.args.iter().take(4).map(String::as_str).collect();
         format!("{} {} …", self.program, head.join(" "))
@@ -57,7 +57,7 @@ pub trait Exec: Send + Sync {
 const TIMEOUT: Duration = Duration::from_secs(20 * 60);
 const ERR_TAIL: usize = 2000;
 const MAX_OUTPUT: usize = 32 * 1024 * 1024;
-/// The templates, brand assets and CA bundle sent to a node (node.ts allows the same).
+/// The templates, brand assets and CA bundle sent to a node .
 const MAX_BYTES: usize = 256 * 1024 * 1024;
 /// A full ZFS send can take hours; the job's lease is renewed meanwhile.
 const PIPE_TIMEOUT: Duration = Duration::from_secs(24 * 60 * 60);

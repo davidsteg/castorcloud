@@ -1,5 +1,5 @@
 {
-  "comment": "Rendered by apps/provisioner/src/tenant.ts. Regenerate with gen-render.mts",
+  "comment": "Rendered by the TypeScript worker's tenant.ts before it was removed; castord must keep rendering the same unless a change means to differ.",
   "platform": {
     "baseDomain": "castor.test",
     "scheme": "https",

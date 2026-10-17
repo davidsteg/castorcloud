@@ -1,12 +1,12 @@
-//! Checks on names that end up in command lines and paths. The same rules as
-//! the TypeScript side; values come from the database, but a bad row must
-//! never turn into an option, a path outside its directory or a shell word.
+//! Checks on names that end up in command lines and paths. Values come from
+//! the database, but a bad row must never turn into an option, a path
+//! outside its directory or a shell word.
 
 fn all(s: &str, ok: impl Fn(u8) -> bool) -> bool {
     !s.is_empty() && s.bytes().all(ok)
 }
 
-/// user@host as node.ts accepts it.
+/// user@host for ssh.
 pub fn ssh_target(s: &str) -> bool {
     let Some((user, host)) = s.split_once('@') else {
         return false;
@@ -19,7 +19,7 @@ pub fn pool(s: &str) -> bool {
     all(s, |b| b.is_ascii_alphanumeric() || b"_-".contains(&b))
 }
 
-/// What castor-ssh passes on (SSH_WORD in node.ts).
+/// What castor-ssh passes on (SSH_WORD).
 pub fn ssh_word(s: &str) -> bool {
     all(s, |b| b.is_ascii_alphanumeric() || b"._/=-".contains(&b))
 }

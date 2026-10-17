@@ -33,14 +33,14 @@ Status: built (phase 5). Web chat, PWA and Telegram work end to end; see
 |---|---|
 | Hermes container, init, tools (compose profile `assistant`) | `packages/stack-templates/tenant/compose.yml` |
 | Skin allowlist for the Hermes API | `packages/stack-templates/tenant/skin/default.conf.template` |
-| Rendered Hermes config, one profile per member, persona | `apps/provisioner/src/assistant.ts` |
-| Tenant key + budget on the gateway | `apps/provisioner/src/llm.ts`, `lifecycle.ts` (`prepareAssistant`) |
+| Rendered Hermes config, one profile per member, persona | `rust/crates/castord/src/assistant.rs` |
+| Tenant key + budget on the gateway | `rust/crates/castord/src/llm.rs`, `apply.rs` (`prepare_assistant`) |
 | Read-only MCP tools | `agent/tools/` (image `pc-assistant-tools`, built by the provisioner) |
 | Gateway + its DB, provider configs | `infra/node/compose.yml`, `infra/node/litellm/*.yaml` |
 | CHF credit → USD budget | `packages/pricing/src/ai-budget.ts` |
 | Portal chat, credit meter, Telegram panel | `apps/portal/src/app/tenant/[slug]/assistant/`, `src/app/api/assistant/`, `src/components/AssistantChat.tsx` |
 | Hermes stream → chat events, pairing codes | `packages/core/src/assistant.ts` |
-| Telegram bot | `apps/provisioner/src/telegram.ts` (`npm run telegram -w @pc/provisioner`) |
+| Telegram bot | `rust/crates/castord/src/telegram/` (`castor-telegram`) |
 
 ## Isolation between members
 
@@ -113,7 +113,7 @@ with mocked API responses.
 ## Before going live
 
 - **Photos tools** were not run against a live Immich (image not pullable in
-  the build sandbox); run `npm run e2e` with Photos booked.
+  the build sandbox); run `castor-admin e2e` with Photos booked.
 - **Swiss provider** (`litellm/swiss.yaml`): set the real model name and the
   per-token prices, otherwise spend (and the budget) is not counted.
 - **Gateway reachability**: control plane and nodes share a LAN. On a Mac

@@ -1,5 +1,4 @@
-//! The node's LLM gateway (LiteLLM) admin API, as in
-//! `apps/provisioner/src/llm.ts`: one virtual key per tenant, carrying the
+//! The node's LLM gateway (LiteLLM) admin API: one virtual key per tenant, carrying the
 //! tenant's monthly budget. The key value is ours (kept in "Secret"), so
 //! every call is idempotent.
 

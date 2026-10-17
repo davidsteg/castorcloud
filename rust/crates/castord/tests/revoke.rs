@@ -1,6 +1,6 @@
 // REVOKE_ACCESS against the real schema, with Docker, SSH and Authentik
-// faked: one run per person with the strongest scope, the commands of
-// access.ts in the booked apps, Authentik sessions ended for "sign out
+// faked: one run per person with the strongest scope, the access
+// commands in the booked apps, Authentik sessions ended for "sign out
 // everywhere", the requests gone. Runs when TEST_DATABASE_URL is set.
 #![allow(clippy::unwrap_used, clippy::expect_used, clippy::panic)]
 

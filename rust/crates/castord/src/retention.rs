@@ -1,4 +1,4 @@
-//! Which backups to keep (retention.ts): pure functions, so the policy is
+//! Which backups to keep: pure functions, so the policy is
 //! tested apart from ZFS. The backup box enforces its own floor on top
 //! (castor-backup: nothing younger than MIN_DAYS, never a tenant's newest).
 

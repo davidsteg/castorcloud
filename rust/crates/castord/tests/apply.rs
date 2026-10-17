@@ -1,6 +1,6 @@
 // PROVISION/UPDATE/RESUME against the real schema, with Docker, SSH,
 // Authentik, the LLM gateway and the apps faked: the commands and requests
-// of Lifecycle.apply in lifecycle.ts, and the rows it leaves.
+// they make, and the rows they leave.
 // Runs when TEST_DATABASE_URL is set.
 #![allow(clippy::unwrap_used, clippy::expect_used, clippy::panic)]
 

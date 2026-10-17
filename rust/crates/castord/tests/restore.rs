@@ -1,5 +1,5 @@
-// RESTORE against the real schema, with SSH faked: the commands of
-// worker.ts (Lifecycle.stop, Backups.restore) and the rows they leave.
+// RESTORE against the real schema, with SSH faked: the commands it
+// runs and the rows it leaves.
 // Runs when TEST_DATABASE_URL is set.
 #![allow(clippy::unwrap_used, clippy::expect_used, clippy::panic)]
 

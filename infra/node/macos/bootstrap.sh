@@ -12,7 +12,7 @@
 #           Everything on it is erased. `diskutil list` shows the candidates.
 #
 # Before: OpenZFS on OS X and Homebrew are installed (see README.md).
-# After:  register the node from the control plane with `npm run node -- add`.
+# After:  register the node from the control plane with `castor-admin node add`.
 # Safe to re-run: every step checks what's already there.
 set -eu
 POOL=castor
@@ -130,7 +130,7 @@ cat <<DONE
 Node ready. Give the Docker VM (${vm_ip:-see 'colima ls'}) a fixed DHCP lease, then on the control plane:
 DONE
 if [ "$role" = stacks ]; then
-  echo "  npm run node -w @pc/provisioner -- add <name> $USER_NAME@$(ipconfig getifaddr en0 || hostname) --kind mac --role stacks --pool $POOL --edge ${vm_ip:-<vm-ip>} --control-plane-ip <control-plane-ip>"
+  echo "  castor-admin node add <name> $USER_NAME@$(ipconfig getifaddr en0 || hostname) --kind mac --role stacks --pool $POOL --edge ${vm_ip:-<vm-ip>} --control-plane-ip <control-plane-ip>"
 else
-  echo "  npm run node -w @pc/provisioner -- add <name> $USER_NAME@$(ipconfig getifaddr en0 || hostname) --kind mac --pool $POOL --edge ${vm_ip:-<vm-ip>} --auth-host-ip <control-plane-ip>"
+  echo "  castor-admin node add <name> $USER_NAME@$(ipconfig getifaddr en0 || hostname) --kind mac --pool $POOL --edge ${vm_ip:-<vm-ip>} --auth-host-ip <control-plane-ip>"
 fi

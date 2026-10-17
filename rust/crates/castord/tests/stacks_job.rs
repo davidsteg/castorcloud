@@ -1,6 +1,5 @@
 // STACKS against the real schema, with Docker, SSH and Authentik faked: the
-// commands and requests of Stacks.apply in apps/provisioner/src/stacks.ts,
-// and the rows it leaves. Runs when TEST_DATABASE_URL is set.
+// commands and requests it makes, and the rows it leaves. Runs when TEST_DATABASE_URL is set.
 #![allow(clippy::unwrap_used, clippy::expect_used, clippy::panic)]
 
 mod common;
@@ -278,7 +277,7 @@ async fn deploys_like_the_typescript_worker() {
         status("broken").await,
         Some((
             "FAILED".into(),
-            Some("the stored definition is not JSON yet (the TypeScript worker converts it when it starts)".into())
+            Some("the stored definition is not JSON yet (run npm run stacks:json -w @pc/portal once)".into())
         ))
     );
     assert_eq!(

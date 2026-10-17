@@ -1,5 +1,5 @@
-// Tenant and custom-stack storage with the volume key: the commands of
-// volume.ts and zfs.ts, and what goes in on stdin (the raw key to pc-cryptd,
+// Tenant and custom-stack storage with the volume key: the commands,
+// and what goes in on stdin (the raw key to pc-cryptd,
 // the derived dataset key to castor-zfs, nothing otherwise).
 #![allow(clippy::unwrap_used, clippy::expect_used, clippy::panic)]
 

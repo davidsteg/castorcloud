@@ -8,6 +8,7 @@
     "start": "next start --port 3000",
     "typecheck": "tsc --noEmit",
     "stripe:sync": "tsx scripts/stripe-sync.mts",
+    "stacks:json": "tsx scripts/stacks-json.mts",
     "stripe:listen": "stripe listen --forward-to https://app.brand.localhost/api/stripe/webhook --skip-verify"
   },
   "dependencies": {

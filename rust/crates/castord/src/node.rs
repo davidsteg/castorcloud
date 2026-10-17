@@ -1,4 +1,4 @@
-//! A data-plane node, as in `apps/provisioner/src/node.ts`:
+//! A data-plane node:
 //!   local  the Docker host the control plane runs on (development); LUKS
 //!          volumes through the pc-cryptd image.
 //!   ssh    TrueNAS SCALE or a Mac mini: Docker over ssh://, and castor-*
@@ -15,7 +15,7 @@ use zeroize::Zeroizing;
 use crate::exec::{Cmd, Exec};
 use crate::valid;
 
-/// Same tag as CRYPTD_IMAGE in node.ts.
+/// The tag the pc-cryptd image is built as.
 pub const CRYPTD_IMAGE: &str = "pc-cryptd:1";
 /// Same tag as ASSISTANT_TOOLS_IMAGE in packages/stack-templates/versions.env.
 pub const ASSISTANT_TOOLS_IMAGE: &str = "pc-assistant-tools:1";
@@ -31,7 +31,7 @@ enum Place {
     Local,
     Ssh {
         target: String,
-        /// castor-ssh's ROOT (nodeLayout in layout.ts).
+        /// castor-ssh's ROOT.
         root: String,
         /// castor-zfs's MOUNT_ROOT and STACKS_MOUNT_ROOT: where datasets are mounted.
         mount_root: String,
@@ -82,7 +82,7 @@ impl NodeRow {
     }
 }
 
-/// Where the control plane reaches a node's edge proxy (parseEdge in layout.ts).
+/// Where the control plane reaches a node's edge proxy.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Edge {
     pub host: String,
@@ -402,7 +402,7 @@ impl Node {
     }
 
     /// Brings the node up to date with this deployment before stacks start
-    /// (node.ts prepare; idempotent). Local: the shared /srv/pc mount and the
+    /// (idempotent). Local: the shared /srv/pc mount and the
     /// cryptd image. Remote: templates, the shared services' files, brand
     /// assets and the CA bundle (only ca-bundle.pem, never a CA key), then
     /// the edge proxy. Both build the assistant's tools image.

@@ -1,4 +1,4 @@
-// The tenant's LLM key, as llm.ts sets it up: generated when the gateway
+// The tenant's LLM key, generated when the gateway
 // doesn't know it, otherwise updated (keeping its monthly reset) and unblocked.
 #![allow(clippy::unwrap_used, clippy::expect_used, clippy::panic)]
 

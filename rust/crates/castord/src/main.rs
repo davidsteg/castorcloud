@@ -1,10 +1,11 @@
-//! castord: see lib.rs. Settings, as for the TypeScript worker (the
-//! control plane's .env):
+//! castord: see lib.rs. Settings (the control plane's .env):
 //!
 //!   DATABASE_URL            the control plane's Postgres
-//!   CASTORD_KINDS           comma-separated job kinds this worker takes, e.g.
-//!                           "SUSPEND"; the TypeScript worker leaves them alone
+//!   CASTORD_KINDS           unset: every job kind; else the comma-separated
+//!                           kinds this worker takes, or "none"
 //!   CASTORD_TASKS           the same for recurring tasks, e.g. "watch-nodes"
+//!   LOCAL_NODE              "off": the Docker host castord runs on takes no tenants
+//!   AUTHENTIK_EMAIL__HOST   set: sign-up verifies the e-mail address
 //!   SECRETS_ENCRYPTION_KEY, VOLUME_KEK
 //!   CASTOR_ROOT             the repository (default: the current directory)
 //!   TRAEFIK_DYNAMIC_DIR     default infra/control-plane/traefik/dynamic
@@ -12,7 +13,7 @@
 //!   STACKS_DOMAIN           custom stacks are on when set
 //!   BACKUP_TARGET           user@host of the backup box (RESTORE, backup tasks);
 //!                           BACKUP_INTERVAL_HOURS (6), BACKUP_DB_PUBLIC_KEY,
-//!                           BACKUP_PG_CONTAINER, POSTGRES_USER as for the TypeScript worker
+//!                           BACKUP_PG_CONTAINER, POSTGRES_USER
 //!   STACKS_CERT_RESOLVER    production: the ACME resolver of the stacks domain's wildcard
 //!   BASE_DOMAIN, PUBLIC_SCHEME, AUTHENTIK_BOOTSTRAP_TOKEN
 //!                           Authentik at <scheme>://auth.<BASE_DOMAIN>
@@ -53,61 +54,77 @@ async fn main() -> ExitCode {
     }
 }
 
-/// The tasks CASTORD_TASKS names, each known (a typo would leave it unrun
-/// once the TypeScript worker skips it).
-fn tasks(c: &Arc<Control>, names: &[&str]) -> Result<Vec<Arc<dyn Task>>, String> {
-    let all: Vec<Arc<dyn Task>> = vec![
+/// The recurring tasks: maintenance, and the backups in a loop of their own
+/// so a long first send never holds up the node watcher. `names` (from
+/// CASTORD_TASKS) picks some; None runs all, the backups only with
+/// BACKUP_TARGET.
+fn tasks(c: &Arc<Control>, names: Option<&[&str]>) -> Result<[Vec<Arc<dyn Task>>; 2], String> {
+    let maintenance: Vec<Arc<dyn Task>> = vec![
         Arc::new(castord::tasks::WatchNodes(c.clone())),
         Arc::new(castord::tasks::MeasureStorage(c.clone())),
         Arc::new(castord::tasks::SweepDeletions),
     ];
-    let mut all = all;
-    if let Some(b) = &c.backup {
-        all.push(Arc::new(castord::backup::BackupTenants(c.clone(), b.clone())));
-        all.push(Arc::new(castord::backup::BackupDatabase(c.clone(), b.clone())));
-        all.push(Arc::new(castord::backup::VerifyBackups(c.clone(), b.clone())));
-    } else if names.iter().any(|n| n.starts_with("backup-") || *n == "verify-backups") {
-        return Err("CASTORD_TASKS: the backup tasks need BACKUP_TARGET".into());
+    let backups: Vec<Arc<dyn Task>> = match &c.backup {
+        Some(b) => vec![
+            Arc::new(castord::backup::BackupTenants(c.clone(), b.clone())),
+            Arc::new(castord::backup::BackupDatabase(c.clone(), b.clone())),
+            Arc::new(castord::backup::VerifyBackups(c.clone(), b.clone())),
+        ],
+        None => vec![],
+    };
+    let Some(names) = names else {
+        if c.backup.is_none() {
+            eprintln!("castord: BACKUP_TARGET is not set: tenant backups are OFF");
+        }
+        return Ok([maintenance, backups]);
+    };
+    for n in names {
+        if !castord::tasks::ALL_TASKS.contains(n) {
+            return Err(format!("CASTORD_TASKS: unknown task {n}"));
+        }
+        if c.backup.is_none() && !maintenance.iter().any(|t| t.name() == *n) {
+            return Err(format!("CASTORD_TASKS: {n} needs BACKUP_TARGET"));
+        }
     }
-    names
-        .iter()
-        .map(|n| {
-            if !castord::tasks::ALL_TASKS.contains(n) {
-                return Err(format!("CASTORD_TASKS: unknown task {n}"));
-            }
-            all.iter()
-                .find(|t| t.name() == *n)
-                .cloned()
-                .ok_or_else(|| format!("CASTORD_TASKS: castord has no {n} yet"))
-        })
-        .collect()
+    let pick = |all: Vec<Arc<dyn Task>>| all.into_iter().filter(|t| names.contains(&t.name())).collect();
+    Ok([pick(maintenance), pick(backups)])
 }
 
-/// A setting read once for the process's lifetime.
-fn list(name: &str) -> &'static str {
-    std::env::var(name).unwrap_or_default().leak()
+/// A list setting read once for the process's lifetime: None when unset
+/// (everything), empty for "none".
+fn list(name: &str) -> Option<Vec<&'static str>> {
+    let v: &'static str = std::env::var(name).ok().filter(|v| !v.trim().is_empty())?.leak();
+    if v.trim() == "none" {
+        return Some(vec![]);
+    }
+    Some(v.split(',').map(str::trim).filter(|k| !k.is_empty()).collect())
 }
 
 async fn run() -> Result<(), String> {
     let url = std::env::var("DATABASE_URL").map_err(|_| "DATABASE_URL is not set".to_owned())?;
-    let (kinds, task_names) = (list("CASTORD_KINDS"), list("CASTORD_TASKS"));
-    let split = |s: &'static str| {
-        s.split(',')
-            .map(str::trim)
-            .filter(|k| !k.is_empty())
-            .collect::<Vec<_>>()
-    };
-    let (take, task_names) = (split(kinds), split(task_names));
-    if take.is_empty() && task_names.is_empty() {
-        return Err("CASTORD_KINDS and CASTORD_TASKS list nothing: nothing to do".into());
-    }
+    let take = list("CASTORD_KINDS").unwrap_or_else(|| castord::queue::ALL_KINDS.to_vec());
+    let task_names = list("CASTORD_TASKS");
     let control = Arc::new(castord::config::control()?);
-    let tasks = tasks(&control, &task_names)?;
+    let [maintenance, backups] = tasks(&control, task_names.as_deref())?;
+    if take.is_empty() && maintenance.is_empty() && backups.is_empty() {
+        return Err("CASTORD_KINDS and CASTORD_TASKS leave nothing to do".into());
+    }
     let db = PgPoolOptions::new()
         .max_connections(4)
         .connect_with(castord::db::connect_options(&url)?)
         .await
         .map_err(|e| e.to_string())?;
+    // Neither stops castord: without the flow sign-up waits, and a job
+    // prepares the local node again before it uses it.
+    if let Err(e) =
+        castord::startup::enrollment(&control, castord::config::var("AUTHENTIK_EMAIL__HOST").is_some()).await
+    {
+        eprintln!("castord: the self-registration flow: {e}");
+    }
+    let local = castord::config::var("LOCAL_NODE").as_deref() != Some("off");
+    if let Err(e) = castord::startup::local_node(&control, &db, local).await {
+        eprintln!("castord: the local node: {e}");
+    }
     let host = std::fs::read_to_string("/etc/hostname")
         .map(|h| h.trim().to_owned())
         .unwrap_or_else(|_| "castord".into());
@@ -137,18 +154,20 @@ async fn run() -> Result<(), String> {
     eprintln!(
         "castord {id} ready (jobs: {}; tasks: {})",
         worker.as_ref().map_or_else(|| "none".into(), |w| w.kinds().join(", ")),
-        if task_names.is_empty() {
-            "none".into()
-        } else {
-            task_names.join(", ")
+        match maintenance.iter().chain(&backups).map(|t| t.name()).collect::<Vec<_>>() {
+            n if n.is_empty() => "none".into(),
+            n => n.join(", "),
         }
     );
-    let task_loop = castord::tasks::run(db.clone(), tasks, stopping);
+    let maintenance = castord::tasks::run(db.clone(), maintenance, stopping.clone());
+    let backups = castord::tasks::run(db.clone(), backups, stopping);
     match &worker {
         Some(w) => {
-            tokio::join!(w.run(), task_loop);
+            tokio::join!(w.run(), maintenance, backups);
         }
-        None => task_loop.await,
+        None => {
+            tokio::join!(maintenance, backups);
+        }
     }
     db.close().await;
     Ok(())

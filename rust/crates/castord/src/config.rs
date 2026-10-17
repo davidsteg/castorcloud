@@ -113,7 +113,7 @@ pub fn control() -> Result<Control, String> {
     })
 }
 
-/// BACKUP_* as backupSettings in backup.ts; None without BACKUP_TARGET.
+/// BACKUP_*; None without BACKUP_TARGET.
 pub fn backup_settings() -> Result<Option<crate::backup::Settings>, String> {
     let Some(target) = var("BACKUP_TARGET") else {
         return Ok(None);

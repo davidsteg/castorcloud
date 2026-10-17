@@ -58,13 +58,13 @@ tenant destroys the dataset and the key (crypto-shredding).
 On the control plane (`~/.ssh/config` needs the key for the Mac):
 
 ```sh
-npm run node -w @pc/provisioner -- add mini-1 castor@10.0.0.21 --kind mac --pool castor --edge 10.0.0.31 --auth-host-ip <control-plane-ip>
-npm run node -w @pc/provisioner -- list
+castor-admin node add mini-1 castor@10.0.0.21 --kind mac --pool castor --edge 10.0.0.31 --auth-host-ip <control-plane-ip>
+castor-admin node list
 ```
 
 `add` checks the pool and Docker, copies the templates, brand assets and CA
 bundle to the Mac, and starts the edge proxy. New tenants are placed on the
-node with the most free booked space (`apps/provisioner/src/placement.ts`).
+node with the most free booked space (`rust/crates/castord/src/placement.rs`).
 `drain <name>` stops new placements.
 
 ## Routing and DNS

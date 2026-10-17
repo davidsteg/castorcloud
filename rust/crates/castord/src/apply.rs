@@ -1,5 +1,5 @@
-//! PROVISION, UPDATE and RESUME: make the tenant's stack match the booking,
-//! as `Lifecycle.apply` in apps/provisioner/src/lifecycle.ts. Every step is
+//! PROVISION, UPDATE and RESUME: make the tenant's stack match the booking.
+//! Every step is
 //! idempotent, so a retried or repeated job converges to what the database
 //! says the customer has booked.
 //!
@@ -399,7 +399,7 @@ pub async fn apply(c: &Control, cx: &JobCx, job: &Job) -> Result<(), String> {
 }
 
 /// Once per node and process: templates, brand assets and the edge proxy
-/// come up to date with this deployment (Nodes.driver in nodes.ts).
+/// come up to date with this deployment.
 pub async fn prepare_once(c: &Control, node: &Node) -> Result<(), String> {
     if c.prepared
         .lock()
@@ -434,7 +434,7 @@ async fn healthy(cx: &JobCx, tenant_id: &str, kind: &str, version: Option<&str>)
     Ok(())
 }
 
-/// Write then rename, so Traefik never reads a half-written file (routes.ts).
+/// Write then rename, so Traefik never reads a half-written file.
 pub(crate) fn write_route(path: &std::path::Path, content: &str) -> Result<(), String> {
     use std::os::unix::fs::PermissionsExt as _;
     let err = |e: std::io::Error| format!("{}: {e}", path.display());

@@ -1,4 +1,4 @@
-//! Which node a new tenant goes to (placement.ts, Nodes.place in nodes.ts).
+//! Which node a new tenant goes to.
 //! A tenant's data lives on one node's pool, so this is decided once.
 
 use sqlx::PgPool;
@@ -385,7 +385,7 @@ mod tests {
         n
     }
 
-    // The cases of placement.test.ts.
+    // The cases the TypeScript placement tests held.
     #[test]
     fn picks_the_node_with_the_most_free_booked_space() {
         let a = with("a", |n| n.tenants = vec![10]);
@@ -475,7 +475,7 @@ mod tests {
         n
     }
 
-    // The stacks cases of placement.test.ts.
+    // The stacks cases the TypeScript placement tests held.
     #[test]
     fn stacks_go_to_the_node_with_the_most_free_memory_never_overcommitted() {
         let need = Units {

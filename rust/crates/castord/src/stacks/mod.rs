@@ -1,6 +1,5 @@
 //! Customers' own stacks (docs/stacks.md): what a definition may be, how it
-//! is rendered, and the pieces of apps/provisioner/src/stacks.ts that run
-//! on the stacks node.
+//! is rendered, and what runs on the stacks node.
 
 pub mod edge;
 pub mod image;
@@ -11,7 +10,7 @@ pub mod spec;
 
 use spec::Units;
 
-/// Where customers' stacks are served (StacksPlatform in stacks.ts).
+/// Where customers' stacks are served.
 #[derive(Debug, Clone)]
 pub struct Platform {
     /// Registrable domain of the stacks, e.g. castorapps.ch; never the portal's in production.

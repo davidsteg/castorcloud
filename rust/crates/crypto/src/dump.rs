@@ -1,4 +1,4 @@
-//! Sealed dumps of the control-plane database (apps/provisioner/src/db-dump.ts).
+//! Sealed dumps of the control-plane database.
 //! The database holds every tenant's wrapped volume key, so without it no
 //! tenant backup can be restored. Dumps are sealed to an X25519 public key
 //! whose secret half is kept offline: the control plane can write dumps but
@@ -41,7 +41,7 @@ pub fn public_key(b64: &str) -> Result<[u8; 32], Error> {
 }
 
 /// A new key pair: BACKUP_DB_PUBLIC_KEY (base64url) and the offline secret
-/// key ("castor-db-secret-<d>.<x>", the JWK fields db-dump.ts writes).
+/// key ("castor-db-secret-<d>.<x>", the JWK fields the TypeScript db-dump.ts wrote).
 pub fn key_pair() -> Result<(String, Zeroizing<String>), Error> {
     let secret = StaticSecret::from(*random::<32>()?);
     let public = PublicKey::from(&secret);
@@ -129,7 +129,7 @@ mod tests {
         assert_ne!(key_pair().unwrap().0, public);
     }
 
-    /// A throwaway key pair and a dump sealed by db-dump.ts with it.
+    /// A throwaway key pair and a dump the TypeScript db-dump.ts sealed with it.
     const FIXTURE: &str = include_str!("../tests/fixtures/db-dump.json");
 
     fn fixture() -> (String, String, Vec<u8>) {

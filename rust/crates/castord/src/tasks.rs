@@ -1,6 +1,5 @@
-//! The worker's recurring tasks (worker.ts): each runs once per slot across
-//! every worker, TypeScript or Rust (schedule.rs). CASTORD_TASKS names the
-//! ones castord runs; the TypeScript worker then leaves them alone.
+//! The worker's recurring tasks: each runs once per slot across every
+//! worker (schedule.rs). CASTORD_TASKS limits a castord to some of them.
 //!
 //!   watch-nodes      every 5 min: probe remote nodes; reopen tenants whose
 //!                    storage came back locked (a node restart: keys are never
@@ -20,7 +19,7 @@ use crate::storage::{StacksStorage, Status, TenantStorage};
 use crate::suspend::strings;
 use crate::{Control, queue, valid};
 
-/// Every task the workers run, by name (worker.ts).
+/// Every task the workers run, by name.
 pub const ALL_TASKS: [&str; 6] = [
     "watch-nodes",
     "measure-storage",
@@ -39,7 +38,7 @@ pub trait Task: Send + Sync {
 
 /// Until `stopping` is set: every 30 s, each due task whose slot this worker wins.
 pub async fn run(db: PgPool, tasks: Vec<Arc<dyn Task>>, stopping: Arc<AtomicBool>) {
-    while !stopping.load(Ordering::SeqCst) {
+    while !tasks.is_empty() && !stopping.load(Ordering::SeqCst) {
         for t in &tasks {
             if stopping.load(Ordering::SeqCst) {
                 break;

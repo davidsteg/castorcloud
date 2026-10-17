@@ -117,14 +117,15 @@ it; data directories are owned by that uid plus the node's userns base.
   shreds both. The definition (it may hold passwords) is sealed in the
   database like other tenant secrets, as the parsed document in JSON
   (`storedDefinition`): castord checks and runs exactly what the portal
-  checked, without a YAML parser of its own.
+  checked, without a YAML parser of its own. Definitions saved before that
+  (as YAML) are converted once with `npm run stacks:json -w @pc/portal`.
 
 ## Lifecycle
 
 - Owner installs (portal, "My apps") → the Stack row is stored sealed, the
   subscription's `stackram` / `stackcpu` / `stackdisk` quantities are set to the
   sum of all stacks (pro rata) → the Stripe webhook stores the booking and
-  queues a `STACKS` job → `Stacks.apply` (apps/provisioner/src/stacks.ts):
+  queues a `STACKS` job → castord's `STACKS` handler (rust/crates/castord/src/stacks/):
   places the tenant on a STACKS node (most free memory, no memory overcommit),
   unlocks the dataset, deploys every stack the booking covers (in the order
   added), stops the rest, writes the routes.
@@ -140,7 +141,7 @@ it; data directories are owned by that uid plus the node's userns base.
 
 1. A separate Mac: `sudo infra/node/macos/bootstrap.sh <disk> "<key>" --stacks`
    (Colima with userns-remap and gVisor, `colima-stacks.yaml`).
-2. `npm run node -w @pc/provisioner -- add stacks-1 castor@<mac> --kind mac --role stacks --pool castor --edge <vm-ip> --control-plane-ip <control-plane-ip>`
+2. `castor-admin node add stacks-1 castor@<mac> --kind mac --role stacks --pool castor --edge <vm-ip> --control-plane-ip <control-plane-ip>`
 3. `.env`: `STACKS_DOMAIN`, and in production `STACKS_CERT_RESOLVER=le`; DNS
    `A *.STACKS_DOMAIN` → the control plane (DNS only); `npm run stripe:sync`.
 

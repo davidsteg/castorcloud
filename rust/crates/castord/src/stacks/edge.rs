@@ -1,4 +1,4 @@
-//! A STACKS node's edge proxy and Docker checks (stacks-node.ts). The proxy
+//! A STACKS node's edge proxy and Docker checks. The proxy
 //! (infra/node/stacks-edge.yml) has no Docker socket: its routes are files
 //! copied into its routes volume, and it joins each stack's edge network,
 //! where only that stack's web service is.
