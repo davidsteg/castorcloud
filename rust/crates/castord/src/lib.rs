@@ -26,6 +26,7 @@ pub mod stacks;
 pub mod storage;
 pub mod suspend;
 pub mod tasks;
+pub mod telegram;
 pub mod valid;
 
 use std::collections::{HashMap, HashSet};

@@ -13,6 +13,7 @@ the TypeScript part is removed.
 | `crates/node` | `infra/node/bin/castor-ssh`, `castor-zfs`, `castor-snap` | done; same commands and output, the scripts stay until every node runs it |
 | `crates/castord` | `apps/provisioner/src/worker.ts` | queue loop done (same SQL as `jobs.ts`); every job kind ported |
 | `castor-monitor` (in `crates/castord`) | `apps/provisioner/src/monitor.ts` | done; same checks, rules, alert table and settings |
+| `castor-telegram` (in `crates/castord`) | `apps/provisioner/src/telegram.ts` | done; same pairing, texts and settings |
 
 ```bash
 cd rust
@@ -101,6 +102,16 @@ E-mail goes only over TLS (smtps://, or smtp:// with STARTTLS required); the
 certificate check reads a bad certificate too, but reports it untrusted, and
 sends nothing over the connection. In development set
 `CASTORD_EXTRA_CA_CERTS=.dev-certs/ca.crt`.
+
+## castor-telegram
+
+The assistant's Telegram bot in Rust: pairing codes from the portal, one
+conversation per linked member, `/new`, `/disconnect`, the same texts in the
+four languages. Same settings as `npm run telegram` (`TELEGRAM_BOT_TOKEN`,
+`DATABASE_URL`, the encryption keys, `BASE_DOMAIN`, `PUBLIC_SCHEME`,
+`LLM_GATEWAY_URL`, `TZ`); run one of the two, since Telegram hands each update
+to one poller. Answers go back as plain text, and the bot token never
+appears in a log line.
 
 ## castor-node on a node
 
