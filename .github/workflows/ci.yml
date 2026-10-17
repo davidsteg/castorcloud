@@ -137,7 +137,7 @@ jobs:
           cargo clippy --locked --all-targets -- -D warnings
           cargo test --locked
           cargo audit --deny warnings
-          docker build -q -t pc-assistant-tools:2 -f agent/tools/Dockerfile ../..
+          docker build -q -t pc-assistant-tools:2 -f Dockerfile ../..
 
       # The node helpers (castor-ssh, castor-zfs, castor-snap) as one static
       # binary for TrueNAS SCALE; cargo test above already ran its tests. The
