@@ -15,7 +15,7 @@ async-trait = "0.1"
 castor-crypto = { path = "../crypto" }
 getrandom = "0.4.3"
 hex = "0.4.3"
-sha2 = "0.10.9"
+sha2 = "0.11.1"
 reqwest = { version = "0.12", default-features = false, features = ["json", "rustls-tls-webpki-roots"] }
 serde = { version = "1", features = ["derive"] }
 serde_json = { version = "1", features = ["preserve_order"] }
