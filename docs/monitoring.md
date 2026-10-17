@@ -12,6 +12,9 @@ npm run monitor -w @pc/provisioner -- status    # open alerts, with details
 npm run monitor -w @pc/provisioner -- test      # send a test alert
 ```
 
+The same monitor exists in Rust (`castor-monitor`, rust/README.md), with the
+same settings and alert state; run one of the two.
+
 It runs next to the provisioner worker on the control plane but as its own
 process, so it can still report a stopped worker, a lost database or a
 database it can't reach.

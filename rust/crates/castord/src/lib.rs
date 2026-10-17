@@ -13,6 +13,7 @@ pub mod delete;
 pub mod exec;
 pub mod http;
 pub mod llm;
+pub mod monitor;
 pub mod node;
 pub mod placement;
 pub mod queue;
