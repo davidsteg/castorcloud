@@ -65,8 +65,8 @@ fn deny(what: &str, why: &str) {
     );
 }
 
-/// The first address of `host` if every address it has is public; else None.
-async fn resolve(rules: &Rules, host: &str, port: u16) -> Option<SocketAddr> {
+/// The addresses of `host` if every address it has is public; else None.
+async fn resolve(rules: &Rules, host: &str, port: u16) -> Option<Vec<SocketAddr>> {
     let addrs: Vec<SocketAddr> =
         tokio::time::timeout(CONNECT_TIMEOUT, tokio::net::lookup_host((host, port)))
             .await
@@ -76,7 +76,7 @@ async fn resolve(rules: &Rules, host: &str, port: u16) -> Option<SocketAddr> {
     if addrs.is_empty() || !addrs.iter().all(|a| rules.public(*a)) {
         return None;
     }
-    addrs.first().copied()
+    Some(addrs)
 }
 
 /// A parsed request head and the bytes read after it.
@@ -127,11 +127,15 @@ async fn reply(client: &mut TcpStream, status: &str, body: &str) {
     let _ = client.shutdown().await;
 }
 
-async fn connect(addr: SocketAddr) -> Option<TcpStream> {
-    tokio::time::timeout(CONNECT_TIMEOUT, TcpStream::connect(addr))
-        .await
-        .ok()?
-        .ok()
+/// The first of the checked addresses that answers (IPv6 first if the
+/// name has it, then IPv4, as the resolver orders them).
+async fn connect(addrs: Vec<SocketAddr>) -> Option<TcpStream> {
+    for addr in addrs {
+        if let Ok(Ok(s)) = tokio::time::timeout(CONNECT_TIMEOUT, TcpStream::connect(addr)).await {
+            return Some(s);
+        }
+    }
+    None
 }
 
 /// Copies both ways until both sides are done or nothing moved for IDLE.
@@ -208,11 +212,11 @@ async fn tunnel(mut client: TcpStream, head: Head, rules: &Rules) {
         deny(&head.target, "not allowed");
         return reply(&mut client, "403 Forbidden", "").await;
     };
-    let Some(addr) = resolve(rules, &host, rules.https).await else {
+    let Some(addrs) = resolve(rules, &host, rules.https).await else {
         deny(&host, "not a public address");
         return reply(&mut client, "403 Forbidden", "").await;
     };
-    let Some(mut upstream) = connect(addr).await else {
+    let Some(mut upstream) = connect(addrs).await else {
         return reply(&mut client, "502 Bad Gateway", "").await;
     };
     if client
@@ -272,11 +276,11 @@ async fn forward(mut client: TcpStream, head: Head, rules: &Rules) {
         },
         _ => return reply(&mut client, "400 Bad Request", "").await,
     };
-    let Some(addr) = resolve(rules, &host, port).await else {
+    let Some(addrs) = resolve(rules, &host, port).await else {
         deny(&host, "not a public address");
         return reply(&mut client, "403 Forbidden", "egress not allowed\n").await;
     };
-    let Some(mut upstream) = connect(addr).await else {
+    let Some(mut upstream) = connect(addrs).await else {
         return reply(&mut client, "502 Bad Gateway", "").await;
     };
     let mut out = format!("{} {path} HTTP/1.1\r\nHost: {host}\r\n", head.method).into_bytes();
