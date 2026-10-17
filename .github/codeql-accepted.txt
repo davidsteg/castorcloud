@@ -1,0 +1,3 @@
+# CodeQL findings accepted after review (Security workflow). One per line:
+#   <rule id> <file>
+# Each entry covers that rule in that file only; say why above it.

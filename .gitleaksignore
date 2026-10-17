@@ -1,0 +1,4 @@
+# Reviewed gitleaks findings (Security workflow), one fingerprint per line.
+# Test key pair of the database-dump format (rust/crates/crypto/src/dump.rs):
+# it seals only the fixture beside it and is used nowhere else.
+f120e5ac47ca4e3ca2a3d6126436041b9a75fc2d:rust/crates/crypto/tests/fixtures/db-dump.json:generic-api-key:3

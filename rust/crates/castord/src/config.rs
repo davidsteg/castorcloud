@@ -106,6 +106,7 @@ pub fn control() -> Result<Control, String> {
         versions,
         versions_file,
         usd_per_chf,
+        images: crate::images::Images::from_env()?,
         prepared: Default::default(),
         http,
         health_timeout: std::time::Duration::from_secs(900),

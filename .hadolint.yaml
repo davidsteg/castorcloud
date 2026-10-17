@@ -1,0 +1,6 @@
+# Dockerfile lint (Security workflow). Warnings fail the build.
+failure-threshold: warning
+ignored:
+  # Alpine drops old package versions, so pinned apk versions break rebuilds.
+  # Base images are pinned instead, and Trivy scans every built image.
+  - DL3018

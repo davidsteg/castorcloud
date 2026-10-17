@@ -5,6 +5,7 @@ mod common;
 
 use std::path::{Path, PathBuf};
 
+use castord::images::Images;
 use castord::node::{Node, NodeRow};
 use common::*;
 
@@ -40,7 +41,7 @@ async fn remote_node_gets_files_then_edge_and_tools() {
     let n = node("TRUENAS", Some("10.0.0.5:8480"), fake.clone());
     assert_eq!(n.edge.as_ref().unwrap().url, "http://10.0.0.5:8480");
     assert_eq!(n.auth_host_ip.as_deref(), Some("10.0.0.1"));
-    n.prepare(&ca).await.unwrap();
+    n.prepare(&ca, &Images::build()).await.unwrap();
     let ssh = "DOCKER_HOST=ssh://deploy@10.0.0.5 DOCKER_CONTEXT= docker";
     let gate = "ssh -o BatchMode=yes -T deploy@10.0.0.5 castor-untar";
     let c = ca.to_string_lossy();
@@ -66,7 +67,7 @@ async fn remote_node_gets_files_then_edge_and_tools() {
     // A missing CA bundle stops before it is sent.
     let fake = Fake::new(vec![]);
     let e = node("TRUENAS", None, fake.clone())
-        .prepare(Path::new("/nonexistent-ca"))
+        .prepare(Path::new("/nonexistent-ca"), &Images::build())
         .await
         .unwrap_err();
     assert_eq!(e, "/nonexistent-ca missing");
@@ -79,7 +80,7 @@ async fn local_node_gets_the_shared_mount_and_images() {
     let fake = Fake::new(vec![]);
     let n = node("LOCAL", Some("10.0.0.5"), fake.clone());
     assert!(n.edge.is_none() && n.auth_host_ip.is_none());
-    n.prepare(Path::new("/unused")).await.unwrap();
+    n.prepare(Path::new("/unused"), &Images::build()).await.unwrap();
     let calls = fake.calls();
     assert!(calls[0].starts_with(
         "docker run --rm --privileged --pid=host alpine:3.22 nsenter -t 1 -m -- sh -c mkdir -p /srv/pc/volumes"

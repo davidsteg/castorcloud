@@ -13,6 +13,7 @@ pub mod db;
 pub mod delete;
 pub mod exec;
 pub mod http;
+pub mod images;
 pub mod llm;
 pub mod monitor;
 pub mod node;
@@ -74,6 +75,8 @@ pub struct Control {
     pub usd_per_chf: f64,
     /// Where ca-bundle.pem comes from for remote nodes (CA_DIR).
     pub ca_dir: PathBuf,
+    /// Castor's node images: built on the node, or pulled signed (CASTOR_IMAGE_TAG).
+    pub images: images::Images,
     /// Nodes prepared by this process (node files and edge are current).
     pub prepared: Mutex<HashSet<String>>,
     /// For health checks and service accounts: no redirects, 30 s timeout.

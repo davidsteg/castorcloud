@@ -13,6 +13,7 @@ use sqlx::PgPool;
 use zeroize::Zeroizing;
 
 use crate::exec::{Cmd, Exec};
+use crate::images::{Images, NodeImage};
 use crate::valid;
 
 /// The tag the pc-cryptd image is built as.
@@ -405,8 +406,9 @@ impl Node {
     /// (idempotent). Local: the shared /srv/pc mount and the
     /// cryptd image. Remote: templates, the shared services' files, brand
     /// assets and the CA bundle (only ca-bundle.pem, never a CA key), then
-    /// the edge proxy. Both build the assistant's tools image.
-    pub async fn prepare(&self, ca_dir: &Path) -> Result<(), String> {
+    /// the edge proxy. Both get the assistant's tools image (built, or pulled
+    /// signed: crate::images).
+    pub async fn prepare(&self, ca_dir: &Path, images: &Images) -> Result<(), String> {
         let root = |p: &str| self.root.join(p).to_string_lossy().into_owned();
         let s = |v: &[&str]| v.iter().map(|a| (*a).to_owned()).collect::<Vec<String>>();
         match &self.place {
@@ -432,19 +434,11 @@ impl Node {
                     false,
                 )
                 .await?;
-                self.docker(
-                    vec![
-                        "build".into(),
-                        "-q".into(),
-                        "-t".into(),
-                        CRYPTD_IMAGE.into(),
-                        root("infra/node/cryptd"),
-                    ],
-                    false,
-                )
-                .await?;
+                images
+                    .install(self, NodeImage::Cryptd, CRYPTD_IMAGE, vec![root("infra/node/cryptd")])
+                    .await?;
             }
-            Place::Ssh { .. } if self.role == Role::Stacks => return crate::stacks::edge::prepare(self).await,
+            Place::Ssh { .. } if self.role == Role::Stacks => return crate::stacks::edge::prepare(self, images).await,
             Place::Ssh { .. } => {
                 let ca = ca_dir.to_string_lossy().into_owned();
                 self.sync("templates", &root("packages/stack-templates"), &["."])
@@ -485,19 +479,18 @@ impl Node {
                     .await?;
             }
         }
-        self.docker(
-            vec![
-                "build".into(),
-                "-q".into(),
-                "-t".into(),
-                ASSISTANT_TOOLS_IMAGE.into(),
-                "-f".into(),
-                root("agent/tools/Dockerfile"),
-                self.root.to_string_lossy().into_owned(),
-            ],
-            false,
-        )
-        .await?;
+        images
+            .install(
+                self,
+                NodeImage::AssistantTools,
+                ASSISTANT_TOOLS_IMAGE,
+                vec![
+                    "-f".into(),
+                    root("agent/tools/Dockerfile"),
+                    self.root.to_string_lossy().into_owned(),
+                ],
+            )
+            .await?;
         Ok(())
     }
 
