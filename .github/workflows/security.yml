@@ -67,6 +67,8 @@ jobs:
             fi
           } >> "$GITHUB_STEP_SUMMARY"
           if [[ -s findings.tsv ]]; then
+            # Also in plain text: annotations hide the location in the log.
+            cat findings.tsv
             while IFS=$'\t' read -r rule loc msg; do echo "::error file=${loc%%:*},line=${loc##*:}::$rule: $msg"; done < findings.tsv
             exit 1
           fi

@@ -71,8 +71,12 @@ export const LIMITS = {
 export const STACK_NAME_RE = /^[a-z][a-z0-9]{1,19}$/;
 const NAME_RE = /^[a-z][a-z0-9-]{0,29}$/;
 const ENV_KEY_RE = /^[A-Za-z_][A-Za-z0-9_]{0,127}$/;
-/** Absolute container path; no "..", no empty segments, no odd characters. */
-const PATH_RE = /^\/(?:[A-Za-z0-9._@+-]+\/?)*$/;
+/**
+ * Absolute container path; no "..", no empty segments, no odd characters.
+ * Each segment ends at a "/" or the end, so matching can't backtrack
+ * exponentially (a "(seg\/?)*" form hangs on "/+++…!").
+ */
+const PATH_RE = /^\/(?:[A-Za-z0-9._@+-]+(?:\/|$))*$/;
 const USER_RE = /^(?:[0-9]{1,10}|[a-z_][a-z0-9_-]{0,31})(?::(?:[0-9]{1,10}|[a-z_][a-z0-9_-]{0,31}))?$/;
 const HOST_RE = /^(?:\*\.)?(?:[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\.)+[a-z]{2,63}$/;
 

@@ -46,7 +46,8 @@ export function parseImageRef(input: string): ImageRef | { error: string } {
     }
   }
   if (registry === "index.docker.io" || registry === "registry-1.docker.io") registry = "docker.io";
-  if (!ALLOWED_REGISTRIES.includes(registry)) {
+  // Exact match against the list (written out, so it never reads as a substring check).
+  if (!ALLOWED_REGISTRIES.some((allowed) => allowed === registry)) {
     return { error: `registry ${registry} is not allowed (allowed: ${ALLOWED_REGISTRIES.join(", ")})` };
   }
 
