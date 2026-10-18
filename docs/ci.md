@@ -83,15 +83,18 @@ settings: visibility **Private**, and under "Manage Actions access" only
 
 ### Docker Hub
 
-Pushes to `main` also publish all four images to one Docker Hub
-repository, `docker.io/davidsteg/castorcloud`, told apart by tag: the
-image's name plus the commit SHA (`castor-<sha>`, `assistant-tools-<sha>`,
-`egress-<sha>`, `cryptd-<sha>`) and `<name>-main`. They stay separate
+Publishing a GitHub release builds, scans and publishes the images of its
+tag like a push to `main` (on GHCR tagged with the commit SHA and the release
+tag), and also pushes all four to one Docker Hub repository,
+`docker.io/davidsteg/castorcloud`, told apart by tag: the image's name plus
+the release tag (`castor-v1.2.0`, `assistant-tools-v1.2.0`, `egress-v1.2.0`,
+`cryptd-v1.2.0`), plus `<name>-<commit SHA>` and, unless the release is a
+pre-release, `<name>-latest`. Pushes to `main` don't go to Docker Hub. They stay separate
 images, so cryptd and assistant-tools carry no control plane. Each one is
 the same manifest and digest as on GHCR, signed with the same cosign key.
 
-The publish job pushes to Docker Hub only when all of this holds, and
-otherwise leaves a notice and pushes to GHCR alone:
+For a release, the publish job pushes to Docker Hub only when all of this
+holds, and otherwise leaves a notice and pushes to GHCR alone:
 
 - the repository secrets `DOCKERHUB_USERNAME` and `DOCKERHUB_TOKEN` are set
   (a Docker Hub personal access token with Read & Write, nothing more);

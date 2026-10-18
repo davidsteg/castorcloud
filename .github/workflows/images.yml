@@ -3,13 +3,16 @@ name: Images
 # Builds every image this repo ships and scans it with Trivy. Pull requests
 # build and scan only; main also pushes the images to GHCR (node images for
 # amd64 TrueNAS and arm64 Mac minis) with an SBOM and build provenance, and
-# signs them with cosign when the COSIGN_PRIVATE_KEY secret is set. All four
-# also go to one private Docker Hub repository, told apart by tag, but only
-# when they are signed and that repository is private (docs/ci.md, "Docker Hub").
+# signs them with cosign when the COSIGN_PRIVATE_KEY secret is set. A
+# published GitHub release does the same for its tag and also pushes all four
+# to one private Docker Hub repository, told apart by tag, but only when they
+# are signed and that repository is private (docs/ci.md, "Docker Hub").
 on:
   push:
     branches: [main]
   pull_request:
+  release:
+    types: [published]
 
 permissions: {}
 
@@ -84,7 +87,7 @@ jobs:
 
   publish:
     name: Publish (${{ matrix.name }})
-    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    if: (github.event_name == 'push' && github.ref == 'refs/heads/main') || github.event_name == 'release'
     needs: scan
     runs-on: ubuntu-latest
     # arm64 builds run under emulation.
@@ -98,8 +101,8 @@ jobs:
     env:
       IMAGE: ghcr.io/${{ github.repository_owner }}/${{ matrix.image }}
       COSIGN_KEY_SET: ${{ secrets.COSIGN_PRIVATE_KEY != '' }}
-      # Docker Hub only gets signed images, so it also needs the cosign key.
-      DOCKERHUB_PUSH: ${{ secrets.DOCKERHUB_USERNAME != '' && secrets.DOCKERHUB_TOKEN != '' && secrets.COSIGN_PRIVATE_KEY != '' }}
+      # Docker Hub only gets signed release images, so it also needs the cosign key.
+      DOCKERHUB_PUSH: ${{ github.event_name == 'release' && secrets.DOCKERHUB_USERNAME != '' && secrets.DOCKERHUB_TOKEN != '' && secrets.COSIGN_PRIVATE_KEY != '' }}
       DOCKERHUB_REPO: davidsteg/castorcloud
       DOCKERHUB_IMAGE: docker.io/davidsteg/castorcloud
     steps:
@@ -143,24 +146,28 @@ jobs:
           username: ${{ secrets.DOCKERHUB_USERNAME }}
           password: ${{ secrets.DOCKERHUB_TOKEN }}
 
-      # Tags: the full commit SHA (immutable, what deployments pin) and main.
+      # Tags: the full commit SHA (immutable, what deployments pin), and main
+      # or the release tag.
       - id: meta
         uses: docker/metadata-action@dc802804100637a589fabce1cb79ff13a1411302 # v6.2.0
         with:
           images: ${{ env.IMAGE }}
           tags: |
             type=sha,format=long,prefix=
-            type=raw,value=main
+            type=raw,value=main,enable=${{ github.event_name == 'push' }}
+            type=ref,event=tag
 
-      # One Docker Hub repository for all images: <name>-<commit SHA> and <name>-main.
+      # One Docker Hub repository for all images: <name>-<release tag>,
+      # <name>-<commit SHA>, and <name>-latest unless it is a pre-release.
       - id: hub
         if: env.DOCKERHUB_PUSH == 'true'
         uses: docker/metadata-action@dc802804100637a589fabce1cb79ff13a1411302 # v6.2.0
         with:
           images: ${{ env.DOCKERHUB_IMAGE }}
           tags: |
+            type=ref,event=tag,prefix=${{ matrix.name }}-
             type=sha,format=long,prefix=${{ matrix.name }}-
-            type=raw,value=${{ matrix.name }}-main
+            type=raw,value=${{ matrix.name }}-latest,enable=${{ !github.event.release.prerelease }}
 
       - id: build
         uses: docker/build-push-action@c3c9e263c25d99ce0380d002d59b67737d91b0dc # v7.4.0
@@ -204,7 +211,7 @@ jobs:
         run: echo "::notice::COSIGN_PRIVATE_KEY is not set, so ${IMAGE} is not signed."
 
       - name: Not on Docker Hub
-        if: env.DOCKERHUB_PUSH != 'true'
+        if: github.event_name == 'release' && env.DOCKERHUB_PUSH != 'true'
         run: echo "::notice::DOCKERHUB_USERNAME, DOCKERHUB_TOKEN or COSIGN_PRIVATE_KEY is not set, so nothing is pushed to ${DOCKERHUB_IMAGE}."
 
       - name: Summary
@@ -214,5 +221,5 @@ jobs:
         run: |
           echo "Pushed \`${IMAGE}@${DIGEST}\` (tag \`${GITHUB_SHA}\`)" >> "$GITHUB_STEP_SUMMARY"
           if [ "$DOCKERHUB_PUSH" = "true" ]; then
-            echo "Pushed \`${DOCKERHUB_IMAGE}@${DIGEST}\` (tag \`${MATRIX_NAME}-${GITHUB_SHA}\`)" >> "$GITHUB_STEP_SUMMARY"
+            echo "Pushed \`${DOCKERHUB_IMAGE}@${DIGEST}\` (tag \`${MATRIX_NAME}-${GITHUB_REF_NAME}\`)" >> "$GITHUB_STEP_SUMMARY"
           fi
