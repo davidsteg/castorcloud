@@ -509,7 +509,7 @@ const it: Dictionary = {
   },
   beta: {
     tag: "Beta",
-    banner: "Beta dall’homelab simpatico qui accanto: per ora Castor Cloud gira sui nostri server in Svizzera e passerà a un’infrastruttura più grande quando saremo di più.",
+    banner: "Per ora Castor Cloud gira sui nostri server in Svizzera e passerà a un’infrastruttura più grande quando saremo di più.",
     more: "Come funziona la beta",
     title: "L’homelab simpatico del tuo quartiere",
     lead: "Durante la beta Castor Cloud gira nel nostro homelab: sui nostri server in Svizzera, non in un centro dati. Lo diciamo apertamente, perché devi sapere dove si trovano i tuoi dati. Quando si aggiungeranno altre persone, passeremo a un’infrastruttura più grande.",

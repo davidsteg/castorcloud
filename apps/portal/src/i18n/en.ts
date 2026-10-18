@@ -509,7 +509,7 @@ const en = {
   },
   beta: {
     tag: "Beta",
-    banner: "Beta from the friendly homelab next door: for now Castor Cloud runs on our own servers in Switzerland, and it moves to bigger infrastructure as more people join.",
+    banner: "For now Castor Cloud runs on our own servers in Switzerland, and it moves to bigger infrastructure as more people join.",
     more: "How the beta works",
     title: "The friendly homelab from your neighbourhood",
     lead: "During the beta, Castor Cloud runs in our homelab: our own servers in Switzerland, not a data centre. We say so openly, because you should know where your data lives. As more people join, we move to bigger infrastructure.",
