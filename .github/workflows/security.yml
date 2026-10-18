@@ -43,6 +43,8 @@ jobs:
         with:
           category: /language:${{ matrix.language }}
           upload: never
+          # Uploading the database needs code scanning too; it only burns retries.
+          upload-database: false
           output: sarif
 
       - name: Fail on findings
@@ -53,8 +55,14 @@ jobs:
             | "\(.ruleId)\t\(.locations[0].physicalLocation.artifactLocation.uri):\(.locations[0].physicalLocation.region.startLine)\t\(.message.text | split("\n")[0])"' \
             sarif/*.sarif > all.tsv
           # Reviewed exceptions: .github/codeql-accepted.txt (rule and file).
-          awk 'NR == FNR { if ($0 !~ /^#/ && NF == 2) ok[$1 "\t" $2] = 1; next }
-               { split($2, loc, ":"); if (!ok[$1 "\t" loc[1]]) print }' \
+          # Rust test code (tests/*.rs, src/tests.rs) never ships: CodeQL reads
+          # its assertion and panic messages as logs, so it is listed, not failed.
+          # Unit tests therefore live in tests.rs files, not inline modules.
+          awk -v tests=findings-tests.tsv '
+               NR == FNR { if ($0 !~ /^#/ && NF == 2) ok[$1 "\t" $2] = 1; next }
+               { split($2, loc, ":") }
+               loc[1] ~ /(^|\/)tests(\/.*)?\.rs$/ { print > tests; next }
+               !ok[$1 "\t" loc[1]] { print }' \
             .github/codeql-accepted.txt all.tsv > findings.tsv
           {
             echo "## CodeQL ($LANGUAGE)"
@@ -64,6 +72,12 @@ jobs:
               while IFS=$'\t' read -r rule loc msg; do echo "| $rule | $loc | $msg |"; done < findings.tsv
             else
               echo "No findings."
+            fi
+            if [[ -s findings-tests.tsv ]]; then
+              echo "### In test code (not failing)"
+              echo "| Rule | Location | Message |"
+              echo "| --- | --- | --- |"
+              while IFS=$'\t' read -r rule loc msg; do echo "| $rule | $loc | $msg |"; done < findings-tests.tsv
             fi
           } >> "$GITHUB_STEP_SUMMARY"
           if [[ -s findings.tsv ]]; then
