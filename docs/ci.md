@@ -47,8 +47,9 @@ of them should carry the control plane.
 
 Pull requests build and scan (amd64). Pushes to `main` publish the images
 tagged with the full commit SHA and `main`, with an SBOM and build
-provenance attached: the node images for amd64 (TrueNAS) and arm64 (Mac
-minis), `castorcloud` for amd64. Deploy by digest or SHA tag, never `main`.
+provenance attached, all for amd64. A published release also builds the
+node images for arm64 (Mac minis); main doesn't, because arm64 builds run
+under emulation and take up to half an hour each. Deploy by digest or SHA tag, never `main`.
 Runtime images run as a non-root user; the castor image carries no npm,
 and the Rust node images are a static binary on an empty image.
 
