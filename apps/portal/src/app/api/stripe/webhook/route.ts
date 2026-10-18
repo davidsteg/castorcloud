@@ -32,7 +32,7 @@ export async function POST(req: NextRequest) {
   }
 
   try {
-    await handle(event);
+    await handle(s, event);
   } catch (err) {
     // Let Stripe retry later.
     await prisma.stripeEvent.delete({ where: { id: event.id } });
@@ -42,27 +42,12 @@ export async function POST(req: NextRequest) {
   return NextResponse.json({ received: true });
 }
 
-async function handle(event: Stripe.Event) {
+async function handle(s: Stripe, event: Stripe.Event) {
   switch (event.type) {
-    case "checkout.session.completed": {
-      const session = event.data.object;
-      const tenantId = session.metadata?.tenantId;
-      if (!tenantId || session.mode !== "subscription") return;
-      const tenant = await prisma.tenant.update({
-        where: { id: tenantId },
-        data: {
-          stripeCustomerId: String(session.customer),
-          stripeSubscriptionId: String(session.subscription),
-          subscriptionStatus: "active",
-        },
-      });
-      await audit("stripe", "billing.checkout_completed", tenantId, { session: session.id });
-      if (tenant.status === "PENDING") {
-        await prisma.tenant.update({ where: { id: tenantId }, data: { status: "PROVISIONING" } });
-        await enqueueTenantJob(tenantId, "PROVISION");
-      }
+    case "checkout.session.completed":
+    case "checkout.session.async_payment_succeeded":
+      await completeCheckout(s, event.data.object);
       return;
-    }
 
     case "customer.subscription.updated": {
       const sub = event.data.object;
@@ -116,9 +101,53 @@ async function handle(event: Stripe.Event) {
   }
 }
 
+/**
+ * Records the subscription and provisions a PENDING tenant once the checkout
+ * is paid. A second paid checkout for a tenant that already has a
+ * subscription is cancelled and audited for a manual refund.
+ */
+async function completeCheckout(s: Stripe, session: Stripe.Checkout.Session) {
+  const tenantId = session.metadata?.tenantId;
+  if (!tenantId || session.mode !== "subscription" || !session.subscription) return;
+  const subscriptionId = typeof session.subscription === "string" ? session.subscription : session.subscription.id;
+  const paid = session.payment_status === "paid" || session.payment_status === "no_payment_required";
+
+  const { count } = await prisma.tenant.updateMany({
+    where: { id: tenantId, OR: [{ stripeSubscriptionId: null }, { stripeSubscriptionId: subscriptionId }] },
+    data: {
+      stripeCustomerId: String(session.customer),
+      stripeSubscriptionId: subscriptionId,
+      ...(paid ? { subscriptionStatus: "active" } : {}),
+    },
+  });
+  if (count === 0) {
+    const duplicate = await s.subscriptions.retrieve(subscriptionId);
+    if (duplicate.status !== "canceled") await s.subscriptions.cancel(subscriptionId);
+    await audit("stripe", "billing.duplicate_subscription", tenantId, { session: session.id, subscription: subscriptionId });
+    console.error("stripe: cancelled duplicate subscription, refund it by hand", tenantId, subscriptionId);
+    return;
+  }
+  // Delayed payment methods: wait for checkout.session.async_payment_succeeded.
+  if (!paid) return;
+
+  await audit("stripe", "billing.checkout_completed", tenantId, { session: session.id });
+  const { count: started } = await prisma.tenant.updateMany({ where: { id: tenantId, status: "PENDING" }, data: { status: "PROVISIONING" } });
+  if (started === 1) await enqueueTenantJob(tenantId, "PROVISION");
+}
+
+/**
+ * The tenant a subscription belongs to. The metadata fallback only matches a
+ * tenant without a subscription yet (events can arrive before the checkout),
+ * so a cancelled duplicate subscription never touches the tenant.
+ */
 async function tenantFor(sub: Stripe.Subscription) {
   return prisma.tenant.findFirst({
-    where: { OR: [{ stripeSubscriptionId: sub.id }, { id: sub.metadata?.tenantId ?? "-" }] },
+    where: {
+      OR: [
+        { stripeSubscriptionId: sub.id },
+        { id: sub.metadata?.tenantId ?? "-", stripeSubscriptionId: null },
+      ],
+    },
   });
 }
 
