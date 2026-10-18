@@ -5,8 +5,7 @@ name: Images
 # SBOM and build provenance, and signs them with cosign when the
 # COSIGN_PRIVATE_KEY secret is set. The version lives in VERSION: every pull
 # request must raise it, and every push to main publishes the images as
-# v<VERSION>, also to one private Docker Hub repository (only signed, only if
-# that repository is private), and then creates the GitHub release v<VERSION>
+# v<VERSION> and then creates the GitHub release v<VERSION>
 # (docs/ci.md, "Versions and releases"). A release published by hand also
 # adds arm64 to the node images for Mac minis.
 on:
@@ -128,10 +127,6 @@ jobs:
       IMAGE: ghcr.io/${{ github.repository_owner }}/${{ matrix.image }}
       COSIGN_KEY_SET: ${{ secrets.COSIGN_PRIVATE_KEY != '' }}
       TAG: ${{ needs.version.outputs.tag }}
-      # Docker Hub only gets signed images, so it also needs the cosign key.
-      DOCKERHUB_PUSH: ${{ secrets.DOCKERHUB_USERNAME != '' && secrets.DOCKERHUB_TOKEN != '' && secrets.COSIGN_PRIVATE_KEY != '' }}
-      DOCKERHUB_REPO: davidsteg/castorcloud
-      DOCKERHUB_IMAGE: docker.io/davidsteg/castorcloud
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -148,32 +143,6 @@ jobs:
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
-      # A public Docker Hub repository would publish the control plane, so
-      # refuse to push unless the repository exists and is private.
-      - name: Check Docker Hub repository is private
-        if: env.DOCKERHUB_PUSH == 'true'
-        env:
-          DOCKERHUB_USERNAME: ${{ secrets.DOCKERHUB_USERNAME }}
-          DOCKERHUB_TOKEN: ${{ secrets.DOCKERHUB_TOKEN }}
-        run: |
-          set -euo pipefail
-          token=$(jq -n --arg u "$DOCKERHUB_USERNAME" --arg t "$DOCKERHUB_TOKEN" '{identifier: $u, secret: $t}' \
-            | curl -fsS -X POST -H 'Content-Type: application/json' --data @- https://hub.docker.com/v2/auth/token \
-            | jq -er .access_token)
-          echo "::add-mask::$token"
-          private=$(curl -fsS -H "Authorization: Bearer $token" "https://hub.docker.com/v2/repositories/${DOCKERHUB_REPO}/" | jq -r .is_private)
-          if [ "$private" != "true" ]; then
-            echo "::error::Docker Hub repository ${DOCKERHUB_REPO} is not private (is_private=${private}); not pushing."
-            exit 1
-          fi
-
-      - uses: docker/login-action@dbcb813823bdd20940b903addbd779551569679f # v4.6.0
-        if: env.DOCKERHUB_PUSH == 'true'
-        with:
-          registry: docker.io
-          username: ${{ secrets.DOCKERHUB_USERNAME }}
-          password: ${{ secrets.DOCKERHUB_TOKEN }}
-
       # Tags: the full commit SHA (immutable, what deployments pin), the
       # version and, for pushes to main, main.
       - id: meta
@@ -186,18 +155,6 @@ jobs:
             type=raw,value=${{ env.TAG }}
           labels: org.opencontainers.image.version=${{ env.TAG }}
 
-      # One Docker Hub repository for all images: <name>-<version>,
-      # <name>-<commit SHA>, and <name>-latest unless it is a pre-release.
-      - id: hub
-        if: env.DOCKERHUB_PUSH == 'true'
-        uses: docker/metadata-action@dc802804100637a589fabce1cb79ff13a1411302 # v6.2.0
-        with:
-          images: ${{ env.DOCKERHUB_IMAGE }}
-          tags: |
-            type=raw,value=${{ matrix.name }}-${{ env.TAG }}
-            type=sha,format=long,prefix=${{ matrix.name }}-
-            type=raw,value=${{ matrix.name }}-latest,enable=${{ !github.event.release.prerelease }}
-
       - id: build
         uses: docker/build-push-action@c3c9e263c25d99ce0380d002d59b67737d91b0dc # v7.4.0
         with:
@@ -205,9 +162,7 @@ jobs:
           file: ${{ matrix.file }}
           platforms: ${{ github.event_name == 'release' && matrix.platforms || 'linux/amd64' }}
           push: true
-          tags: |
-            ${{ steps.meta.outputs.tags }}
-            ${{ steps.hub.outputs.tags }}
+          tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
           sbom: true
           provenance: mode=max
@@ -229,29 +184,16 @@ jobs:
           COSIGN_KEY: ${{ secrets.COSIGN_PRIVATE_KEY }}
           COSIGN_PASSWORD: ${{ secrets.COSIGN_PASSWORD }}
           DIGEST: ${{ steps.build.outputs.digest }}
-        run: |
-          cosign sign --yes --key env://COSIGN_KEY --tlog-upload=false "${IMAGE}@${DIGEST}"
-          if [ "$DOCKERHUB_PUSH" = "true" ]; then
-            cosign sign --yes --key env://COSIGN_KEY --tlog-upload=false "${DOCKERHUB_IMAGE}@${DIGEST}"
-          fi
+        run: cosign sign --yes --key env://COSIGN_KEY --tlog-upload=false "${IMAGE}@${DIGEST}"
 
       - name: Unsigned
         if: env.COSIGN_KEY_SET != 'true'
         run: echo "::notice::COSIGN_PRIVATE_KEY is not set, so ${IMAGE} is not signed."
 
-      - name: Not on Docker Hub
-        if: github.event_name == 'release' && env.DOCKERHUB_PUSH != 'true'
-        run: echo "::notice::DOCKERHUB_USERNAME, DOCKERHUB_TOKEN or COSIGN_PRIVATE_KEY is not set, so nothing is pushed to ${DOCKERHUB_IMAGE}."
-
       - name: Summary
         env:
-          MATRIX_NAME: ${{ matrix.name }}
           DIGEST: ${{ steps.build.outputs.digest }}
-        run: |
-          echo "Pushed \`${IMAGE}@${DIGEST}\` (tag \`${GITHUB_SHA}\`)" >> "$GITHUB_STEP_SUMMARY"
-          if [ "$DOCKERHUB_PUSH" = "true" ]; then
-            echo "Pushed \`${DOCKERHUB_IMAGE}@${DIGEST}\` (tag \`${MATRIX_NAME}-${TAG}\`)" >> "$GITHUB_STEP_SUMMARY"
-          fi
+        run: echo "Pushed \`${IMAGE}@${DIGEST}\` (tags \`${GITHUB_SHA}\`, \`${TAG}\`)" >> "$GITHUB_STEP_SUMMARY"
 
   # Created with GITHUB_TOKEN, so it does not start this workflow again.
   release:
