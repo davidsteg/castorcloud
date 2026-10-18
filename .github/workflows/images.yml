@@ -1,13 +1,14 @@
 name: Images
 
 # Builds every image this repo ships and scans it with Trivy. Pull requests
-# build and scan only; main also pushes the images to GHCR (node images for
-# amd64 TrueNAS and arm64 Mac minis) with an SBOM and build provenance, and
-# signs them with cosign when the COSIGN_PRIVATE_KEY secret is set. The
-# version lives in VERSION: every pull request must raise it, and every push
-# to main publishes the images as v<VERSION>, also to one private Docker Hub
-# repository (only signed, only if that repository is private), and then
-# creates the GitHub release v<VERSION> (docs/ci.md, "Versions and releases").
+# build and scan only; main also pushes the images to GHCR (amd64) with an
+# SBOM and build provenance, and signs them with cosign when the
+# COSIGN_PRIVATE_KEY secret is set. The version lives in VERSION: every pull
+# request must raise it, and every push to main publishes the images as
+# v<VERSION>, also to one private Docker Hub repository (only signed, only if
+# that repository is private), and then creates the GitHub release v<VERSION>
+# (docs/ci.md, "Versions and releases"). A release published by hand also
+# adds arm64 to the node images for Mac minis.
 on:
   push:
     branches: [main]
@@ -55,7 +56,8 @@ jobs:
       matrix: &images
         include:
           # Portal, castord, monitor, Telegram bot and admin CLI: one image,
-          # one container each. The control plane runs on amd64.
+          # one container each. The control plane runs on amd64. platforms
+          # is what a release builds; main builds only linux/amd64.
           - name: castor
             image: castorcloud
             context: .
@@ -113,7 +115,8 @@ jobs:
     if: (github.event_name == 'push' && github.ref == 'refs/heads/main') || github.event_name == 'release'
     needs: [version, scan]
     runs-on: ubuntu-latest
-    # arm64 builds run under emulation.
+    # A release's arm64 builds run under emulation: compiling Rust there
+    # takes up to half an hour per image, so main skips them.
     timeout-minutes: 90
     permissions:
       contents: read
@@ -135,6 +138,7 @@ jobs:
           persist-credentials: false
 
       - uses: docker/setup-qemu-action@99012661954931238ded8c8b007157a8430204e1 # v4.4.0
+        if: github.event_name == 'release'
 
       - uses: docker/setup-buildx-action@f87e5991a6d7451dcb8d9637bfbc97413f497069 # v4.4.1
 
@@ -199,7 +203,7 @@ jobs:
         with:
           context: ${{ matrix.context }}
           file: ${{ matrix.file }}
-          platforms: ${{ matrix.platforms }}
+          platforms: ${{ github.event_name == 'release' && matrix.platforms || 'linux/amd64' }}
           push: true
           tags: |
             ${{ steps.meta.outputs.tags }}
