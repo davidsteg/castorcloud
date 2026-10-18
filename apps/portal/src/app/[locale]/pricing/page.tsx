@@ -1,7 +1,15 @@
+import type { Metadata } from "next";
 import { getDictionary, type Locale } from "@/i18n";
 import { configFromQuery } from "@/lib/plan";
 import { SubPage } from "@/components/site/SubPage";
 import { PricingCalculator } from "@/components/site/PricingCalculator";
+import { pageMetadata } from "@/lib/seo";
+
+export async function generateMetadata({ params }: { params: Promise<{ locale: Locale }> }): Promise<Metadata> {
+  const { locale } = await params;
+  const t = getDictionary(locale);
+  return pageMetadata(locale, "/pricing", { title: t.pricing.title, description: t.pricing.lead });
+}
 
 export default async function PricingPage({
   params,

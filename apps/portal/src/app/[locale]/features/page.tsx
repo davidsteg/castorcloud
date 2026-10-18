@@ -1,3 +1,4 @@
+import type { Metadata } from "next";
 import Image from "next/image";
 import Link from "next/link";
 import { OSS_PROJECTS, SERVICES, SERVICE_KEYS, formatChf, type ServiceKey } from "@pc/pricing";
@@ -6,6 +7,13 @@ import { SERVICE_ICONS } from "@/lib/plan";
 import { SCREENSHOTS } from "@/lib/screenshots";
 import { SubPage } from "@/components/site/SubPage";
 import { ServiceApps } from "@/components/site/MobileApps";
+import { pageMetadata } from "@/lib/seo";
+
+export async function generateMetadata({ params }: { params: Promise<{ locale: Locale }> }): Promise<Metadata> {
+  const { locale } = await params;
+  const t = getDictionary(locale);
+  return pageMetadata(locale, "/features", { title: t.services.title, description: t.services.lead });
+}
 
 // One sales section per tool: benefit, screenshot, features, how to move in,
 // apps, price and a direct start with that tool pre-selected.
