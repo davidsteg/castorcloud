@@ -8,6 +8,13 @@
 //! encrypted with the tenant's key, which never leaves the control plane.
 //! See docs/backups.md.
 //!
+//! On TrueNAS (BACKUP_TARGET=truenas-replication, docs/gatekeeper.md) the NAS
+//! sends the backups itself: castord snapshots each tenant through
+//! gatekeeper, runs the replication task the operator set up to the backup
+//! box (raw, so the box gets ciphertext only) and records how it went. The
+//! box's retention is that task's; castord can't delete anything there, only
+//! its own snapshots on the NAS.
+//!
 //!   backup-tenants   every BACKUP_INTERVAL_HOURS: one backup of every active
 //!                    tenant on a ZFS node, then retention
 //!   backup-database  02:30: the control-plane database, sealed to the offline key
@@ -17,7 +24,7 @@ use std::io::Write as _;
 use std::sync::Arc;
 use std::time::{SystemTime, UNIX_EPOCH};
 
-use serde_json::json;
+use serde_json::{Map, Value, json};
 use sqlx::PgPool;
 use zeroize::Zeroizing;
 
@@ -31,6 +38,12 @@ use crate::suspend::strings;
 use crate::tasks::{Task, busy};
 use crate::{Control, valid};
 
+/// BACKUP_TARGET for backups by the NAS's own replication task.
+pub const REPLICATION: &str = "truenas-replication";
+/// How often and how long castord waits for a replication run.
+const REPLICATION_EVERY: std::time::Duration = std::time::Duration::from_secs(30);
+const REPLICATION_TRIES: u32 = 6 * 120;
+
 /// BACKUP_* settings; backups are off without BACKUP_TARGET.
 #[derive(Debug, Clone)]
 pub struct Settings {
@@ -42,6 +55,13 @@ pub struct Settings {
     /// The control-plane Postgres container, for pg_dumpall.
     pub pg_container: String,
     pub pg_user: String,
+}
+
+impl Settings {
+    /// Backups by TrueNAS replication instead of a box castord reaches over ssh.
+    pub fn replication(&self) -> bool {
+        self.target == REPLICATION
+    }
 }
 
 fn now() -> i64 {
@@ -62,6 +82,10 @@ async fn on_box(c: &Control, s: &Settings, args: &[&str]) -> Result<String, Stri
 }
 
 pub async fn list(c: &Control, s: &Settings) -> Result<Vec<(String, Vec<Snapshot>)>, String> {
+    // castord doesn't reach the box: what it holds is the replication task's business.
+    if s.replication() {
+        return Ok(Vec::new());
+    }
     Ok(retention::parse_list(&on_box(c, s, &["list"]).await?))
 }
 
@@ -75,6 +99,9 @@ pub struct Pool {
 
 /// "pool <size-mb> <alloc-mb> <health>".
 pub async fn pool(c: &Control, s: &Settings) -> Result<Pool, String> {
+    if s.replication() {
+        return Err("backups go by the NAS's replication task: see its state on the NAS".into());
+    }
     let out = on_box(c, s, &["pool"]).await?;
     let w: Vec<&str> = out.split_whitespace().collect();
     match w.as_slice() {
@@ -156,6 +183,9 @@ struct Backed {
 
 /// One backup of every active tenant on a ZFS node, then retention.
 pub async fn run_all(c: &Control, db: &PgPool, s: &Settings) -> Result<(), String> {
+    if s.replication() {
+        return run_replication(c, db).await;
+    }
     let health = pool_health(c, s).await?;
     if health != "ONLINE" {
         audit(
@@ -217,6 +247,9 @@ pub async fn run_all(c: &Control, db: &PgPool, s: &Settings) -> Result<(), Strin
 
 /// One tenant now (the admin CLI's `run <slug>`); Ok(false) when it failed.
 pub async fn backup_one(c: &Control, db: &PgPool, s: &Settings, tenant_id: &str) -> Result<bool, String> {
+    if s.replication() {
+        return Err("with TrueNAS replication all tenants are sent together: backup run".into());
+    }
     let t = sqlx::query_as::<_, Backed>(
         r#"SELECT t.id, t.slug, t."nodeId", b.generation, b."lastSnapshot", b.failures
            FROM "Tenant" t LEFT JOIN "TenantBackup" b ON b."tenantId" = t.id
@@ -364,6 +397,215 @@ async fn backup_tenant(
     }
 }
 
+fn args(pairs: &[(&str, &str)]) -> Map<String, Value> {
+    pairs.iter().map(|(k, v)| ((*k).to_owned(), Value::from(*v))).collect()
+}
+
+/// One run of every active tenant on a gatekeeper node: snapshot each, run
+/// the node's replication task once, record the outcome, and drop the
+/// tenants' older backup snapshots on the NAS (the newest stays as the base
+/// of the next incremental send).
+async fn run_replication(c: &Control, db: &PgPool) -> Result<(), String> {
+    let tenants = sqlx::query_as::<_, Backed>(
+        r#"SELECT t.id, t.slug, t."nodeId", b.generation, b."lastSnapshot", b.failures
+           FROM "Tenant" t LEFT JOIN "TenantBackup" b ON b."tenantId" = t.id
+           WHERE t.status = 'ACTIVE' AND t."nodeId" IS NOT NULL ORDER BY t."nodeId", t.slug"#,
+    )
+    .fetch_all(db)
+    .await
+    .map_err(|e| e.to_string())?;
+    let snap = retention::snapshot_name(now());
+    let mut node_ids: Vec<&str> = tenants.iter().map(|t| t.node_id.as_str()).collect();
+    node_ids.dedup();
+    let mut ok = 0;
+    for node_id in node_ids {
+        let node = match NodeRow::load(db, node_id)
+            .await
+            .and_then(|row| Node::new(&row, &c.root, c.exec.clone()))
+        {
+            Ok(n) if n.is_gatekeeper() => n,
+            Ok(n) => {
+                eprintln!(
+                    "[backup-tenants] {}: not a TrueNAS node, not backed up by replication",
+                    n.name
+                );
+                continue;
+            }
+            Err(e) => {
+                eprintln!("[backup-tenants] node {node_id}: {e}");
+                continue;
+            }
+        };
+        let Some(root) = node.dataset_root().map(str::to_owned) else {
+            continue;
+        };
+        let mut taken: Vec<&Backed> = Vec::new();
+        for t in tenants.iter().filter(|t| t.node_id == node_id) {
+            if !valid::slug(&t.slug) || busy(db, &t.id).await? {
+                eprintln!("[backup-tenants] {}: busy or invalid, next run", t.slug);
+                continue;
+            }
+            attempted(db, &t.id).await?;
+            let ds = format!("{root}/{}", t.slug);
+            match node
+                .call(
+                    "truenas.snapshot_create",
+                    args(&[("dataset", &ds), ("snapshot", &snap)]),
+                    None,
+                )
+                .await
+            {
+                Ok(_) => taken.push(t),
+                Err(e) => failed(db, t, &e).await?,
+            }
+        }
+        if taken.is_empty() {
+            continue;
+        }
+        let sent = replicate(&node).await;
+        for t in taken {
+            let ds = format!("{root}/{}", t.slug);
+            match &sent {
+                Ok(()) => {
+                    succeeded(db, t, &snap).await?;
+                    ok += 1;
+                    if let Err(e) = drop_older(&node, &ds, &snap).await {
+                        eprintln!("[backup-tenants] {}: old snapshots stay: {e}", t.slug);
+                    }
+                }
+                Err(e) => {
+                    failed(db, t, e).await?;
+                    // Don't let failed snapshots eat the quota.
+                    let gone = format!("{ds}@{snap}");
+                    let _ = node
+                        .call("truenas.snapshot_delete", args(&[("snapshot", &gone)]), None)
+                        .await;
+                }
+            }
+        }
+    }
+    eprintln!("[backup-tenants] backed up {ok} tenant(s)");
+    Ok(())
+}
+
+/// Runs the replication task and waits until a run that started after now ended.
+async fn replicate(node: &Node) -> Result<(), String> {
+    let started = now() * 1000;
+    node.call("truenas.replication_run", Map::new(), None).await?;
+    for i in 0..REPLICATION_TRIES {
+        if i > 0 {
+            tokio::time::sleep(REPLICATION_EVERY).await;
+        }
+        let out = node.call("truenas.replication_query", Map::new(), None).await?;
+        match replication_state(&out)? {
+            (state, Some(at), _) if at >= started && state == "FINISHED" => return Ok(()),
+            (state, Some(at), error) if at >= started && (state == "ERROR" || state == "FAILED") => {
+                return Err(format!("replication failed: {}", error.unwrap_or_default()));
+            }
+            _ => {}
+        }
+    }
+    Err("replication still running after 6 hours".into())
+}
+
+/// replication.query's state of the task: (state, when in ms, error).
+pub fn replication_state(text: &str) -> Result<(String, Option<i64>, Option<String>), String> {
+    let v: Value = serde_json::from_str(text).map_err(|e| format!("replication.query: {e}"))?;
+    let st = v
+        .as_array()
+        .and_then(|a| a.first())
+        .and_then(|t| t.get("state"))
+        .ok_or("replication.query: no such task")?;
+    let state = st.get("state").and_then(Value::as_str).unwrap_or("").to_owned();
+    let at = st
+        .get("datetime")
+        .and_then(|d| d.get("$date").or(Some(d)))
+        .and_then(Value::as_i64);
+    let error = st.get("error").and_then(Value::as_str).map(str::to_owned);
+    Ok((state, at, error))
+}
+
+/// Every backup snapshot of the dataset but `keep`.
+async fn drop_older(node: &Node, ds: &str, keep: &str) -> Result<(), String> {
+    let out = node
+        .call("truenas.snapshot_query", args(&[("dataset", ds)]), None)
+        .await?;
+    let v: Value = serde_json::from_str(&out).map_err(|e| format!("zfs.snapshot.query: {e}"))?;
+    let keep = format!("{ds}@{keep}");
+    for snap in v.as_array().into_iter().flatten() {
+        let Some(name) = snap.get("name").or(snap.get("id")).and_then(Value::as_str) else {
+            continue;
+        };
+        let ours = name.strip_prefix(ds).and_then(|r| r.strip_prefix("@cb-")).is_some();
+        if ours && name != keep {
+            node.call("truenas.snapshot_delete", args(&[("snapshot", name)]), None)
+                .await?;
+        }
+    }
+    Ok(())
+}
+
+async fn attempted(db: &PgPool, tenant_id: &str) -> Result<(), String> {
+    sqlx::query(
+        r#"INSERT INTO "TenantBackup" ("tenantId", "lastAttemptAt", "updatedAt") VALUES ($1, now() AT TIME ZONE 'UTC', now() AT TIME ZONE 'UTC')
+           ON CONFLICT ("tenantId") DO UPDATE SET "lastAttemptAt" = now() AT TIME ZONE 'UTC', "updatedAt" = now() AT TIME ZONE 'UTC'"#,
+    )
+    .bind(tenant_id)
+    .execute(db)
+    .await
+    .map_err(|e| e.to_string())?;
+    Ok(())
+}
+
+async fn succeeded(db: &PgPool, t: &Backed, snap: &str) -> Result<(), String> {
+    sqlx::query(
+        r#"UPDATE "TenantBackup" SET generation = 1, "lastSnapshot" = $2, "lastSuccessAt" = now() AT TIME ZONE 'UTC',
+                  "lastError" = NULL, failures = 0, "updatedAt" = now() AT TIME ZONE 'UTC'
+           WHERE "tenantId" = $1"#,
+    )
+    .bind(&t.id)
+    .bind(snap)
+    .execute(db)
+    .await
+    .map_err(|e| e.to_string())?;
+    if t.failures.unwrap_or(0) > 0 {
+        audit(
+            db,
+            "system",
+            "backup.recovered",
+            Some(&t.id),
+            Some(json!({ "snap": snap })),
+        )
+        .await?;
+    }
+    Ok(())
+}
+
+async fn failed(db: &PgPool, t: &Backed, e: &str) -> Result<(), String> {
+    let message = slice(e, 2000);
+    sqlx::query(
+        r#"UPDATE "TenantBackup" SET "lastError" = $2, failures = failures + 1, "updatedAt" = now() AT TIME ZONE 'UTC'
+           WHERE "tenantId" = $1"#,
+    )
+    .bind(&t.id)
+    .bind(message)
+    .execute(db)
+    .await
+    .map_err(|e| e.to_string())?;
+    if t.failures.unwrap_or(0) == 0 {
+        audit(
+            db,
+            "system",
+            "backup.failed",
+            Some(&t.id),
+            Some(json!({ "error": slice(message, 500) })),
+        )
+        .await?;
+    }
+    eprintln!("[backup-tenants] {}: backup failed: {message}", t.slug);
+    Ok(())
+}
+
 /// The box refuses to delete anything younger than its own floor; those
 /// refusals are expected.
 fn refused(e: &str) -> bool {
@@ -414,6 +656,10 @@ pub async fn prune(c: &Control, db: &PgPool, s: &Settings) -> Result<(), String>
 
 /// Reads each tenant's newest backup back on the box; ZFS checks every block.
 pub async fn verify_all(c: &Control, db: &PgPool, s: &Settings) -> Result<(), String> {
+    if s.replication() {
+        eprintln!("[verify-backups] TrueNAS replication: scrub the backup box's pool on the box itself");
+        return Ok(());
+    }
     let listing = list(c, s).await?;
     let slugs: Vec<&str> = listing.iter().map(|(slug, _)| slug.as_str()).collect();
     let tenants: Vec<(String, String)> =
@@ -522,6 +768,9 @@ pub async fn problems(db: &PgPool, s: &Settings) -> Result<Vec<(String, Vec<Stri
 /// pg_dumpall of the control plane (portal and Authentik, with the wrapped
 /// tenant keys), gzipped and sealed to the offline key, stored on the box.
 pub async fn dump_database(c: &Control, s: &Settings) -> Result<String, String> {
+    if s.replication() {
+        return Err("database dumps to the box need ssh; not with TrueNAS replication yet".into());
+    }
     let Some(public) = &s.db_public_key else {
         return Err("BACKUP_DB_PUBLIC_KEY is not set: the control-plane database is NOT backed up".into());
     };

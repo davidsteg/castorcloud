@@ -104,10 +104,42 @@ castor admin node add nas1 castor-node:7443 --kind truenas --pool tank --auth-ho
 `node add` probes the pool and the system through the TrueNAS API, then
 copies the templates and node files through gatekeeper's file tools.
 
+## Tenant storage
+
+Each tenant is one TrueNAS dataset `<pool>/castor/t/<slug>`, its own
+encryption root (AES-256-GCM) with a passphrase: the 64 hex characters of
+the key castor-zfs used (HKDF of the tenant's volume key). TrueNAS doesn't
+store passphrases, so after a reboot the datasets stay locked until castord
+opens them. Each data directory is a child dataset, which inherits the key
+and gives the per-service usage. Unlock and lock are middleware jobs; castord
+confirms them by querying the dataset.
+
+## Backups
+
+With `BACKUP_TARGET=truenas-replication` the NAS sends the backups itself.
+Set up, on the NAS, one replication task to the backup box (a second
+TrueNAS):
+
+- source `<pool>/castor/t`, recursive, run manually (no schedule);
+- also include snapshots named `cb-%Y%m%dT%H%MZ`;
+- encryption: send the datasets raw (the box gets ciphertext, never a key);
+- retention on the box: **custom** (for example four weeks), never "same as
+  source": castord deletes its older snapshots on the NAS after each run, and
+  with "same as source" the box would delete them too.
+
+Generate the tools with the task's id (`castor-admin gatekeeper tools <pool>
+<task-id>`). Every `BACKUP_INTERVAL_HOURS` castord snapshots each active
+tenant, runs the task, waits for it and records the outcome; then it keeps
+only the newest snapshot on the NAS, the base of the next incremental send.
+castord can't delete anything on the box: what it keeps is the task's
+retention.
+
+Not yet with replication: restoring from the box (replicate back by hand on
+the NAS, then open the tenant), the weekly verify (scrub the box's pool), and
+the control-plane database dump.
+
 ## Not through gatekeeper yet
 
-- Backups (`castor-snap`) still go over SSH and fail on a TrueNAS node.
-  They move to TrueNAS snapshots and replication next.
 - The custom-stacks edge (`docker cp` of routes) has no tool: a TrueNAS node
   takes no custom stacks.
 - Pulling from GHCR with a token needs gatekeeper's stdin support; until
