@@ -62,15 +62,15 @@ pub fn address_ok(addr: &str) -> bool {
 
 /// A certificate chain and its key, from PEM files.
 pub struct Identity {
-    certs: Vec<CertificateDer<'static>>,
+    chain: Vec<CertificateDer<'static>>,
     key: PrivateKeyDer<'static>,
 }
 
 impl Identity {
     pub fn from_pem(cert_pem: &[u8], key_pem: &[u8]) -> Result<Self, String> {
-        let certs = certs(cert_pem)?;
+        let chain = pem_chain(cert_pem)?;
         let key = PrivateKeyDer::from_pem_slice(key_pem).map_err(|e| format!("link key: {e}"))?;
-        Ok(Self { certs, key })
+        Ok(Self { chain, key })
     }
 
     pub fn from_files(cert_file: &str, key_file: &str) -> Result<Self, String> {
@@ -80,14 +80,14 @@ impl Identity {
     }
 }
 
-fn certs(pem: &[u8]) -> Result<Vec<CertificateDer<'static>>, String> {
-    let certs = CertificateDer::pem_slice_iter(pem)
+fn pem_chain(pem: &[u8]) -> Result<Vec<CertificateDer<'static>>, String> {
+    let chain = CertificateDer::pem_slice_iter(pem)
         .collect::<Result<Vec<_>, _>>()
         .map_err(|e| format!("link certificates: {e}"))?;
-    if certs.is_empty() {
+    if chain.is_empty() {
         return Err("link certificates: none found".into());
     }
-    Ok(certs)
+    Ok(chain)
 }
 
 fn provider() -> Arc<CryptoProvider> {
@@ -98,20 +98,20 @@ fn provider() -> Arc<CryptoProvider> {
 /// with the key of the one presented.
 #[derive(Debug)]
 struct Pinned {
-    certs: Vec<CertificateDer<'static>>,
+    chain: Vec<CertificateDer<'static>>,
     provider: Arc<CryptoProvider>,
 }
 
 impl Pinned {
     fn new(pem: &[u8]) -> Result<Self, String> {
         Ok(Self {
-            certs: certs(pem)?,
+            chain: pem_chain(pem)?,
             provider: provider(),
         })
     }
 
     fn check(&self, end_entity: &CertificateDer<'_>) -> Result<(), rustls::Error> {
-        if self.certs.iter().any(|c| c.as_ref() == end_entity.as_ref()) {
+        if self.chain.iter().any(|c| c.as_ref() == end_entity.as_ref()) {
             Ok(())
         } else {
             Err(rustls::Error::General("certificate is not pinned".into()))
@@ -228,7 +228,7 @@ impl Client {
             .map_err(|e| e.to_string())?
             .dangerous()
             .with_custom_certificate_verifier(Arc::new(Pinned::new(peers_pem)?))
-            .with_client_auth_cert(identity.certs, identity.key)
+            .with_client_auth_cert(identity.chain, identity.key)
             .map_err(|e| format!("link identity: {e}"))?;
         Ok(Self {
             tls: TlsConnector::from(Arc::new(config)),
@@ -405,7 +405,7 @@ pub fn acceptor(identity: Identity, peers_pem: &[u8]) -> Result<TlsAcceptor, Str
         .with_protocol_versions(&[&rustls::version::TLS13])
         .map_err(|e| e.to_string())?
         .with_client_cert_verifier(Arc::new(Pinned::new(peers_pem)?))
-        .with_single_cert(identity.certs, identity.key)
+        .with_single_cert(identity.chain, identity.key)
         .map_err(|e| format!("link identity: {e}"))?;
     Ok(TlsAcceptor::from(Arc::new(config)))
 }
