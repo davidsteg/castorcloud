@@ -375,7 +375,7 @@ const fr: Dictionary = {
     ],
   },
   footer: {
-    tagline: "Votre cloud privé, hébergé en Suisse.",
+    tagline: "Votre cloud privé, depuis le homelab sympa d’à côté, hébergé en Suisse.",
     legal: "Mentions légales",
     privacy: "Protection des données",
     terms: "CG",

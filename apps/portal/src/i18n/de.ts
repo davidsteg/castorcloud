@@ -376,7 +376,7 @@ const de: Dictionary = {
     ],
   },
   footer: {
-    tagline: "Ihre private Cloud, gehostet in der Schweiz.",
+    tagline: "Ihre private Cloud aus dem freundlichen Homelab nebenan, gehostet in der Schweiz.",
     legal: "Impressum",
     privacy: "Datenschutz",
     terms: "AGB",

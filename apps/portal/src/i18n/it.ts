@@ -375,7 +375,7 @@ const it: Dictionary = {
     ],
   },
   footer: {
-    tagline: "Il tuo cloud privato, ospitato in Svizzera.",
+    tagline: "Il tuo cloud privato dall’homelab simpatico qui accanto, ospitato in Svizzera.",
     legal: "Note legali",
     privacy: "Protezione dei dati",
     terms: "CG",

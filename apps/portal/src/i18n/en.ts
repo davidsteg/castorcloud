@@ -375,7 +375,7 @@ const en = {
     ],
   },
   footer: {
-    tagline: "Your private cloud, hosted in Switzerland.",
+    tagline: "Your private cloud from the friendly homelab next door, hosted in Switzerland.",
     legal: "Legal notice",
     privacy: "Privacy policy",
     terms: "Terms",
