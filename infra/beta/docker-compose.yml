@@ -193,8 +193,9 @@ services:
   gatekeeper-castor:
     image: ${GATEKEEPER_IMAGE:?GATEKEEPER_IMAGE is required}
     container_name: gatekeeper-castor
-    # No --ui: nobody signs in to this instance.
-    command: ["serve"]
+    # Headless: no console, no admin endpoint. The TrueNAS API key is the
+    # `nas` credential (docs/gatekeeper.md), reloaded with SIGHUP.
+    command: ["serve", "--headless"]
     user: "568:568"
     group_add: ["${DOCKER_GID:-999}"]
     read_only: true
@@ -202,7 +203,8 @@ services:
     security_opt: [no-new-privileges:true]
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock
-      # toolkits.yaml, tools.yaml, identities.yaml (../gatekeeper/).
+      # toolkits.yaml, tools.yaml, identities.yaml (../gatekeeper/) and
+      # truenas-ca.pem, the NAS's CA.
       - ${GATEKEEPER_CONFIG:?GATEKEEPER_CONFIG is required}:/etc/gatekeeper:ro
       - ${GATEKEEPER_LOGS:?GATEKEEPER_LOGS is required}:/var/log/gatekeeper
       # The node root at the host's path: compose files and tenant files.

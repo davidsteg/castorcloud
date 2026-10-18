@@ -90,7 +90,7 @@ from the castord container (step 4).
 
    ```sh
    gatekeeper credential-set --name nas --kind ws_api_key < key
-   kill -HUP <gatekeeper pid>
+   docker kill -s HUP gatekeeper-castor
    ```
 
    The instance runs `serve --headless`: no console and no admin endpoint.
