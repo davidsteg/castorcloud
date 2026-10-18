@@ -70,6 +70,16 @@ openssl req -x509 -newkey ed25519 -nodes -days 3650 -subj /CN=castor-node \
 To rotate, add the new certificate to the peer file first, then switch the
 key, then remove the old certificate.
 
+## The beta: everything on one TrueNAS
+
+`infra/beta/docker-compose.yml` runs the control plane, the node role and
+`gatekeeper-castor` as one compose project, with `beta.env.example` as the
+template for its `.env`. Before the first start, move the TrueNAS web UI off
+ports 80 and 443, create `<pool>/castor/node` and `<pool>/castor/t`, set up
+gatekeeper's configuration (below), and put the token and the four link
+files into `SECRETS_DIR`. Then `docker compose up -d` and register the node
+from the castord container (step 4).
+
 ## Running a node
 
 1. Create `/mnt/<pool>/castor/node` and `/mnt/<pool>/castor/t` on the pool.
@@ -96,9 +106,8 @@ copies the templates and node files through gatekeeper's file tools.
 
 ## Not through gatekeeper yet
 
-- Tenant storage (`castor-zfs`) and backups (`castor-snap`) still go over
-  SSH and fail on a TrueNAS node. They move to `pool.dataset.*` and TrueNAS
-  replication next.
+- Backups (`castor-snap`) still go over SSH and fail on a TrueNAS node.
+  They move to TrueNAS snapshots and replication next.
 - The custom-stacks edge (`docker cp` of routes) has no tool: a TrueNAS node
   takes no custom stacks.
 - Pulling from GHCR with a token needs gatekeeper's stdin support; until

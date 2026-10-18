@@ -1,0 +1,242 @@
+# Castor on one TrueNAS SCALE (the beta, docs/gatekeeper.md): the control
+# plane, the node role and its gatekeeper instance, in one compose project.
+# Run from this directory of a castorcloud checkout on the NAS:
+#
+#   cp beta.env.example .env    # fill in, chmod 600
+#   docker compose up -d
+#
+# Who holds what:
+#   portal, castord, monitor   the database and the keys (.env); no gatekeeper
+#                              token, no docker.sock, no host mounts
+#   node (castor node)         the gatekeeper token only; refuses any other secret
+#   gatekeeper-castor          docker.sock and the TrueNAS API key
+#
+# Networks:
+#   cp        control plane: Traefik, portal, castord, monitor, Postgres, Authentik
+#   link      castord to the node role (mutual TLS, pinned certificates)
+#   gk        the node role to gatekeeper (internal)
+#   host-api  gatekeeper to the TrueNAS middleware only (limit it with a NAS
+#             firewall rule to the middleware's port)
+#   pc-edge   Traefik to the tenant stacks, which gatekeeper starts
+#
+# Before the first start: move the TrueNAS web UI off ports 80/443, create
+# the datasets <pool>/castor/node and <pool>/castor/t, and put the files
+# listed under "secrets" below into SECRETS_DIR (docs/gatekeeper.md).
+name: castor
+
+x-castor: &castor
+  image: ghcr.io/davidsteg/castorcloud:${CASTOR_VERSION:?CASTOR_VERSION is required}
+  env_file: .env
+  read_only: true
+  tmpfs: [/tmp]
+  cap_drop: [ALL]
+  security_opt: [no-new-privileges:true]
+  restart: unless-stopped
+
+services:
+  traefik:
+    image: traefik:v3.6
+    command:
+      - --providers.file.directory=/etc/traefik/dynamic
+      - --providers.file.watch=true
+      - --entrypoints.web.address=:80
+      - --entrypoints.web.http.redirections.entrypoint.to=websecure
+      - --entrypoints.web.http.redirections.entrypoint.scheme=https
+      - --entrypoints.websecure.address=:443
+      - --entrypoints.websecure.http.tls.certresolver=le
+      - --entrypoints.websecure.http.tls.domains[0].main=${BASE_DOMAIN}
+      - --entrypoints.websecure.http.tls.domains[0].sans=*.${BASE_DOMAIN}
+      - --certificatesresolvers.le.acme.email=${ACME_EMAIL:?ACME_EMAIL is required}
+      - --certificatesresolvers.le.acme.storage=/acme/acme.json
+      - --certificatesresolvers.le.acme.dnschallenge.provider=cloudflare
+      - --certificatesresolvers.le.acme.dnschallenge.resolvers=1.1.1.1:53,1.0.0.1:53
+    environment:
+      BASE_DOMAIN: ${BASE_DOMAIN}
+      PORTAL_URL: http://portal:3000
+      CF_DNS_API_TOKEN: ${CF_DNS_API_TOKEN:?CF_DNS_API_TOKEN is required}
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      # The static routes come with the image; castord adds tenant-<slug>.yml.
+      - routes:/etc/traefik/dynamic:ro
+      - acme:/acme
+    # castord creates the routes volume, so it starts with the image's static routes.
+    depends_on: [castord]
+    networks:
+      cp: {}
+      pc-edge:
+        aliases: ["auth.${BASE_DOMAIN}", "app.${BASE_DOMAIN}"]
+    restart: unless-stopped
+
+  postgres:
+    image: postgres:17-alpine
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+    volumes:
+      - postgres:/var/lib/postgresql/data
+      - ../control-plane/postgres/init.sh:/docker-entrypoint-initdb.d/init.sh:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER}"]
+      interval: 5s
+      retries: 10
+    networks: [cp]
+    restart: unless-stopped
+
+  authentik-server:
+    image: ghcr.io/goauthentik/server:${AUTHENTIK_TAG}
+    command: server
+    environment: &authentik-env
+      AUTHENTIK_SECRET_KEY: ${AUTHENTIK_SECRET_KEY}
+      AUTHENTIK_POSTGRESQL__HOST: postgres
+      AUTHENTIK_POSTGRESQL__USER: ${POSTGRES_USER}
+      AUTHENTIK_POSTGRESQL__PASSWORD: ${POSTGRES_PASSWORD}
+      AUTHENTIK_POSTGRESQL__NAME: authentik
+      AUTHENTIK_BOOTSTRAP_EMAIL: ${AUTHENTIK_BOOTSTRAP_EMAIL}
+      AUTHENTIK_BOOTSTRAP_PASSWORD: ${AUTHENTIK_BOOTSTRAP_PASSWORD}
+      AUTHENTIK_BOOTSTRAP_TOKEN: ${AUTHENTIK_BOOTSTRAP_TOKEN}
+      AUTHENTIK_DISABLE_UPDATE_CHECK: "true"
+      AUTHENTIK_ERROR_REPORTING__ENABLED: "false"
+      PC_BASE_DOMAIN: ${BASE_DOMAIN}
+      PC_PUBLIC_SCHEME: https
+      PC_BRAND_NAME: ${BRAND_NAME}
+      PC_PORTAL_CLIENT_ID: ${PORTAL_OIDC_CLIENT_ID}
+      PC_PORTAL_CLIENT_SECRET: ${PORTAL_OIDC_CLIENT_SECRET}
+      PC_GOOGLE_CLIENT_ID: ${GOOGLE_CLIENT_ID:-}
+      PC_GOOGLE_CLIENT_SECRET: ${GOOGLE_CLIENT_SECRET:-}
+      PC_GITHUB_CLIENT_ID: ${GITHUB_LOGIN_CLIENT_ID:-}
+      PC_GITHUB_CLIENT_SECRET: ${GITHUB_LOGIN_CLIENT_SECRET:-}
+      PC_MONITOR_TOKEN: ${MONITOR_AUTHENTIK_TOKEN:-}
+    volumes:
+      - authentik-media:/media
+      - ../control-plane/authentik/blueprints:/blueprints/custom:ro
+    depends_on:
+      postgres: {condition: service_healthy}
+    networks: [cp, pc-edge]
+    restart: unless-stopped
+
+  authentik-worker:
+    image: ghcr.io/goauthentik/server:${AUTHENTIK_TAG}
+    command: worker
+    environment: *authentik-env
+    volumes:
+      - authentik-media:/media
+      - ../control-plane/authentik/blueprints:/blueprints/custom:ro
+    depends_on:
+      postgres: {condition: service_healthy}
+    networks: [cp]
+    restart: unless-stopped
+
+  migrate:
+    <<: *castor
+    command: ["migrate"]
+    restart: "no"
+    depends_on:
+      postgres: {condition: service_healthy}
+    networks: [cp]
+
+  portal:
+    <<: *castor
+    command: ["portal"]
+    # Next.js writes its cache next to the build.
+    read_only: false
+    depends_on:
+      migrate: {condition: service_completed_successfully}
+    networks: [cp]
+
+  castord:
+    <<: *castor
+    command: ["castord"]
+    environment:
+      LOCAL_NODE: "off"
+      LINK_CERT_FILE: /run/secrets/castord_cert
+      LINK_KEY_FILE: /run/secrets/castord_key
+      LINK_PEERS_FILE: /run/secrets/node_cert
+    secrets: [castord_cert, castord_key, node_cert]
+    volumes:
+      # Tenant routes for Traefik, and the files castord renders per tenant.
+      - routes:/app/infra/control-plane/traefik/dynamic
+      - tenants:/app/.tenants
+    depends_on:
+      migrate: {condition: service_completed_successfully}
+    networks: [cp, link]
+
+  monitor:
+    <<: *castor
+    command: ["monitor"]
+    depends_on:
+      migrate: {condition: service_completed_successfully}
+    networks: [cp]
+
+  node:
+    image: ghcr.io/davidsteg/castorcloud:${CASTOR_VERSION}
+    command: ["node"]
+    # No env_file: the node role refuses the control plane's secrets.
+    environment:
+      NODE_POOL: ${NODE_POOL:?NODE_POOL is required}
+      GATEKEEPER_URL: http://gatekeeper-castor:8080/mcp
+      GATEKEEPER_TOKEN_FILE: /run/secrets/gatekeeper_token
+      LINK_CERT_FILE: /run/secrets/node_cert
+      LINK_KEY_FILE: /run/secrets/node_key
+      LINK_PEERS_FILE: /run/secrets/castord_cert
+    secrets: [gatekeeper_token, node_cert, node_key, castord_cert]
+    read_only: true
+    cap_drop: [ALL]
+    security_opt: [no-new-privileges:true]
+    networks:
+      link:
+        aliases: [castor-node]
+      gk: {}
+    restart: unless-stopped
+
+  gatekeeper-castor:
+    image: ${GATEKEEPER_IMAGE:?GATEKEEPER_IMAGE is required}
+    container_name: gatekeeper-castor
+    # No --ui: nobody signs in to this instance.
+    command: ["serve"]
+    user: "568:568"
+    group_add: ["${DOCKER_GID:-999}"]
+    read_only: true
+    cap_drop: [ALL]
+    security_opt: [no-new-privileges:true]
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+      # toolkits.yaml, tools.yaml, identities.yaml (../gatekeeper/).
+      - ${GATEKEEPER_CONFIG:?GATEKEEPER_CONFIG is required}:/etc/gatekeeper:ro
+      - ${GATEKEEPER_LOGS:?GATEKEEPER_LOGS is required}:/var/log/gatekeeper
+      # The node root at the host's path: compose files and tenant files.
+      - /mnt/${NODE_POOL}/castor/node:/mnt/${NODE_POOL}/castor/node
+    networks: [gk, host-api]
+    extra_hosts:
+      - truenas.lan:host-gateway
+    restart: unless-stopped
+
+secrets:
+  gatekeeper_token:
+    file: ${SECRETS_DIR:?SECRETS_DIR is required}/gatekeeper_token
+  castord_cert:
+    file: ${SECRETS_DIR}/castord.crt
+  castord_key:
+    file: ${SECRETS_DIR}/castord.key
+  node_cert:
+    file: ${SECRETS_DIR}/node.crt
+  node_key:
+    file: ${SECRETS_DIR}/node.key
+
+volumes:
+  postgres:
+  authentik-media:
+  acme:
+  routes:
+  tenants:
+
+networks:
+  cp: {}
+  link:
+    internal: true
+  gk:
+    internal: true
+  host-api: {}
+  pc-edge:
+    name: pc-edge
