@@ -80,5 +80,7 @@ networks:
     internal: true
   castor-gk:
     internal: true
-  # Only gatekeeper is on it, to reach the host's middleware.
+  # Only gatekeeper is on it, to reach the host's middleware. Limit it with a
+  # NAS firewall rule to the middleware's port: gatekeeper needs nothing else
+  # outside castor-gk.
   host-api: {}

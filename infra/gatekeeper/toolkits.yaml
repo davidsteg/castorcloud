@@ -74,6 +74,10 @@ toolkits:
   truenas:
     executor: truenas
     ws_url: "wss://truenas.lan/api/current"
+    # The NAS's own certificate is usually self-signed: pin its CA with the
+    # truenas toolkit's tls_ca once your gatekeeper version has it, rather
+    # than trusting the system roots only.
+    # tls_ca: /etc/gatekeeper/truenas-ca.pem
     allowed_rpc_methods:
       - pool.query
       - system.info
