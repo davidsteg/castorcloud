@@ -375,7 +375,7 @@ const en = {
     ],
   },
   footer: {
-    tagline: "Your private cloud, hosted in Switzerland.",
+    tagline: "Your private cloud from the friendly homelab next door, hosted in Switzerland.",
     legal: "Legal notice",
     privacy: "Privacy policy",
     terms: "Terms",
@@ -509,9 +509,9 @@ const en = {
   },
   beta: {
     tag: "Beta",
-    banner: "Beta from the friendly homelab next door: for now Castor Cloud runs on our own servers in Switzerland, and it moves to bigger infrastructure as more people join.",
+    banner: "Beta: for now Castor Cloud runs on our own servers in Switzerland and will move to larger infrastructure as the service grows.",
     more: "How the beta works",
-    title: "The friendly homelab from your neighbourhood",
+    title: "Castor Cloud in beta",
     lead: "During the beta, Castor Cloud runs in our homelab: our own servers in Switzerland, not a data centre. We say so openly, because you should know where your data lives. As more people join, we move to bigger infrastructure.",
     points: [
       { title: "Where your cloud runs", text: "On our own servers in a homelab in Switzerland, with encrypted storage for every customer and encrypted backups on a separate machine. It is a careful setup, but it is not a data centre: one location, without redundant power or internet lines." },
