@@ -18,8 +18,13 @@ newer() { [ "$1" != "$2" ] && [ "$(printf '%s\n%s\n' "$1" "$2" | sort -V | tail 
 
 case "${EVENT}" in
   pull_request)
-    base=$(gh api "repos/${GITHUB_REPOSITORY}/contents/VERSION?ref=${BASE_REF}" \
-      -H 'Accept: application/vnd.github.raw' 2>/dev/null | tr -d '[:space:]' || true)
+    # No VERSION on the base branch yet (gh prints the 404 body to stdout): nothing to compare.
+    if base=$(gh api "repos/${GITHUB_REPOSITORY}/contents/VERSION?ref=${BASE_REF}" \
+      -H 'Accept: application/vnd.github.raw' 2>/dev/null); then
+      base=$(printf '%s' "$base" | tr -d '[:space:]')
+    else
+      base=""
+    fi
     if [ -n "$base" ] && ! newer "$version" "$base"; then
       echo "::error file=VERSION::Raise VERSION above ${base} (${BASE_REF}); every merge to main is released."
       exit 1
