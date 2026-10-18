@@ -829,6 +829,174 @@ tools:
     required_scopes: []
     timeout_seconds: 30
     max_output_bytes: 1048576
+  - id: "truenas.dataset_query"
+    toolkit: "truenas"
+    version: 1
+    title: "A tenant's dataset"
+    description: "Whether it exists and is unlocked, its quota, and what it and each data directory use."
+    category: "read"
+    idempotent: true
+    enabled: true
+    method: "pool.dataset.query"
+    params:
+      filters: [["id","=","{dataset}"]]
+    parameters:
+      dataset:
+        type: "string"
+        pattern: "^tank/castor/t/[a-z0-9](?:[a-z0-9]|-(?!-)){1,28}[a-z0-9]$"
+        required: true
+        description: "<pool>/castor/t/<slug>."
+    required_scopes: []
+    timeout_seconds: 120
+    max_output_bytes: 1048576
+  - id: "truenas.dataset_create"
+    toolkit: "truenas"
+    version: 1
+    title: "Create a tenant's dataset"
+    description: "An encryption root of its own (AES-256-GCM, passphrase), with the booked quota."
+    category: "write"
+    idempotent: true
+    enabled: true
+    method: "pool.dataset.create"
+    params:
+      data: {"name":"{dataset}","quota":"{quota}","encryption":true,"inherit_encryption":false,"encryption_options":{"algorithm":"AES-256-GCM","passphrase":"{passphrase}"}}
+    parameters:
+      dataset:
+        type: "string"
+        pattern: "^tank/castor/t/[a-z0-9](?:[a-z0-9]|-(?!-)){1,28}[a-z0-9]$"
+        required: true
+        description: "<pool>/castor/t/<slug>."
+      quota:
+        type: "integer"
+        minimum: 1048576
+        maximum: 1125899906842624
+        required: true
+        description: "The quota in bytes."
+      passphrase:
+        type: "string"
+        pattern: "^[0-9a-f]{64}$"
+        required: true
+        secret: true
+        description: "HKDF of the tenant's volume key; TrueNAS never stores it."
+    required_scopes: []
+    timeout_seconds: 120
+    max_output_bytes: 1048576
+  - id: "truenas.dataset_create_dir"
+    toolkit: "truenas"
+    version: 1
+    title: "Create a data directory"
+    description: "A child dataset of an unlocked tenant dataset; it inherits the key and the mount."
+    category: "write"
+    idempotent: true
+    enabled: true
+    method: "pool.dataset.create"
+    params:
+      data: {"name":"{dataset}"}
+    parameters:
+      dataset:
+        type: "string"
+        pattern: "^tank/castor/t/[a-z0-9](?:[a-z0-9]|-(?!-)){1,28}[a-z0-9]/[a-z0-9-]{1,40}$"
+        required: true
+        description: "<pool>/castor/t/<slug>/<dir>."
+    required_scopes: []
+    timeout_seconds: 120
+    max_output_bytes: 1048576
+  - id: "truenas.dataset_unlock"
+    toolkit: "truenas"
+    version: 1
+    title: "Unlock a tenant's dataset"
+    description: "Unlocks and mounts it with its children. A job: castord confirms with dataset_query."
+    category: "write"
+    idempotent: true
+    enabled: true
+    method: "pool.dataset.unlock"
+    params:
+      id: "{dataset}"
+      options: {"recursive":true,"datasets":[{"name":"{dataset}","passphrase":"{passphrase}"}]}
+    parameters:
+      dataset:
+        type: "string"
+        pattern: "^tank/castor/t/[a-z0-9](?:[a-z0-9]|-(?!-)){1,28}[a-z0-9]$"
+        required: true
+        description: "<pool>/castor/t/<slug>."
+      passphrase:
+        type: "string"
+        pattern: "^[0-9a-f]{64}$"
+        required: true
+        secret: true
+        description: "HKDF of the tenant's volume key; TrueNAS never stores it."
+    required_scopes: []
+    timeout_seconds: 120
+    max_output_bytes: 1048576
+  - id: "truenas.dataset_lock"
+    toolkit: "truenas"
+    version: 1
+    title: "Lock a tenant's dataset"
+    description: "Unmounts and locks it; its stacks are stopped first. A job: castord confirms with dataset_query."
+    category: "write"
+    idempotent: true
+    enabled: true
+    method: "pool.dataset.lock"
+    params:
+      id: "{dataset}"
+      options: {"force_umount":false}
+    parameters:
+      dataset:
+        type: "string"
+        pattern: "^tank/castor/t/[a-z0-9](?:[a-z0-9]|-(?!-)){1,28}[a-z0-9]$"
+        required: true
+        description: "<pool>/castor/t/<slug>."
+    required_scopes: []
+    timeout_seconds: 120
+    max_output_bytes: 1048576
+  - id: "truenas.dataset_quota"
+    toolkit: "truenas"
+    version: 1
+    title: "Set a tenant's quota"
+    description: "Online; TrueNAS refuses a quota below what is used, and castord checks first."
+    category: "write"
+    idempotent: true
+    enabled: true
+    method: "pool.dataset.update"
+    params:
+      id: "{dataset}"
+      data: {"quota":"{quota}"}
+    parameters:
+      dataset:
+        type: "string"
+        pattern: "^tank/castor/t/[a-z0-9](?:[a-z0-9]|-(?!-)){1,28}[a-z0-9]$"
+        required: true
+        description: "<pool>/castor/t/<slug>."
+      quota:
+        type: "integer"
+        minimum: 1048576
+        maximum: 1125899906842624
+        required: true
+        description: "The quota in bytes."
+    required_scopes: []
+    timeout_seconds: 120
+    max_output_bytes: 1048576
+  - id: "truenas.dataset_delete"
+    toolkit: "truenas"
+    version: 1
+    title: "Destroy a tenant's dataset"
+    description: "With its data directories and snapshots. Irreversible; castord then deletes the key."
+    category: "write"
+    idempotent: true
+    enabled: true
+    method: "pool.dataset.delete"
+    params:
+      id: "{dataset}"
+      options: {"recursive":true,"force":true}
+    parameters:
+      dataset:
+        type: "string"
+        pattern: "^tank/castor/t/[a-z0-9](?:[a-z0-9]|-(?!-)){1,28}[a-z0-9]$"
+        required: true
+        description: "<pool>/castor/t/<slug>."
+    required_scopes: []
+    timeout_seconds: 120
+    max_output_bytes: 1048576
   - id: "file.tenant_write"
     toolkit: "file"
     version: 1

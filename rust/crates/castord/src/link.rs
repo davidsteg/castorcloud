@@ -334,37 +334,7 @@ fn decode_answer(bytes: &[u8]) -> Result<String, String> {
 /// value passing its check, the secret only where the tool has one.
 pub fn checked_call(tools: &[Tool], bytes: &[u8]) -> Result<ToolCall, String> {
     let Incoming { tool, args, secret } = serde_json::from_slice(bytes).map_err(|_| "malformed request".to_owned())?;
-    let secret = secret.map(Zeroizing::new);
-    let t = tools
-        .iter()
-        .find(|t| t.id == tool)
-        .ok_or_else(|| format!("no tool {tool}"))?;
-    let refuse = |what: &str| format!("{tool}: {what}");
-    let mut secret_param = None;
-    for p in &t.params {
-        if p.secret {
-            secret_param = Some(p);
-            continue;
-        }
-        match args.get(p.name).and_then(Value::as_str) {
-            Some(v) if p.check.ok(v) => {}
-            Some(_) => return Err(refuse(&format!("{} not allowed", p.name))),
-            None => return Err(refuse(&format!("{} missing", p.name))),
-        }
-    }
-    if args.keys().any(|k| !t.params.iter().any(|p| !p.secret && p.name == k)) {
-        return Err(refuse("unknown parameter"));
-    }
-    let secret = match (secret_param, secret) {
-        (Some(p), Some(s)) if p.check.ok(&s) => Some((p.name, s)),
-        (None, None) => None,
-        _ => return Err(refuse("secret does not fit the tool")),
-    };
-    Ok(ToolCall {
-        name: t.id.to_owned(),
-        args,
-        secret,
-    })
+    crate::gatekeeper::checked(tools, &tool, args, secret.map(Zeroizing::new))
 }
 
 async fn write_frame<W: AsyncWrite + Unpin>(w: &mut W, body: &[u8]) -> Result<(), String> {

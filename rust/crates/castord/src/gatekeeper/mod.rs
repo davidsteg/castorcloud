@@ -18,12 +18,18 @@ use zeroize::Zeroizing;
 
 use crate::exec::{Cmd, ToolCall};
 use crate::revoke::{ASSISTANT_KEY_NAME, DOCS_SCRIPT, FLIGHTS_SQL, PHOTOS_SQL, PLACES_SCRIPT};
+use crate::storage::BYTES_PER_MB;
 use crate::suspend::ALL_PROFILES;
 use crate::valid;
 
 /// The node's root on the pool, as gatekeeper and its Docker engine see it.
 pub fn root(pool: &str) -> String {
     format!("/mnt/{pool}/castor/node")
+}
+
+/// Where tenant datasets live: <pool>/castor/t/<slug>, mounted at /mnt/<it>.
+pub fn dataset_root(pool: &str) -> String {
+    format!("{pool}/castor/t")
 }
 
 /// The containers of the node's shared services (delete::SHARED_CONTAINERS).
@@ -57,7 +63,20 @@ pub enum Check {
     },
     /// File content, written verbatim.
     Content,
+    /// A tenant's dataset below `root` (<pool>/castor/t): `<root>/<slug>`,
+    /// and with `child` one of its data directories `<root>/<slug>/<dir>`.
+    Dataset {
+        root: String,
+        child: bool,
+    },
+    /// A size in bytes, sent to TrueNAS as a JSON number: at least 1 MB.
+    Bytes,
+    /// A dataset passphrase: 64 hex characters (HKDF of the volume key).
+    Passphrase,
 }
+
+/// The largest quota a tool accepts: 1 PB.
+const MAX_BYTES: u64 = 1 << 50;
 
 #[derive(Debug, Clone, Copy)]
 pub enum FirstSegment {
@@ -70,6 +89,14 @@ pub enum Rest {
     None,
     Optional,
     Required,
+}
+
+/// A data directory's name (a compose volume): what castor-zfs allows too.
+fn data_dir_name(s: &str) -> bool {
+    (1..=40).contains(&s.len())
+        && !s.starts_with('-')
+        && s.bytes()
+            .all(|b| b.is_ascii_lowercase() || b.is_ascii_digit() || b == b'-')
 }
 
 fn plain_segment(s: &str) -> bool {
@@ -137,6 +164,26 @@ impl Check {
                 head_ok && tail_ok
             }
             Check::Content => true,
+            Check::Dataset { root, child } => {
+                let Some(below) = v.strip_prefix(root.as_str()).and_then(|r| r.strip_prefix('/')) else {
+                    return false;
+                };
+                match (below.split_once('/'), child) {
+                    (None, false) => valid::slug(below),
+                    (Some((slug, dir)), true) => valid::slug(slug) && data_dir_name(dir),
+                    _ => false,
+                }
+            }
+            Check::Bytes => false,
+            Check::Passphrase => v.len() == 64 && v.bytes().all(|b| b.is_ascii_digit() || (b'a'..=b'f').contains(&b)),
+        }
+    }
+
+    /// A parameter's value as it travels: numbers for Bytes, strings otherwise.
+    pub fn ok_value(&self, v: &Value) -> bool {
+        match self {
+            Check::Bytes => v.as_u64().is_some_and(|n| (BYTES_PER_MB..=MAX_BYTES).contains(&n)),
+            _ => v.as_str().is_some_and(|s| self.ok(s)),
         }
     }
 
@@ -174,6 +221,17 @@ impl Check {
                 v.push(("allow_control_characters", Value::Bool(true)));
                 v
             }
+            Check::Dataset { root, child } => {
+                let slug = "[a-z0-9](?:[a-z0-9]|-(?!-)){1,28}[a-z0-9]";
+                let dir = if *child { "/[a-z0-9-]{1,40}" } else { "" };
+                pattern(format!("^{}/{slug}{dir}$", regex_escape(root)))
+            }
+            Check::Bytes => vec![
+                ("type", Value::from("integer")),
+                ("minimum", Value::from(BYTES_PER_MB)),
+                ("maximum", Value::from(MAX_BYTES)),
+            ],
+            Check::Passphrase => pattern("^[0-9a-f]{64}$".into()),
         }
     }
 }
@@ -693,6 +751,117 @@ pub fn catalog(pool: &str) -> Vec<Tool> {
             timeout_s: 30,
         },
     ]);
+    let datasets = dataset_root(pool);
+    let dataset = |child: bool, description| {
+        param(
+            "dataset",
+            Check::Dataset {
+                root: datasets.clone(),
+                child,
+            },
+            description,
+        )
+    };
+    let passphrase = Param {
+        name: "passphrase",
+        check: Check::Passphrase,
+        secret: true,
+        description: "HKDF of the tenant's volume key; TrueNAS never stores it.",
+    };
+    let quota = param("quota", Check::Bytes, "The quota in bytes.");
+    let truenas = |id, title, description, write, method, params: Value, params_list: Vec<Param>| Tool {
+        id,
+        title,
+        description,
+        write,
+        idempotent: true,
+        run: Run::Truenas {
+            method,
+            params,
+            job: false,
+        },
+        params: params_list,
+        derived: vec![],
+        timeout_s: 120,
+    };
+    tools.extend([
+        truenas(
+            "truenas.dataset_query",
+            "A tenant's dataset",
+            "Whether it exists and is unlocked, its quota, and what it and each data directory use.",
+            false,
+            "pool.dataset.query",
+            serde_json::json!({"filters": [["id", "=", "{dataset}"]]}),
+            vec![dataset(false, "<pool>/castor/t/<slug>.")],
+        ),
+        truenas(
+            "truenas.dataset_create",
+            "Create a tenant's dataset",
+            "An encryption root of its own (AES-256-GCM, passphrase), with the booked quota.",
+            true,
+            "pool.dataset.create",
+            serde_json::json!({"data": {
+                "name": "{dataset}",
+                "quota": "{quota}",
+                "encryption": true,
+                "inherit_encryption": false,
+                "encryption_options": {"algorithm": "AES-256-GCM", "passphrase": "{passphrase}"},
+            }}),
+            vec![
+                dataset(false, "<pool>/castor/t/<slug>."),
+                quota.clone(),
+                passphrase.clone(),
+            ],
+        ),
+        truenas(
+            "truenas.dataset_create_dir",
+            "Create a data directory",
+            "A child dataset of an unlocked tenant dataset; it inherits the key and the mount.",
+            true,
+            "pool.dataset.create",
+            serde_json::json!({"data": {"name": "{dataset}"}}),
+            vec![dataset(true, "<pool>/castor/t/<slug>/<dir>.")],
+        ),
+        truenas(
+            "truenas.dataset_unlock",
+            "Unlock a tenant's dataset",
+            "Unlocks and mounts it with its children. A job: castord confirms with dataset_query.",
+            true,
+            "pool.dataset.unlock",
+            serde_json::json!({
+                "id": "{dataset}",
+                "options": {"recursive": true, "datasets": [{"name": "{dataset}", "passphrase": "{passphrase}"}]},
+            }),
+            vec![dataset(false, "<pool>/castor/t/<slug>."), passphrase.clone()],
+        ),
+        truenas(
+            "truenas.dataset_lock",
+            "Lock a tenant's dataset",
+            "Unmounts and locks it; its stacks are stopped first. A job: castord confirms with dataset_query.",
+            true,
+            "pool.dataset.lock",
+            serde_json::json!({"id": "{dataset}", "options": {"force_umount": false}}),
+            vec![dataset(false, "<pool>/castor/t/<slug>.")],
+        ),
+        truenas(
+            "truenas.dataset_quota",
+            "Set a tenant's quota",
+            "Online; TrueNAS refuses a quota below what is used, and castord checks first.",
+            true,
+            "pool.dataset.update",
+            serde_json::json!({"id": "{dataset}", "data": {"quota": "{quota}"}}),
+            vec![dataset(false, "<pool>/castor/t/<slug>."), quota],
+        ),
+        truenas(
+            "truenas.dataset_delete",
+            "Destroy a tenant's dataset",
+            "With its data directories and snapshots. Irreversible; castord then deletes the key.",
+            true,
+            "pool.dataset.delete",
+            serde_json::json!({"id": "{dataset}", "options": {"recursive": true, "force": true}}),
+            vec![dataset(false, "<pool>/castor/t/<slug>.")],
+        ),
+    ]);
     let content = |description| Param {
         name: "content",
         check: Check::Content,
@@ -824,6 +993,47 @@ fn find<'a>(tools: &'a [Tool], id: &str) -> Result<&'a Tool, String> {
         .iter()
         .find(|t| t.id == id)
         .ok_or_else(|| format!("no gatekeeper tool {id}"))
+}
+
+/// A call of tool `id`, checked the way gatekeeper will check it: every
+/// parameter given, nothing more, each value passing its check, the secret
+/// only where the tool has one (and then its value).
+pub fn checked(
+    tools: &[Tool],
+    id: &str,
+    args: Map<String, Value>,
+    secret: Option<Zeroizing<String>>,
+) -> Result<ToolCall, String> {
+    let t = tools
+        .iter()
+        .find(|t| t.id == id)
+        .ok_or_else(|| format!("no tool {id}"))?;
+    let refuse = |what: &str| format!("{id}: {what}");
+    let mut secret_param = None;
+    for p in &t.params {
+        if p.secret {
+            secret_param = Some(p);
+            continue;
+        }
+        match args.get(p.name) {
+            Some(v) if p.check.ok_value(v) => {}
+            Some(_) => return Err(refuse(&format!("{} not allowed", p.name))),
+            None => return Err(refuse(&format!("{} missing", p.name))),
+        }
+    }
+    if args.keys().any(|k| !t.params.iter().any(|p| !p.secret && p.name == k)) {
+        return Err(refuse("unknown parameter"));
+    }
+    let secret = match (secret_param, secret) {
+        (Some(p), Some(s)) if p.check.ok(&s) => Some((p.name, s)),
+        (None, None) => None,
+        _ => return Err(refuse("secret does not fit the tool")),
+    };
+    Ok(ToolCall {
+        name: t.id.to_owned(),
+        args,
+        secret,
+    })
 }
 
 /// A file tool's call, its parameters checked as gatekeeper will check them.

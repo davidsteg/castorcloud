@@ -51,6 +51,8 @@ enum Place {
         root: String,
         /// Where tenant datasets are mounted.
         mount_root: String,
+        /// <pool>/castor/t: the tenant datasets.
+        datasets: String,
         tools: Vec<Tool>,
     },
 }
@@ -202,6 +204,7 @@ impl Node {
                     link: row.ssh_host.clone(),
                     root: gk::root(pool),
                     mount_root: format!("/mnt/{pool}/castor/t"),
+                    datasets: gk::dataset_root(pool),
                     tools: gk::catalog(pool),
                 }
             }
@@ -266,6 +269,25 @@ impl Node {
             Place::Gatekeeper { tools, .. } => Ok(tools),
             _ => Err(format!("{} is not reached through gatekeeper", self.name)),
         }
+    }
+
+    /// The tenant datasets' parent on a gatekeeper node (<pool>/castor/t).
+    pub fn dataset_root(&self) -> Option<&str> {
+        match &self.place {
+            Place::Gatekeeper { datasets, .. } => Some(datasets),
+            _ => None,
+        }
+    }
+
+    /// One gatekeeper tool, its arguments checked against the catalog first.
+    pub async fn call(
+        &self,
+        id: &str,
+        args: serde_json::Map<String, serde_json::Value>,
+        secret: Option<Zeroizing<String>>,
+    ) -> Result<String, String> {
+        let call = gk::checked(self.tools()?, id, args, secret)?;
+        self.tool(call).await
     }
 
     async fn tool(&self, call: ToolCall) -> Result<String, String> {
