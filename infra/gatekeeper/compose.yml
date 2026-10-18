@@ -4,7 +4,7 @@
 #
 # node.env:
 #   CASTOR_IMAGE       the castor image, pinned by digest
-#   GATEKEEPER_IMAGE   davidsteg/gatekeeper, pinned by digest
+#   GATEKEEPER_IMAGE   davidsteg/gatekeeper 1.26.0 or later, pinned by digest
 #   NODE_POOL          the ZFS pool, e.g. tank
 #   GATEKEEPER_CONFIG  toolkits.yaml, tools.yaml, identities.yaml (read-only)
 #   GATEKEEPER_LOGS    the audit log
@@ -40,8 +40,9 @@ services:
   gatekeeper-castor:
     image: ${GATEKEEPER_IMAGE:?GATEKEEPER_IMAGE is required}
     container_name: gatekeeper-castor
-    # No --ui: nobody signs in to this instance.
-    command: ["serve"]
+    # Headless: no console and no admin endpoint; nobody signs in to this
+    # instance, and it refuses to start if one is configured.
+    command: ["serve", "--headless"]
     user: "568:568"
     group_add: ["${DOCKER_GID:-999}"]
     read_only: true

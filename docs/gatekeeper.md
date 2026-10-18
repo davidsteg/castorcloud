@@ -75,7 +75,15 @@ key, then remove the old certificate.
 1. Create `/mnt/<pool>/castor/node` and `/mnt/<pool>/castor/t` on the pool.
 2. Set up `gatekeeper-castor`'s configuration from `infra/gatekeeper/`, with
    your pool's paths, the generated `tools.yaml`, a token for the `castor-node`
-   identity, and the TrueNAS API key as its `truenas` credential.
+   identity, and the NAS's CA as `truenas-ca.pem`. Store the TrueNAS API key
+   as the `nas` credential and reload:
+
+   ```sh
+   gatekeeper credential-set --name nas --kind ws_api_key < key
+   kill -HUP <gatekeeper pid>
+   ```
+
+   The instance runs `serve --headless`: no console and no admin endpoint.
 3. Start `infra/gatekeeper/compose.yml` with a `node.env` (listed at its top).
 4. Join castord to the `castor-link` network and register the node:
 

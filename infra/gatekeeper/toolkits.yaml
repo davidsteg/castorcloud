@@ -68,16 +68,16 @@ toolkits:
 
   # The TrueNAS middleware. A method not listed here can't be called by any
   # tool: no pool.dataset.delete outside castor/t, no service or user calls.
-  # The API key is a credential named "truenas" in gatekeeper's credential
-  # store, bound to a user with only dataset, snapshot and replication roles
+  # The API key is a credential named "nas" in gatekeeper's credential
+  # store (`gatekeeper credential-set --name nas --kind ws_api_key < key`,
+  # then SIGHUP), bound to a user with only dataset, snapshot and replication roles
   # if your TrueNAS version allows it.
   truenas:
     executor: truenas
     ws_url: "wss://truenas.lan/api/current"
-    # The NAS's own certificate is usually self-signed: pin its CA with the
-    # truenas toolkit's tls_ca once your gatekeeper version has it, rather
-    # than trusting the system roots only.
-    # tls_ca: /etc/gatekeeper/truenas-ca.pem
+    # The NAS's own certificate is usually self-signed: pin its CA rather
+    # than trusting the system roots.
+    tls_ca: /etc/gatekeeper/truenas-ca.pem
     allowed_rpc_methods:
       - pool.query
       - system.info
@@ -92,6 +92,6 @@ toolkits:
       - zfs.snapshot.delete
       - replication.query
       - replication.run
-    credential: truenas
+    credential: nas
     max_timeout_seconds: 900
     max_output_bytes: 1048576
