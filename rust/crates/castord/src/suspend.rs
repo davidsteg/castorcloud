@@ -170,8 +170,15 @@ pub(crate) async fn stop_stacks(
 }
 
 /// `docker compose` for the tenant's stack (Lifecycle.compose) with these profiles.
+/// Through gatekeeper the booked profiles come from COMPOSE_PROFILES in
+/// tenant.env (a tool's argv is fixed); only "every profile" is spelled out.
 pub fn compose_args(node: &Node, slug: &str, profiles: &[&str], args: &[&str]) -> Vec<String> {
     let dir = node.config_dir(slug);
+    let profiles = if node.is_gatekeeper() && profiles != ALL_PROFILES {
+        &[][..]
+    } else {
+        profiles
+    };
     let mut out = strings(&[
         "compose",
         "-p",

@@ -9,7 +9,7 @@ use common::*;
 #[tokio::test]
 async fn suspends_like_the_typescript_worker() {
     let Some(db) = db().await else { return };
-    let w = world(&db, "TRUENAS").await;
+    let w = world(&db, "MAC").await;
     let s = &w.slug;
     let fake = Fake::new(vec![("stacks-status", Ok("open 1 1024 1024\n"))]);
     let (url, seen) = gateway().await;
@@ -33,7 +33,7 @@ async fn suspends_like_the_typescript_worker() {
             format!("{gate} stacks-close {s}"),
             format!(
                 "{ssh} compose -p pc-t-{s} -f /repo/packages/stack-templates/tenant/compose.yml \
-                 --project-directory /mnt/tank/castor/node/files/templates/tenant \
+                 --project-directory /Users/Shared/castor/files/templates/tenant \
                  -f /repo/.tenants/{s}/compose.volumes.yml --env-file /repo/.tenants/{s}/tenant.env \
                  --profile photos --profile docs --profile places --profile flights --profile assistant stop"
             ),
@@ -93,7 +93,7 @@ async fn local_node_locks_through_cryptd_and_locked_stacks_stay_locked() {
 #[tokio::test]
 async fn a_failed_lock_fails_the_attempt_and_leaves_the_tenant_active() {
     let Some(db) = db().await else { return };
-    let w = world(&db, "TRUENAS").await;
+    let w = world(&db, "MAC").await;
     let fake = Fake::new(vec![
         ("stacks-status", Ok("closed")),
         ("castor-zfs close", Err("ssh … failed: dataset busy")),

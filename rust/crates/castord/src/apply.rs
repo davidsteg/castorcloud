@@ -23,7 +23,7 @@ use crate::delete::{LLM_GATEWAY, SHARED_CONTAINERS};
 use crate::node::{Node, NodeRow};
 use crate::render::{self, ASSISTANT_CONTAINERS, EnvInput, Names, STACK_SERVICES, Service, Vars};
 use crate::storage::{Status, TenantStorage, VolumeKey, fits, quota_mb};
-use crate::suspend::{compose_args, strings};
+use crate::suspend::{ALL_PROFILES, compose_args, strings};
 use crate::{Control, Handler, Job, JobCx, placement, queue, valid};
 
 fn sql(e: sqlx::Error) -> String {
@@ -264,7 +264,8 @@ pub async fn apply(c: &Control, cx: &JobCx, job: &Job) -> Result<(), String> {
         &t.slug,
         "compose.volumes.yml",
         &render::volumes_override(&storage.data_dir()),
-    )?;
+    )
+    .await?;
     let mut p = c.platform.clone();
     if let Some(ip) = &node.auth_host_ip {
         p.auth_host_ip = ip.clone();
@@ -280,7 +281,9 @@ pub async fn apply(c: &Control, cx: &JobCx, job: &Job) -> Result<(), String> {
         ca_dir: &node.ca(),
         assistant_services,
     })?;
-    node.write_config(&t.slug, "tenant.env", &env)?;
+    // The booked profiles, for commands that don't name them (gatekeeper's tools).
+    let env = format!("{}\nCOMPOSE_PROFILES={}\n", env.trim_end(), profiles.join(","));
+    node.write_config(&t.slug, "tenant.env", &env).await?;
     let llm_key = render::get(&secrets, "LLM_VIRTUAL_KEY");
     if with_assistant {
         prepare_assistant(c, cx, &node, &t, &members, &secrets, &enabled).await?;
@@ -289,6 +292,12 @@ pub async fn apply(c: &Control, cx: &JobCx, job: &Job) -> Result<(), String> {
     }
 
     // The node's shared services; the LLM gateway's admin API listens on the node's LAN address.
+    let env = node
+        .edge
+        .as_ref()
+        .map(|e| vec![("LLM_GATEWAY_BIND", e.host.clone())])
+        .unwrap_or_default();
+    let (env_file, env) = node.shared_env(&c.versions_file, env).await?;
     let shared = vec![
         "compose".into(),
         "-f".into(),
@@ -296,15 +305,10 @@ pub async fn apply(c: &Control, cx: &JobCx, job: &Job) -> Result<(), String> {
         "--project-directory".into(),
         node.node_infra(),
         "--env-file".into(),
-        c.versions_file.to_string_lossy().into_owned(),
+        env_file,
         "up".into(),
         "-d".into(),
     ];
-    let env = node
-        .edge
-        .as_ref()
-        .map(|e| vec![("LLM_GATEWAY_BIND", e.host.clone())])
-        .unwrap_or_default();
     node.docker_env(shared, None, env, false).await?;
     node.docker(
         compose_args(&node, &t.slug, &profiles, &["up", "-d", "--remove-orphans"]),
@@ -338,6 +342,13 @@ pub async fn apply(c: &Control, cx: &JobCx, job: &Job) -> Result<(), String> {
         unbooked.extend(ASSISTANT_CONTAINERS);
     }
     for svc in unbooked {
+        // Through gatekeeper by service name: a tool takes no list of container ids.
+        if node.is_gatekeeper() {
+            let rm = ["rm", "-s", "-f", svc];
+            node.docker(compose_args(&node, &t.slug, &ALL_PROFILES, &rm), false)
+                .await?;
+            continue;
+        }
         let ps = strings(&[
             "ps",
             "-aq",

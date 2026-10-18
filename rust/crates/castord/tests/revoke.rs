@@ -67,7 +67,7 @@ async fn setup(db: &PgPool, w: &World) {
 #[tokio::test]
 async fn revokes_like_the_typescript_worker() {
     let Some(db) = db().await else { return };
-    let w = world(&db, "TRUENAS").await;
+    let w = world(&db, "MAC").await;
     let s = &w.slug;
     setup(&db, &w).await;
     let fake = Fake::new(vec![]);
@@ -81,7 +81,7 @@ async fn revokes_like_the_typescript_worker() {
     let compose = format!(
         "DOCKER_HOST=ssh://deploy@10.0.0.5 DOCKER_CONTEXT= docker compose -p pc-t-{s} \
          -f /repo/packages/stack-templates/tenant/compose.yml \
-         --project-directory /mnt/tank/castor/node/files/templates/tenant \
+         --project-directory /Users/Shared/castor/files/templates/tenant \
          -f /repo/.tenants/{s}/compose.volumes.yml --env-file /repo/.tenants/{s}/tenant.env \
          --profile photos --profile flights exec -T"
     );
@@ -140,7 +140,7 @@ async fn revokes_like_the_typescript_worker() {
 #[tokio::test]
 async fn requests_wait_while_the_apps_are_stopped() {
     let Some(db) = db().await else { return };
-    let w = world(&db, "TRUENAS").await;
+    let w = world(&db, "MAC").await;
     setup(&db, &w).await;
     sqlx::query(r#"UPDATE "Tenant" SET status = 'SUSPENDED' WHERE id = $1"#)
         .bind(&w.tenant)
@@ -168,6 +168,38 @@ async fn requests_wait_while_the_apps_are_stopped() {
     assert!(
         log[0].ends_with(" identity: apps not running (SUSPENDED); revocations wait for the next start\n"),
         "{log:?}"
+    );
+    cleanup(&db, &w).await;
+}
+
+/// On a TrueNAS node every step is a tool of the castor gatekeeper catalog,
+/// asked of the node role: the SQL is fixed in the tool, only typed values travel.
+#[tokio::test]
+async fn revokes_through_the_node_role_on_truenas() {
+    let Some(db) = db().await else { return };
+    let w = world(&db, "TRUENAS").await;
+    let s = &w.slug;
+    setup(&db, &w).await;
+    let fake = Fake::new(vec![]);
+    let (ak, _) = http("ak", authentik).await;
+    let j = job(&db, &w.tenant, "REVOKE_ACCESS").await;
+    castord::revoke::RevokeAccess(control(fake.clone(), &w.traefik, None, &ak))
+        .run(&JobCx { db: db.clone() }, &j)
+        .await
+        .unwrap();
+    let keep = "Castor assistant (read-only)";
+    assert_eq!(
+        fake.calls(),
+        vec![
+            format!(
+                r#"gk docker.revoke_photos {{"slug":"{s}","email":"anna@example.ch","before":"2026-10-16T10:00:02.123Z","web":"false","keep":"{keep}"}}"#
+            ),
+            format!(r#"gk docker.revoke_flights {{"slug":"{s}","sub":"sub-a","web":"false","keep":"{keep}"}}"#),
+            format!(
+                r#"gk docker.revoke_photos {{"slug":"{s}","email":"bert@example.ch","before":"2026-10-16T10:00:01.123Z","web":"false","keep":""}}"#
+            ),
+            format!(r#"gk docker.revoke_flights {{"slug":"{s}","sub":"sub-b","web":"false","keep":""}}"#),
+        ]
     );
     cleanup(&db, &w).await;
 }

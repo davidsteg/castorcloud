@@ -31,7 +31,7 @@ fn broken(_: &str, _: &str) -> (u16, String) {
 #[tokio::test]
 async fn deletes_like_the_typescript_worker() {
     let Some(db) = db().await else { return };
-    let w = world(&db, "TRUENAS").await;
+    let w = world(&db, "MAC").await;
     let s = &w.slug;
     std::fs::write(w.traefik.join(format!("tenant-{s}.yml")), "x").unwrap();
     let fake = Fake::new(vec![]);
@@ -65,7 +65,7 @@ async fn deletes_like_the_typescript_worker() {
     want.push(format!("{ssh} network disconnect -f {p}-llm pc-node-llm-gateway"));
     want.push(format!(
         "{ssh} compose -p {p} -f /repo/packages/stack-templates/tenant/compose.yml \
-         --project-directory /mnt/tank/castor/node/files/templates/tenant \
+         --project-directory /Users/Shared/castor/files/templates/tenant \
          -f /repo/.tenants/{s}/compose.volumes.yml --env-file /repo/.tenants/{s}/tenant.env \
          --profile photos --profile docs --profile places --profile flights --profile assistant \
          down --volumes --remove-orphans"

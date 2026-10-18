@@ -45,7 +45,7 @@ fn restore(fake: std::sync::Arc<Fake>, w: &World) -> castord::restore::Restore {
 #[tokio::test]
 async fn restores_like_the_typescript_worker() {
     let Some(db) = db().await else { return };
-    let w = world(&db, "TRUENAS").await;
+    let w = world(&db, "MAC").await;
     let s = &w.slug;
     let fake = Fake::new(vec![
         ("castor-zfs status", Ok("open 10 20 30\n")),
@@ -71,7 +71,7 @@ async fn restores_like_the_typescript_worker() {
             format!(
                 "DOCKER_HOST=ssh://deploy@10.0.0.5 DOCKER_CONTEXT= docker compose -p pc-t-{s} \
                  -f /repo/packages/stack-templates/tenant/compose.yml \
-                 --project-directory /mnt/tank/castor/node/files/templates/tenant \
+                 --project-directory /Users/Shared/castor/files/templates/tenant \
                  -f /repo/.tenants/{s}/compose.volumes.yml --env-file /repo/.tenants/{s}/tenant.env \
                  --profile photos --profile docs --profile places --profile flights --profile assistant stop"
             ),
@@ -125,7 +125,7 @@ async fn restores_like_the_typescript_worker() {
 #[tokio::test]
 async fn a_failed_receive_puts_the_data_back() {
     let Some(db) = db().await else { return };
-    let w = world(&db, "TRUENAS").await;
+    let w = world(&db, "MAC").await;
     let s = &w.slug;
     let fake = Fake::new(vec![
         ("castor-zfs status", Ok("closed\n")),
@@ -160,7 +160,7 @@ async fn a_failed_receive_puts_the_data_back() {
 #[tokio::test]
 async fn refuses_bad_params_and_the_local_node() {
     let Some(db) = db().await else { return };
-    let w = world(&db, "TRUENAS").await;
+    let w = world(&db, "MAC").await;
     let cx = JobCx { db: db.clone() };
     for (params, msg) in [
         (r#"{"gen": "g1"}"#, "RESTORE needs params { gen, snap }"),

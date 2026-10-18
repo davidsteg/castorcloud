@@ -159,7 +159,7 @@ fn mask(line: &str) -> String {
 async fn provisions_like_the_typescript_worker() {
     let Some(db) = db().await else { return };
     let _one = USERS.lock().await;
-    let w = world(&db, "TRUENAS").await;
+    let w = world(&db, "MAC").await;
     let (s, t) = (&w.slug, &w.tenant);
     let users = setup(&db, &w).await;
     let fake = Fake::new(vec![
@@ -184,7 +184,7 @@ async fn provisions_like_the_typescript_worker() {
     let gate = "ssh -o BatchMode=yes -T deploy@10.0.0.5";
     let compose = format!(
         "{ssh} compose -p pc-t-{s} -f {r}/packages/stack-templates/tenant/compose.yml \
-         --project-directory /mnt/tank/castor/node/files/templates/tenant \
+         --project-directory /Users/Shared/castor/files/templates/tenant \
          -f {r}/.tenants/{s}/compose.volumes.yml --env-file {r}/.tenants/{s}/tenant.env \
          --profile photos --profile assistant"
     );
@@ -211,7 +211,7 @@ async fn provisions_like_the_typescript_worker() {
         rest,
         vec![
             format!(
-                "LLM_GATEWAY_BIND=10.0.0.5 {ssh} compose -f {r}/infra/node/compose.yml --project-directory /mnt/tank/castor/node/files/node --env-file /repo/packages/stack-templates/versions.env up -d"
+                "LLM_GATEWAY_BIND=10.0.0.5 {ssh} compose -f {r}/infra/node/compose.yml --project-directory /Users/Shared/castor/files/node --env-file /repo/packages/stack-templates/versions.env up -d"
             ),
             format!("{compose} up -d --remove-orphans"),
             format!("{ssh} network connect pc-t-{s}-shared pc-node-immich-ml"),
@@ -253,7 +253,7 @@ async fn provisions_like_the_typescript_worker() {
     assert!(env.contains("AUTH_HOST_IP='10.0.0.1'"), "{env}");
     let volumes = std::fs::read_to_string(root.join(format!(".tenants/{s}/compose.volumes.yml"))).unwrap();
     assert!(
-        volumes.contains(&format!("/mnt/tank/castor/t/{s}/data/photos")),
+        volumes.contains(&format!("/Volumes/tank/t/{s}/data/photos")),
         "{volumes}"
     );
     let route = std::fs::read_to_string(w.traefik.join(format!("tenant-{s}.yml"))).unwrap();
@@ -463,7 +463,7 @@ async fn update_on_the_local_node_shrinks_offline_and_follows_with_stacks() {
 async fn refusals_and_held_back_downgrades() {
     let Some(db) = db().await else { return };
     let _one = USERS.lock().await;
-    let w = world(&db, "TRUENAS").await;
+    let w = world(&db, "MAC").await;
     let (s, t) = (&w.slug, &w.tenant);
     let users = setup(&db, &w).await;
     let fake = Fake::new(vec![("castor-zfs status", Ok("open 150000 204800 204800\n"))]);

@@ -34,14 +34,14 @@ async fn zfs_gets_the_derived_key_only_to_open() {
     let keys = keys();
     let wrapped = keys.new_wrapped_volume_key("ct1").unwrap();
     let fake = Fake::new(vec![("status", Ok("open 10 100 102\n"))]);
-    let n = node("TRUENAS", "TENANTS", fake.clone());
+    let n = node("MAC", "TENANTS", fake.clone());
     let key = VolumeKey {
         keys: &keys,
         tenant_id: "ct1",
         wrapped: &wrapped,
     };
     let s = TenantStorage::new(&n, "anna").unwrap().with_key(key);
-    assert_eq!(s.data_dir(), "/mnt/tank/castor/t/anna/data");
+    assert_eq!(s.data_dir(), "/Volumes/tank/t/anna/data");
     assert!(!s.offline_shrink());
     s.ensure_open(2, &["db", "photos"]).await.unwrap();
     s.grow(3).await.unwrap();
@@ -107,7 +107,7 @@ async fn no_key_no_command_and_a_key_of_another_tenant_fails() {
     let keys = keys();
     let wrapped = keys.new_wrapped_volume_key("ct1").unwrap();
     let fake = Fake::new(vec![]);
-    let n = node("TRUENAS", "TENANTS", fake.clone());
+    let n = node("MAC", "TENANTS", fake.clone());
     let e = TenantStorage::new(&n, "anna")
         .unwrap()
         .ensure_open(1, &[])
@@ -136,14 +136,14 @@ async fn stacks_dataset_gets_its_own_key() {
     let keys = keys();
     let wrapped = keys.new_wrapped_volume_key("ct1").unwrap();
     let fake = Fake::new(vec![("stack-usage", Ok("linkding 12\nittools 0\n"))]);
-    let n = node("TRUENAS", "STACKS", fake.clone());
+    let n = node("MAC", "STACKS", fake.clone());
     let key = VolumeKey {
         keys: &keys,
         tenant_id: "ct1",
         wrapped: &wrapped,
     };
     let s = StacksStorage::new(&n, "anna").unwrap().with_key(key);
-    assert_eq!(s.data_dir("linkding").unwrap(), "/mnt/tank/castor/s/anna/linkding/data");
+    assert_eq!(s.data_dir("linkding").unwrap(), "/Volumes/tank/s/anna/linkding/data");
     assert!(s.open(0).await.is_err());
     s.open(10240).await.unwrap();
     s.create_stack("linkding", 1024, &[("data", 100999, 100999)])
@@ -172,12 +172,12 @@ async fn stacks_dataset_gets_its_own_key() {
 #[tokio::test]
 async fn measure_records_usage_per_service() {
     let Some(db) = db().await else { return };
-    let w = world(&db, "TRUENAS").await;
+    let w = world(&db, "MAC").await;
     let fake = Fake::new(vec![
         ("castor-zfs status", Ok("open 120 102400 102400\n")),
         ("castor-zfs usage", Ok("db 3\nphotos 100\nimmich-db 5\ndocs-media 12\n")),
     ]);
-    let n = node("TRUENAS", "TENANTS", fake);
+    let n = node("MAC", "TENANTS", fake);
     let s = TenantStorage::new(&n, &w.slug).unwrap();
     castord::storage::measure(&db, &w.tenant, &s).await.unwrap();
     assert_eq!(

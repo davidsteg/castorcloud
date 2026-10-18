@@ -48,7 +48,7 @@ async fn registers_nodes() {
             &name,
             "castor@10.0.0.7",
             "--kind",
-            "truenas",
+            "mac",
             "--pool",
             "tank",
             "--edge",
@@ -63,7 +63,7 @@ async fn registers_nodes() {
     assert!(out.ends_with(&format!("node {name} is ready for tenants")));
     assert_eq!(
         node_row(&db, &name).await,
-        ["TRUENAS TENANTS castor@10.0.0.7 tank 10.0.0.7:8480 10.0.0.2 20 2000000 ONLINE 65536 t"]
+        ["MAC TENANTS castor@10.0.0.7 tank 10.0.0.7:8480 10.0.0.2 20 2000000 ONLINE 65536 t"]
     );
     // The node was prepared: templates and the edge proxy.
     assert!(
@@ -236,7 +236,7 @@ async fn staff_and_tenants() {
         .await
         .unwrap();
 
-    let w = world(&db, "TRUENAS").await;
+    let w = world(&db, "MAC").await;
     let out = admin::delete_tenant(&db, &w.slug).await.unwrap();
     assert!(out.starts_with(&format!("queued DELETE for {} (job c", w.slug)));
     assert_eq!(
@@ -255,7 +255,7 @@ async fn staff_and_tenants() {
 #[tokio::test]
 async fn restore_requests() {
     let Some(db) = db().await else { return };
-    let w = world(&db, "TRUENAS").await;
+    let w = world(&db, "MAC").await;
     let listing: &'static str = format!(
         "{s} g1 cb-20260101T0000Z 1767225600 1048576\n{s} g2 cb-20260102T0000Z 1767312000 0\nother g1 cb-20260101T0000Z 1767225600 0\n",
         s = w.slug

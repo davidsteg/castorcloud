@@ -88,7 +88,7 @@ fn node_name(name: &str) -> bool {
     (1..=63).contains(&name.len()) && name.bytes().all(|b| b.is_ascii_alphanumeric() || b"._-".contains(&b))
 }
 
-const ADD_USAGE: &str = "usage: node add <name> <user@host> --kind truenas|mac --pool <pool> --edge <host[:port]> --auth-host-ip <ip> [--capacity 20]\n       node add <name> <user@host> --kind mac|truenas --role stacks --pool <pool> --edge <host[:port]> --control-plane-ip <ip> [--uid-base 100000] [--no-gvisor]";
+const ADD_USAGE: &str = "usage: node add <name> <castor-node:port> --kind truenas --pool <pool> --auth-host-ip <ip> [--capacity 20]\n       node add <name> <user@host> --kind mac --pool <pool> --edge <host[:port]> --auth-host-ip <ip> [--capacity 20]\n       node add <name> <user@host> --kind mac --role stacks --pool <pool> --edge <host[:port]> --control-plane-ip <ip> [--uid-base 100000] [--no-gvisor]";
 
 /// `node add`: probes the node, registers it and prepares it (templates,
 /// edge proxy; on a stacks node the egress proxy). Refuses a degraded pool,
@@ -98,11 +98,26 @@ pub async fn node_add(c: &Control, db: &PgPool, a: &Args) -> Result<String, Stri
         return Err(ADD_USAGE.into());
     };
     let stacks = a.get("role").unwrap_or("tenants") == "stacks";
-    let kind = a.get("kind").unwrap_or("truenas").to_uppercase();
-    let (Some(pool), Some(edge), Some((ssh_user, ssh_host))) = (a.get("pool"), a.get("edge"), target.split_once('@'))
-    else {
+    let kind = a
+        .get("kind")
+        .unwrap_or(if target.contains('@') { "mac" } else { "truenas" })
+        .to_uppercase();
+    // A TrueNAS node is reached through its node role (crate::link), which
+    // holds the gatekeeper token: the target is the role's address. No edge
+    // proxy (Traefik reaches the stacks on pc-edge).
+    let gatekeeper = kind == "TRUENAS";
+    let target_parts = if gatekeeper {
+        crate::link::address_ok(target).then_some(("castor-node", target))
+    } else {
+        target.split_once('@')
+    };
+    let edge = a.get("edge");
+    let (Some(pool), Some((ssh_user, ssh_host))) = (a.get("pool"), target_parts) else {
         return Err(ADD_USAGE.into());
     };
+    if edge.is_some() == gatekeeper {
+        return Err(ADD_USAGE.into());
+    }
     if !node_name(name) || !["TRUENAS", "MAC"].contains(&kind.as_str()) {
         return Err(ADD_USAGE.into());
     }
@@ -177,7 +192,7 @@ pub async fn node_add(c: &Control, db: &PgPool, a: &Args) -> Result<String, Stri
         ssh_user: ssh_user.to_owned(),
         zfs_pool: Some(pool.to_owned()),
         auth_host_ip: if stacks { None } else { auth_host_ip.map(str::to_owned) },
-        edge_host: Some(edge.to_owned()),
+        edge_host: edge.map(str::to_owned),
         control_plane_ips: stacks.then(|| ips.join(",")),
         uid_base: stacks.then_some(uid_base),
         stack_runtime: None,
@@ -289,6 +304,8 @@ pub async fn node_add(c: &Control, db: &PgPool, a: &Args) -> Result<String, Stri
     .map_err(sql)?;
     out.push_str(if stacks {
         "building the egress proxy and starting the edge proxy…\n"
+    } else if gatekeeper {
+        "syncing templates through gatekeeper…\n"
     } else {
         "syncing templates and starting the edge proxy…\n"
     });

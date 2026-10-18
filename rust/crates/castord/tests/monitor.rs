@@ -179,7 +179,7 @@ fn settings() -> Arc<Settings> {
 #[tokio::test]
 async fn checks_read_the_schema() {
     let Some(db) = db().await else { return };
-    let w = world(&db, "TRUENAS").await;
+    let w = world(&db, "MAC").await;
     let now = monitor::now_ms();
     // A node never reached.
     let nodes = checks::Nodes(db.clone()).run(now).await.unwrap();

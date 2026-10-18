@@ -1,4 +1,4 @@
-//! Running the Docker and SSH CLIs.
+//! Running the Docker and SSH CLIs, and gatekeeper's tools through a node role.
 //! Behind a trait so tests can record what would run.
 
 use std::process::Stdio;
@@ -32,6 +32,25 @@ impl Cmd {
     }
 }
 
+/// One call of a gatekeeper tool (crate::gatekeeper). `secret` is one more
+/// argument, kept out of `args` so it can be wiped and never printed.
+pub struct ToolCall {
+    pub name: String,
+    pub args: serde_json::Map<String, serde_json::Value>,
+    pub secret: Option<(&'static str, Zeroizing<String>)>,
+}
+
+impl ToolCall {
+    /// A short form for errors and tests: the arguments, the secret as [secret].
+    pub fn label(&self) -> String {
+        let mut args = self.args.clone();
+        if let Some((name, _)) = &self.secret {
+            args.insert((*name).to_owned(), "[secret]".into());
+        }
+        format!("{} {}", self.name, serde_json::Value::Object(args))
+    }
+}
+
 #[async_trait::async_trait]
 pub trait Exec: Send + Sync {
     /// Stdout, or an error with the end of stderr.
@@ -51,6 +70,15 @@ pub trait Exec: Send + Sync {
             to.label()
         ))
     }
+
+    /// A gatekeeper tool's stdout, run by the node role at `node`
+    /// (crate::link), or an error with what it reported.
+    async fn tool(&self, node: &str, call: ToolCall) -> Result<String, String> {
+        Err(format!(
+            "{}: no link to node {node} configured (LINK_*_FILE)",
+            call.name
+        ))
+    }
 }
 
 /// No command may outlive a job's lease.
@@ -62,7 +90,11 @@ const MAX_BYTES: usize = 256 * 1024 * 1024;
 /// A full ZFS send can take hours; the job's lease is renewed meanwhile.
 const PIPE_TIMEOUT: Duration = Duration::from_secs(24 * 60 * 60);
 
-pub struct Real;
+/// The CLIs on the control plane, and the link to node roles when configured.
+#[derive(Default)]
+pub struct Real {
+    pub link: Option<crate::link::Client>,
+}
 
 #[async_trait::async_trait]
 impl Exec for Real {
@@ -86,6 +118,16 @@ impl Exec for Real {
 
     async fn pipe(&self, from: Cmd, to: Cmd) -> Result<u64, String> {
         pipe(from, to).await
+    }
+
+    async fn tool(&self, node: &str, call: ToolCall) -> Result<String, String> {
+        match &self.link {
+            Some(l) => l.call(node, call).await,
+            None => Err(format!(
+                "{}: no link to node {node} configured (LINK_*_FILE)",
+                call.name
+            )),
+        }
     }
 }
 
@@ -248,10 +290,10 @@ mod tests {
     async fn runs_and_reports_failures() {
         let mut ok = Cmd::new("sh", vec!["-c".into(), "cat; echo out".into()]);
         ok.input = Some(Zeroizing::new(b"in ".to_vec()));
-        assert_eq!(Real.run(ok).await.unwrap(), "in out\n");
+        assert_eq!(Real::default().run(ok).await.unwrap(), "in out\n");
         let bad = Cmd::new("sh", vec!["-c".into(), "echo nope >&2; exit 3".into()]);
         assert_eq!(
-            Real.run(bad).await.unwrap_err(),
+            Real::default().run(bad).await.unwrap_err(),
             "sh -c echo nope >&2; exit 3 … failed: nope"
         );
     }
@@ -260,27 +302,27 @@ mod tests {
     async fn large_input_and_output_at_once() {
         let mut echo = Cmd::new("cat", vec![]);
         echo.input = Some(Zeroizing::new(vec![b'x'; 4 * 1024 * 1024]));
-        assert_eq!(Real.run_bytes(echo).await.unwrap().len(), 4 * 1024 * 1024);
+        assert_eq!(Real::default().run_bytes(echo).await.unwrap().len(), 4 * 1024 * 1024);
     }
 
     #[tokio::test]
     async fn pipes_and_stops_both_sides() {
         let from = Cmd::new("sh", vec!["-c".into(), "head -c 3000000 /dev/zero".into()]);
         let to = Cmd::new("sh", vec!["-c".into(), "wc -c >/dev/null".into()]);
-        assert_eq!(Real.pipe(from, to).await.unwrap(), 3_000_000);
+        assert_eq!(Real::default().pipe(from, to).await.unwrap(), 3_000_000);
         let from = Cmd::new("sh", vec!["-c".into(), "cat /dev/zero".into()]);
         let to = Cmd::new(
             "sh",
             vec!["-c".into(), "head -c 10 >/dev/null; echo full >&2; exit 4".into()],
         );
         assert_eq!(
-            Real.pipe(from, to).await.unwrap_err(),
+            Real::default().pipe(from, to).await.unwrap_err(),
             "sh -c head -c 10 >/dev/null; echo full >&2; exit 4 … failed: full"
         );
         let from = Cmd::new("sh", vec!["-c".into(), "echo half; echo gone >&2; exit 2".into()]);
         let to = Cmd::new("sh", vec!["-c".into(), "cat >/dev/null".into()]);
         assert_eq!(
-            Real.pipe(from, to).await.unwrap_err(),
+            Real::default().pipe(from, to).await.unwrap_err(),
             "sh -c echo half; echo gone >&2; exit 2 … failed: gone"
         );
     }

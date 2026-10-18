@@ -68,6 +68,23 @@ impl Exec for Fake {
         Ok(String::new())
     }
 
+    /// Recorded as "gk <tool> <arguments>", the secret as [secret] and kept
+    /// as the call's input.
+    async fn tool(&self, _node: &str, call: castord::exec::ToolCall) -> Result<String, String> {
+        let line = format!("gk {}", call.label());
+        self.calls.lock().unwrap().push(line.clone());
+        self.inputs
+            .lock()
+            .unwrap()
+            .push(call.secret.as_ref().map(|(_, s)| s.as_bytes().to_vec()));
+        for (needle, answer) in &self.rules {
+            if line.contains(needle) {
+                return answer.map(str::to_owned).map_err(str::to_owned);
+            }
+        }
+        Ok(String::new())
+    }
+
     /// Recorded as "<from> | <to>"; a rule's answer is the bytes moved.
     async fn pipe(&self, from: Cmd, to: Cmd) -> Result<u64, String> {
         let line = |c: &Cmd| format!("{} {}", c.program, c.args.join(" "));
@@ -163,7 +180,12 @@ pub async fn node(db: &PgPool, kind: &str, role: &str) -> String {
     .bind(&id)
     .bind(kind)
     .bind(role)
-    .bind(if kind == "LOCAL" { "local" } else { "10.0.0.5" })
+    .bind(match kind {
+        "LOCAL" => "local",
+        // The node role's address (castord::link).
+        "TRUENAS" => "castor-node:7443",
+        _ => "10.0.0.5",
+    })
     .execute(db)
     .await
     .unwrap();
@@ -176,7 +198,7 @@ pub async fn world(db: &PgPool, kind: &str) -> World {
     let slug = format!("t{}", hex8());
     let tenant = format!("c{}", hex8());
     let n = node(db, kind, "TENANTS").await;
-    let s = node(db, "TRUENAS", "STACKS").await;
+    let s = node(db, "MAC", "STACKS").await;
     sqlx::query(
         r#"INSERT INTO "Tenant" (id, slug, "displayName", status, "nodeId", "stacksNodeId", "updatedAt")
            VALUES ($1, $2, 'T', 'ACTIVE', $3, $4, now())"#,

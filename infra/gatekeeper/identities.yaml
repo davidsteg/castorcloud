@@ -1,0 +1,15 @@
+# The one identity of gatekeeper-castor (docs/gatekeeper.md): the castor
+# node role. No console users, no other agents. Generate the token with
+#   docker exec gatekeeper-castor gatekeeper token
+# put its hash here and the token itself in the node role's Docker secret
+# gatekeeper_token. It never goes to the control plane.
+#
+# The tool list is every id in tools.<pool>.yaml:
+#   grep '^  - id:' tools.tank.yaml | sed 's/.*id: "\(.*\)"/      - \1/'
+identities:
+  - id: castor-node
+    role: agent
+    token_hash: "scrypt$REPLACE_ME"
+    tools:
+      - REPLACE_ME
+    scopes: []

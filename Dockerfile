@@ -7,6 +7,9 @@
 #   telegram   Castor Telegram bot (castor-telegram)
 #   admin      operator commands (castor-admin)
 #   migrate    apply database migrations (prisma migrate deploy)
+#   node       the data plane on a TrueNAS (castor-node): the one holder of
+#              the gatekeeper token, no database and no tenant keys
+#              (docs/gatekeeper.md)
 # Build from the repo root:
 #   docker build --build-arg BASE_DOMAIN=castorcloud.ch -t castor .
 # Only BASE_DOMAIN is baked in (into the portal's client bundle); everything
@@ -18,7 +21,8 @@ COPY rust/Cargo.toml rust/Cargo.lock ./
 COPY rust/crates crates
 RUN cargo build --release --locked -p castord --bins \
  && mkdir /out \
- && cp target/release/castord target/release/castor-admin target/release/castor-monitor target/release/castor-telegram /out/
+ && cp target/release/castord target/release/castor-admin target/release/castor-monitor target/release/castor-telegram \
+    target/release/castor-node /out/
 
 FROM node:24-alpine@sha256:44fce696f38ba8c987c4db89954051000bbd05ffd8d8659ba15ed4a8602e937f AS portal
 WORKDIR /app

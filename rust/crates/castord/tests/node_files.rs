@@ -34,7 +34,7 @@ fn mode(p: &str) -> u32 {
 async fn local_files_are_owner_only_unless_readable() {
     let root = std::env::temp_dir().join(format!("castord-files-{}", hex8()));
     let n = node("LOCAL", &root, Fake::new(vec![]));
-    let env = n.write_config("anna", "tenant.env", "A=1\n").unwrap();
+    let env = n.write_config("anna", "tenant.env", "A=1\n").await.unwrap();
     assert_eq!(env, root.join(".tenants/anna/tenant.env").to_string_lossy());
     assert_eq!(mode(&env), 0o600);
     let m = n
@@ -57,12 +57,12 @@ async fn local_files_are_owner_only_unless_readable() {
 #[tokio::test]
 async fn remote_files_go_through_castor_put() {
     let fake = Fake::new(vec![]);
-    let n = node("TRUENAS", Path::new("/repo"), fake.clone());
+    let n = node("MAC", Path::new("/repo"), fake.clone());
     let p = n
         .write_node_file("anna", "immich.json", "{\"a\":1}", false)
         .await
         .unwrap();
-    assert_eq!(p, "/mnt/tank/castor/node/tenants/anna/immich.json");
+    assert_eq!(p, "/Users/Shared/castor/tenants/anna/immich.json");
     n.write_node_file("anna", "assistant/members.json", "{}", true)
         .await
         .unwrap();
@@ -80,9 +80,9 @@ async fn remote_files_go_through_castor_put() {
     assert_eq!(
         (n.node_infra(), n.brand(), n.ca()),
         (
-            "/mnt/tank/castor/node/files/node".to_owned(),
-            "/mnt/tank/castor/node/files/brand".to_owned(),
-            "/mnt/tank/castor/node/files/ca".to_owned()
+            "/Users/Shared/castor/files/node".to_owned(),
+            "/Users/Shared/castor/files/brand".to_owned(),
+            "/Users/Shared/castor/files/ca".to_owned()
         )
     );
 }
@@ -90,7 +90,7 @@ async fn remote_files_go_through_castor_put() {
 #[tokio::test]
 async fn nothing_outside_the_tenant() {
     let fake = Fake::new(vec![]);
-    let n = node("TRUENAS", Path::new("/repo"), fake.clone());
+    let n = node("MAC", Path::new("/repo"), fake.clone());
     for (slug, file) in [
         ("anna", "../bert/tenant.env"),
         ("anna", "a//b"),
@@ -100,7 +100,7 @@ async fn nothing_outside_the_tenant() {
         ("../x", "tenant.env"),
     ] {
         assert!(n.write_node_file(slug, file, "", false).await.is_err(), "{slug} {file}");
-        assert!(n.write_config(slug, file, "").is_err(), "{slug} {file}");
+        assert!(n.write_config(slug, file, "").await.is_err(), "{slug} {file}");
         assert!(n.remove_node_files(slug, file).await.is_err(), "{slug} {file}");
     }
     assert!(fake.calls().is_empty());

@@ -113,7 +113,7 @@ async fn one_worker_per_slot() {
 #[tokio::test]
 async fn sweeps_tenants_past_their_grace_period() {
     let Some(db) = db().await else { return };
-    let w = world(&db, "TRUENAS").await;
+    let w = world(&db, "MAC").await;
     let job_count = || async {
         rows(
             &db,
@@ -147,7 +147,7 @@ async fn sweeps_tenants_past_their_grace_period() {
 #[tokio::test]
 async fn measures_open_volumes() {
     let Some(db) = db().await else { return };
-    let w = world(&db, "TRUENAS").await;
+    let w = world(&db, "MAC").await;
     let fake = Fake::new(vec![
         ("castor-zfs status", Ok("open 300 1024 102400\n")),
         ("castor-zfs usage", Ok("immich-data 250\npaperless-data 50\n")),
@@ -166,7 +166,7 @@ async fn measures_open_volumes() {
 #[tokio::test]
 async fn watching_records_nodes_and_reopens_locked_storage() {
     let Some(db) = db().await else { return };
-    let w = world(&db, "TRUENAS").await;
+    let w = world(&db, "MAC").await;
     let w_ids = w.nodes.clone();
     let w_nodes = |ids: &Vec<String>| ids.clone();
     let fake = Fake::new(vec![

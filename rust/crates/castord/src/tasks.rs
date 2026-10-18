@@ -222,8 +222,14 @@ pub struct Probed {
 }
 
 pub async fn probe_host(node: &Node) -> Result<Probed, String> {
-    let pool = node.host(strings(&["castor-zfs", "pool"]), None).await?;
-    let info = node.host(strings(&["castor-info"]), None).await?;
+    let (pool, info) = if node.is_gatekeeper() {
+        node.truenas_facts().await?
+    } else {
+        (
+            node.host(strings(&["castor-zfs", "pool"]), None).await?,
+            node.host(strings(&["castor-info"]), None).await?,
+        )
+    };
     let (Some((pool_size_mb, pool_used_mb, pool_health)), Some((memory_mb, cpus))) =
         (parse_pool(&pool), parse_info(&info))
     else {
