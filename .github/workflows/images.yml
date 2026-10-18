@@ -3,10 +3,11 @@ name: Images
 # Builds every image this repo ships and scans it with Trivy. Pull requests
 # build and scan only; main also pushes the images to GHCR (node images for
 # amd64 TrueNAS and arm64 Mac minis) with an SBOM and build provenance, and
-# signs them with cosign when the COSIGN_PRIVATE_KEY secret is set. A
-# published GitHub release does the same for its tag and also pushes all four
-# to one private Docker Hub repository, told apart by tag, but only when they
-# are signed and that repository is private (docs/ci.md, "Docker Hub").
+# signs them with cosign when the COSIGN_PRIVATE_KEY secret is set. The
+# version lives in VERSION: every pull request must raise it, and every push
+# to main publishes the images as v<VERSION>, also to one private Docker Hub
+# repository (only signed, only if that repository is private), and then
+# creates the GitHub release v<VERSION> (docs/ci.md, "Versions and releases").
 on:
   push:
     branches: [main]
@@ -16,11 +17,33 @@ on:
 
 permissions: {}
 
+# Pull requests cancel superseded runs; main never does, so every merge
+# gets its release.
 concurrency:
   group: images-${{ github.ref }}
-  cancel-in-progress: true
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 jobs:
+  version:
+    name: Version
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      contents: read
+    outputs:
+      tag: ${{ steps.version.outputs.tag }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - id: version
+        env:
+          GH_TOKEN: ${{ github.token }}
+          EVENT: ${{ github.event_name }}
+          BASE_REF: ${{ github.base_ref }}
+        run: .github/scripts/version.sh
+
   scan:
     name: Build and scan (${{ matrix.name }})
     runs-on: ubuntu-latest
@@ -88,7 +111,7 @@ jobs:
   publish:
     name: Publish (${{ matrix.name }})
     if: (github.event_name == 'push' && github.ref == 'refs/heads/main') || github.event_name == 'release'
-    needs: scan
+    needs: [version, scan]
     runs-on: ubuntu-latest
     # arm64 builds run under emulation.
     timeout-minutes: 90
@@ -101,8 +124,9 @@ jobs:
     env:
       IMAGE: ghcr.io/${{ github.repository_owner }}/${{ matrix.image }}
       COSIGN_KEY_SET: ${{ secrets.COSIGN_PRIVATE_KEY != '' }}
-      # Docker Hub only gets signed release images, so it also needs the cosign key.
-      DOCKERHUB_PUSH: ${{ github.event_name == 'release' && secrets.DOCKERHUB_USERNAME != '' && secrets.DOCKERHUB_TOKEN != '' && secrets.COSIGN_PRIVATE_KEY != '' }}
+      TAG: ${{ needs.version.outputs.tag }}
+      # Docker Hub only gets signed images, so it also needs the cosign key.
+      DOCKERHUB_PUSH: ${{ secrets.DOCKERHUB_USERNAME != '' && secrets.DOCKERHUB_TOKEN != '' && secrets.COSIGN_PRIVATE_KEY != '' }}
       DOCKERHUB_REPO: davidsteg/castorcloud
       DOCKERHUB_IMAGE: docker.io/davidsteg/castorcloud
     steps:
@@ -146,8 +170,8 @@ jobs:
           username: ${{ secrets.DOCKERHUB_USERNAME }}
           password: ${{ secrets.DOCKERHUB_TOKEN }}
 
-      # Tags: the full commit SHA (immutable, what deployments pin), and main
-      # or the release tag.
+      # Tags: the full commit SHA (immutable, what deployments pin), the
+      # version and, for pushes to main, main.
       - id: meta
         uses: docker/metadata-action@dc802804100637a589fabce1cb79ff13a1411302 # v6.2.0
         with:
@@ -155,9 +179,10 @@ jobs:
           tags: |
             type=sha,format=long,prefix=
             type=raw,value=main,enable=${{ github.event_name == 'push' }}
-            type=ref,event=tag
+            type=raw,value=${{ env.TAG }}
+          labels: org.opencontainers.image.version=${{ env.TAG }}
 
-      # One Docker Hub repository for all images: <name>-<release tag>,
+      # One Docker Hub repository for all images: <name>-<version>,
       # <name>-<commit SHA>, and <name>-latest unless it is a pre-release.
       - id: hub
         if: env.DOCKERHUB_PUSH == 'true'
@@ -165,7 +190,7 @@ jobs:
         with:
           images: ${{ env.DOCKERHUB_IMAGE }}
           tags: |
-            type=ref,event=tag,prefix=${{ matrix.name }}-
+            type=raw,value=${{ matrix.name }}-${{ env.TAG }}
             type=sha,format=long,prefix=${{ matrix.name }}-
             type=raw,value=${{ matrix.name }}-latest,enable=${{ !github.event.release.prerelease }}
 
@@ -221,5 +246,24 @@ jobs:
         run: |
           echo "Pushed \`${IMAGE}@${DIGEST}\` (tag \`${GITHUB_SHA}\`)" >> "$GITHUB_STEP_SUMMARY"
           if [ "$DOCKERHUB_PUSH" = "true" ]; then
-            echo "Pushed \`${DOCKERHUB_IMAGE}@${DIGEST}\` (tag \`${MATRIX_NAME}-${GITHUB_REF_NAME}\`)" >> "$GITHUB_STEP_SUMMARY"
+            echo "Pushed \`${DOCKERHUB_IMAGE}@${DIGEST}\` (tag \`${MATRIX_NAME}-${TAG}\`)" >> "$GITHUB_STEP_SUMMARY"
           fi
+
+  # Created with GITHUB_TOKEN, so it does not start this workflow again.
+  release:
+    name: Release
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    needs: [version, publish]
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      contents: write # create the tag and the release
+    steps:
+      - name: Create release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ needs.version.outputs.tag }}
+        run: |
+          gh release create "$TAG" --repo "$GITHUB_REPOSITORY" --target "$GITHUB_SHA" \
+            --title "$TAG" --generate-notes
+          echo "Released \`${TAG}\` at \`${GITHUB_SHA}\`" >> "$GITHUB_STEP_SUMMARY"
