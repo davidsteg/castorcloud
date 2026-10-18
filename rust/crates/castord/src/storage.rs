@@ -673,7 +673,7 @@ mod tests {
                     204800 * BYTES_PER_MB
                 ),
                 format!("truenas.dataset_lock {ds}"),
-                format!(r#"truenas.dataset_unlock {{"dataset":"tank/castor/t/anna","passphrase":"[secret]"}}"#),
+                r#"truenas.dataset_unlock {"dataset":"tank/castor/t/anna","passphrase":"[secret]"}"#.to_string(),
                 format!("truenas.dataset_delete {ds}"),
             ]
         );
