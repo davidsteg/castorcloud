@@ -6,7 +6,7 @@ import { DEFAULT_LOCALE, isLocale, negotiateLocale } from "@/i18n";
 //   <slug>.<domain>  tenant shell   ->  rewritten to /tenant/<slug>/<path>
 //   app.<domain>     public site    ->  /<locale>/<path> (locale from URL,
 //                                      else cookie, else Accept-Language)
-export function middleware(request: NextRequest) {
+export function proxy(request: NextRequest) {
   const url = request.nextUrl.clone();
   const slug = tenantSlugFromHost(request.headers.get("host"));
 

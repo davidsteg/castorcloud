@@ -15,7 +15,7 @@ export function siteOrigin(): URL {
 
 /**
  * hreflang alternates of one page: every locale, plus x-default pointing at
- * the unprefixed path, which the middleware sends to the visitor's language.
+ * the unprefixed path, which the proxy (src/proxy.ts) sends to the visitor's language.
  */
 export function languageAlternates(path: string): Record<string, string> {
   return {
