@@ -102,30 +102,6 @@ The version lives in one place, `VERSION` at the repository root
 The release is created with `GITHUB_TOKEN`, so it doesn't start the workflow
 a second time. A release published by hand runs the same publish for its tag.
 
-### Docker Hub
-
-Each release also pushes all four images to one Docker Hub repository,
-`docker.io/davidsteg/castorcloud`, told apart by tag: the image's name plus
-the version (`castor-v0.1.0`, `assistant-tools-v0.1.0`, `egress-v0.1.0`,
-`cryptd-v0.1.0`), `<name>-<commit SHA>` and, unless it is a pre-release,
-`<name>-latest`. They stay separate images, so cryptd and assistant-tools
-carry no control plane. Each one is the same manifest and digest as on GHCR,
-signed with the same cosign key.
-
-The publish job pushes to Docker Hub only when all of this holds, and
-otherwise leaves a notice and pushes to GHCR alone:
-
-- the repository secrets `DOCKERHUB_USERNAME` and `DOCKERHUB_TOKEN` are set
-  (a Docker Hub personal access token with Read & Write, nothing more);
-- `COSIGN_PRIVATE_KEY` is set, so nothing unsigned reaches Docker Hub;
-- the repository exists and is **private**. The job asks the Docker Hub
-  API first and fails if it is public or missing, because a `docker push`
-  to a missing repository creates it with the account's default
-  visibility.
-
-Create the repository on Docker Hub as private before setting the secrets.
-Nodes still pull from GHCR (below); Docker Hub is a copy.
-
 ### How nodes get the images
 
 In production castord no longer builds cryptd, assistant-tools and egress
