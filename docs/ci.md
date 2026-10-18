@@ -47,8 +47,10 @@ of them should carry the control plane.
 
 Pull requests build and scan (amd64). Pushes to `main` publish the images
 tagged with the full commit SHA and `main`, with an SBOM and build
-provenance attached: the node images for amd64 (TrueNAS) and arm64 (Mac
-minis), `castorcloud` for amd64. Deploy by digest or SHA tag, never `main`.
+provenance attached, all for amd64; the automatic release of each merge
+(below) is amd64 too. A release published by hand also builds the node
+images for arm64 (Mac minis); main doesn't, because arm64 builds run
+under emulation and take up to half an hour each. Deploy by digest or SHA tag, never `main`.
 Runtime images run as a non-root user; the castor image carries no npm,
 and the Rust node images are a static binary on an empty image.
 
@@ -81,14 +83,34 @@ GitHub > Your profile > Packages > each `castorcloud*` package > Package
 settings: visibility **Private**, and under "Manage Actions access" only
 `davidsteg/castorcloud`, with the Write role.
 
+### Versions and releases
+
+The version lives in one place, `VERSION` at the repository root
+(`MAJOR.MINOR.PATCH`). Rules:
+
+- **Every pull request raises `VERSION`** above `main`'s: patch for fixes and
+  dependency bumps, minor for features, major for breaking changes. The
+  Images workflow's `Version` check fails otherwise, Dependabot pull requests
+  included (push a commit that raises it before merging).
+- **Every merge to `main` is released.** The push builds, scans and publishes
+  the images tagged `v<VERSION>` (plus the commit SHA and `main`), and once
+  they are all published the `Release` job creates the GitHub release
+  `v<VERSION>` on that commit with generated notes. A push whose
+  `v<VERSION>` already exists fails instead of overwriting it.
+- Runs on `main` are never cancelled by a newer push, so no merge is skipped.
+
+The release is created with `GITHUB_TOKEN`, so it doesn't start the workflow
+a second time. A release published by hand runs the same publish for its tag.
+
 ### Docker Hub
 
-Pushes to `main` also publish all four images to one Docker Hub
-repository, `docker.io/davidsteg/castorcloud`, told apart by tag: the
-image's name plus the commit SHA (`castor-<sha>`, `assistant-tools-<sha>`,
-`egress-<sha>`, `cryptd-<sha>`) and `<name>-main`. They stay separate
-images, so cryptd and assistant-tools carry no control plane. Each one is
-the same manifest and digest as on GHCR, signed with the same cosign key.
+Each release also pushes all four images to one Docker Hub repository,
+`docker.io/davidsteg/castorcloud`, told apart by tag: the image's name plus
+the version (`castor-v0.1.0`, `assistant-tools-v0.1.0`, `egress-v0.1.0`,
+`cryptd-v0.1.0`), `<name>-<commit SHA>` and, unless it is a pre-release,
+`<name>-latest`. They stay separate images, so cryptd and assistant-tools
+carry no control plane. Each one is the same manifest and digest as on GHCR,
+signed with the same cosign key.
 
 The publish job pushes to Docker Hub only when all of this holds, and
 otherwise leaves a notice and pushes to GHCR alone:

@@ -1,15 +1,17 @@
 # Control plane: edge proxy, identity provider, databases.
 # The portal and provisioner run on the host during development
 # (npm run dev) and are reached by Traefik through host.docker.internal.
+#
+# Traefik has no Docker socket and no Docker provider: the socket is root on
+# the host (":ro" does not limit the API), and container labels would let
+# whatever runs on pc-edge claim a host name. Every route is a file in
+# traefik/dynamic: the static ones here, tenant-<slug>.yml from castord.
 name: pc-control-plane
 
 services:
   traefik:
     image: traefik:v3.6
     command:
-      - --providers.docker=true
-      - --providers.docker.exposedbydefault=false
-      - --providers.docker.network=pc-edge
       - --providers.file.directory=/etc/traefik/dynamic
       - --providers.file.watch=true
       - --entrypoints.web.address=:80
@@ -26,7 +28,6 @@ services:
       - "443:443"
       - "8080:8080"
     volumes:
-      - /var/run/docker.sock:/var/run/docker.sock:ro
       - ./traefik/dynamic:/etc/traefik/dynamic:ro
       # Dev certificates (infra/dev-certs/generate.sh). Production uses ACME.
       - ../../.dev-certs:/certs:ro
@@ -90,11 +91,6 @@ services:
     depends_on:
       postgres:
         condition: service_healthy
-    labels:
-      - traefik.enable=true
-      - traefik.http.routers.authentik.rule=Host(`auth.${BASE_DOMAIN}`)
-      - traefik.http.routers.authentik.entrypoints=websecure
-      - traefik.http.services.authentik.loadbalancer.server.port=9000
     networks: [pc-internal, pc-edge]
     restart: unless-stopped
 
