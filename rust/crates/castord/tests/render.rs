@@ -64,6 +64,17 @@ fn renders_what_typescript_renders() {
         edge_route("anna", &p, "http://10.0.0.5:8480"),
         f["edge"].as_str().unwrap()
     );
+    let skin = skin_route("anna", &p);
+    assert_eq!(
+        skin.lines().skip(1).collect::<Vec<_>>(),
+        f["edge"]
+            .as_str()
+            .unwrap()
+            .replace("http://10.0.0.5:8480", "http://pc-t-anna-skin-1:80")
+            .lines()
+            .skip(1)
+            .collect::<Vec<_>>()
+    );
     assert_eq!(
         volumes_override("/mnt/tank/castor/t/anna/data"),
         f["volumes"].as_str().unwrap()

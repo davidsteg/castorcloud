@@ -12,9 +12,6 @@
 services:
   traefik:
     command:
-      - --providers.docker=true
-      - --providers.docker.exposedbydefault=false
-      - --providers.docker.network=pc-edge
       - --providers.file.directory=/etc/traefik/dynamic
       - --providers.file.watch=true
       - --entrypoints.web.address=:80
@@ -31,6 +28,8 @@ services:
       - --certificatesresolvers.le.acme.dnschallenge.resolvers=1.1.1.1:53,1.0.0.1:53
     environment:
       BASE_DOMAIN: ${BASE_DOMAIN}
+      # Where Traefik reaches the portal container (portal.yml), e.g. http://portal:3000.
+      PORTAL_URL: ${PORTAL_URL:?PORTAL_URL is required}
       CF_DNS_API_TOKEN: ${CF_DNS_API_TOKEN:?CF_DNS_API_TOKEN is required}
     # No dashboard port in production.
     ports: !override
@@ -38,7 +37,6 @@ services:
       - "443:443"
     # No dev certificates; tls.yml skips itself when CF_DNS_API_TOKEN is set.
     volumes: !override
-      - /var/run/docker.sock:/var/run/docker.sock:ro
       - ./traefik/dynamic:/etc/traefik/dynamic:ro
       - acme:/acme
 
