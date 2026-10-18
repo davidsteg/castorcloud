@@ -26,7 +26,42 @@ pub async fn connect(max: u32) -> Result<PgPool, String> {
         .map_err(|e| format!("database: {e}"))
 }
 
+/// Where a control-plane role would find a gatekeeper token it must not have.
+const NODE_ROLE_FILE: &str = "/run/secrets/gatekeeper_token";
+
+/// A control-plane role holds no gatekeeper token: only the node role does
+/// (docs/gatekeeper.md). Refuses to start with one.
+pub fn control_plane_role_only() -> Result<(), String> {
+    for name in ["GATEKEEPER_TOKEN", "GATEKEEPER_TOKEN_FILE", "GATEKEEPER_URL"] {
+        if std::env::var_os(name).is_some() {
+            return Err(format!("{name} belongs to the node role (castor node), not here"));
+        }
+    }
+    if std::path::Path::new(NODE_ROLE_FILE).exists() {
+        return Err(format!(
+            "{NODE_ROLE_FILE} belongs to the node role (castor node), not here"
+        ));
+    }
+    Ok(())
+}
+
+/// The node role holds nothing of the control plane's: no database, no keys,
+/// no tokens or passwords. Settings ending in _FILE name its own files.
+pub fn node_role_only(names: impl IntoIterator<Item = String>) -> Result<(), String> {
+    for name in names {
+        let secret = ["SECRET", "PASSWORD", "TOKEN", "KEK", "KEY"]
+            .iter()
+            .any(|w| name.contains(w))
+            || name == "DATABASE_URL";
+        if secret && !name.ends_with("_FILE") {
+            return Err(format!("{name} belongs to the control plane, not the node role"));
+        }
+    }
+    Ok(())
+}
+
 pub fn control() -> Result<Control, String> {
+    control_plane_role_only()?;
     let root = match var("CASTOR_ROOT") {
         Some(r) => PathBuf::from(r),
         None => std::env::current_dir().map_err(|e| e.to_string())?,
@@ -96,7 +131,9 @@ pub fn control() -> Result<Control, String> {
             .unwrap_or_else(|| root.join(".dev-certs")),
         root,
         traefik_dir,
-        exec: Arc::new(crate::exec::Real),
+        exec: Arc::new(crate::exec::Real {
+            link: crate::link::Client::from_env()?,
+        }),
         keys: castor_crypto::Keys::from_env().map_err(|e| e.to_string())?,
         llm,
         authentik,
@@ -137,4 +174,25 @@ pub fn backup_settings() -> Result<Option<crate::backup::Settings>, String> {
         pg_container: var("BACKUP_PG_CONTAINER").unwrap_or_else(|| "pc-control-plane-postgres-1".into()),
         pg_user: var("POSTGRES_USER").unwrap_or_else(|| "pc".into()),
     }))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn the_node_role_refuses_control_plane_secrets() {
+        let names = |v: &[&str]| v.iter().map(|s| (*s).to_owned()).collect::<Vec<_>>();
+        assert!(node_role_only(names(&["PATH", "NODE_POOL", "LINK_KEY_FILE", "GATEKEEPER_TOKEN_FILE"])).is_ok());
+        for bad in [
+            "VOLUME_KEK",
+            "DATABASE_URL",
+            "SECRETS_ENCRYPTION_KEY",
+            "STRIPE_SECRET_KEY",
+            "POSTGRES_PASSWORD",
+            "GATEKEEPER_TOKEN",
+        ] {
+            assert!(node_role_only(names(&[bad])).is_err(), "{bad}");
+        }
+    }
 }

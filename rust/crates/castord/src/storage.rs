@@ -18,6 +18,7 @@ use crate::valid;
 /// One booked storage unit is 100 GB (@pc/pricing catalog.ts).
 const STORAGE_UNIT_GB: u64 = 100;
 const MB_PER_GB: u64 = 1024;
+pub const BYTES_PER_MB: u64 = 1024 * 1024;
 
 /// Size of the encrypted volume for a booking, in MB (storageQuotaMb).
 pub fn quota_mb(storage_units: u64) -> u64 {

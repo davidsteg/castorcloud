@@ -92,6 +92,41 @@ fn psql(user: &str, db: &str, vars: &[(&str, &str)]) -> Vec<String> {
     v
 }
 
+/// What each app's command runs: fixed text, the same in gatekeeper's tools
+/// (crate::gatekeeper), so a node never runs code castord made up.
+pub const PHOTOS_SQL: &str = r#"
+DELETE FROM session s USING "user" u
+ WHERE s."userId" = u.id AND lower(u.email) = lower(:'email') AND s."createdAt" < :'before'::timestamptz
+   AND (NOT :'web'::boolean OR s."appVersion" IS NULL);
+DELETE FROM api_key k USING "user" u
+ WHERE k."userId" = u.id AND lower(u.email) = lower(:'email')
+   AND NOT :'web'::boolean AND k.name <> :'keep';
+"#;
+pub const DOCS_SCRIPT: &str = r#"
+import os
+from django.contrib.auth.models import User
+from rest_framework.authtoken.models import Token
+for user in User.objects.filter(email__iexact=os.environ["PC_EMAIL"]).exclude(email=""):
+    user.set_unusable_password()
+    user.save(update_fields=["password"])
+    if os.environ["PC_SCOPE"] != "WEB":
+        Token.objects.filter(user=user).delete()
+"#;
+pub const PLACES_SCRIPT: &str = r#"
+user = User.where("lower(email) = ?", ENV.fetch("PC_EMAIL").downcase).first
+if user
+  user.update_columns(encrypted_password: Devise::Encryptor.digest(User, SecureRandom.hex(32)))
+  user.update_columns(api_key: SecureRandom.hex(32)) unless ENV.fetch("PC_SCOPE") == "WEB"
+end
+"#;
+pub const FLIGHTS_SQL: &str = r#"
+DELETE FROM session s USING "user" u WHERE s.user_id = u.id AND u.oauth_id = :'sub';
+DELETE FROM api_key k USING "user" u
+ WHERE k.user_id = u.id AND u.oauth_id = :'sub' AND NOT :'web'::boolean AND k.name <> :'keep';
+DELETE FROM oauth_grant g USING "user" u
+ WHERE g.user_id = u.id AND u.oauth_id = :'sub' AND NOT :'web'::boolean;
+"#;
+
 /// Immich: sessions carry appVersion only when the phone app created them,
 /// so WEB keeps the app signed in.
 fn photos(who: &Who, scope: Scope) -> AccessCommand {
@@ -109,15 +144,7 @@ fn photos(who: &Who, scope: Scope) -> AccessCommand {
             ],
         ),
         env: Vec::new(),
-        input: r#"
-DELETE FROM session s USING "user" u
- WHERE s."userId" = u.id AND lower(u.email) = lower(:'email') AND s."createdAt" < :'before'::timestamptz
-   AND (NOT :'web'::boolean OR s."appVersion" IS NULL);
-DELETE FROM api_key k USING "user" u
- WHERE k."userId" = u.id AND lower(u.email) = lower(:'email')
-   AND NOT :'web'::boolean AND k.name <> :'keep';
-"#
-        .into(),
+        input: PHOTOS_SQL.into(),
     }
 }
 
@@ -131,17 +158,7 @@ fn docs(who: &Who, scope: Scope) -> AccessCommand {
             .map(|s| (*s).to_owned())
             .collect(),
         env: vec![("PC_EMAIL", who.email.clone()), ("PC_SCOPE", scope.name().into())],
-        input: r#"
-import os
-from django.contrib.auth.models import User
-from rest_framework.authtoken.models import Token
-for user in User.objects.filter(email__iexact=os.environ["PC_EMAIL"]).exclude(email=""):
-    user.set_unusable_password()
-    user.save(update_fields=["password"])
-    if os.environ["PC_SCOPE"] != "WEB":
-        Token.objects.filter(user=user).delete()
-"#
-        .into(),
+        input: DOCS_SCRIPT.into(),
     }
 }
 
@@ -150,18 +167,7 @@ for user in User.objects.filter(email__iexact=os.environ["PC_EMAIL"]).exclude(em
 fn places(who: &Who, scope: Scope) -> AccessCommand {
     AccessCommand {
         service: "dawarich",
-        command: vec![
-            "bin/rails".into(),
-            "runner".into(),
-            r#"
-user = User.where("lower(email) = ?", ENV.fetch("PC_EMAIL").downcase).first
-if user
-  user.update_columns(encrypted_password: Devise::Encryptor.digest(User, SecureRandom.hex(32)))
-  user.update_columns(api_key: SecureRandom.hex(32)) unless ENV.fetch("PC_SCOPE") == "WEB"
-end
-"#
-            .into(),
-        ],
+        command: vec!["bin/rails".into(), "runner".into(), PLACES_SCRIPT.into()],
         env: vec![("PC_EMAIL", who.email.clone()), ("PC_SCOPE", scope.name().into())],
         input: String::new(),
     }
@@ -179,14 +185,7 @@ fn flights(who: &Who, scope: Scope) -> AccessCommand {
             &[("sub", &who.sub), ("web", &web), ("keep", scope.keep_key())],
         ),
         env: Vec::new(),
-        input: r#"
-DELETE FROM session s USING "user" u WHERE s.user_id = u.id AND u.oauth_id = :'sub';
-DELETE FROM api_key k USING "user" u
- WHERE k.user_id = u.id AND u.oauth_id = :'sub' AND NOT :'web'::boolean AND k.name <> :'keep';
-DELETE FROM oauth_grant g USING "user" u
- WHERE g.user_id = u.id AND u.oauth_id = :'sub' AND NOT :'web'::boolean;
-"#
-        .into(),
+        input: FLIGHTS_SQL.into(),
     }
 }
 

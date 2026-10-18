@@ -1,0 +1,87 @@
+# The data plane on a TrueNAS (docs/gatekeeper.md): the castor node role and
+# its own gatekeeper instance. The operator starts it, never Castor:
+#   docker compose -f infra/gatekeeper/compose.yml --env-file node.env up -d
+#
+# node.env:
+#   CASTOR_IMAGE       the castor image, pinned by digest
+#   GATEKEEPER_IMAGE   davidsteg/gatekeeper 1.26.0 or later, pinned by digest
+#   NODE_POOL          the ZFS pool, e.g. tank
+#   GATEKEEPER_CONFIG  toolkits.yaml, tools.yaml, identities.yaml (read-only)
+#   GATEKEEPER_LOGS    the audit log
+#   SECRETS_DIR        gatekeeper_token, link.crt, link.key, castord.crt
+#   DOCKER_GID         group of /var/run/docker.sock (stat -c %g)
+#
+# Networks: castor-link carries castord's calls (mutual TLS, pinned
+# certificates); castord joins it from the control plane. castor-gk joins
+# the node role and gatekeeper only. Neither reaches the internet.
+name: castor-node
+
+services:
+  node:
+    image: ${CASTOR_IMAGE:?CASTOR_IMAGE is required}
+    command: ["node"]
+    environment:
+      NODE_POOL: ${NODE_POOL:?NODE_POOL is required}
+      GATEKEEPER_URL: http://gatekeeper-castor:8080/mcp
+      GATEKEEPER_TOKEN_FILE: /run/secrets/gatekeeper_token
+      LINK_CERT_FILE: /run/secrets/link_cert
+      LINK_KEY_FILE: /run/secrets/link_key
+      LINK_PEERS_FILE: /run/secrets/link_peers
+    secrets: [gatekeeper_token, link_cert, link_key, link_peers]
+    read_only: true
+    cap_drop: [ALL]
+    security_opt: [no-new-privileges:true]
+    networks:
+      castor-link:
+        aliases: [castor-node]
+      castor-gk: {}
+    restart: unless-stopped
+
+  gatekeeper-castor:
+    image: ${GATEKEEPER_IMAGE:?GATEKEEPER_IMAGE is required}
+    container_name: gatekeeper-castor
+    # Headless: no console and no admin endpoint; nobody signs in to this
+    # instance, and it refuses to start if one is configured.
+    command: ["serve", "--headless"]
+    user: "568:568"
+    group_add: ["${DOCKER_GID:-999}"]
+    read_only: true
+    cap_drop: [ALL]
+    security_opt: [no-new-privileges:true]
+    volumes:
+      # Root-equivalent: the reason this container is its own, and the node
+      # role only holds a token for it.
+      - /var/run/docker.sock:/var/run/docker.sock
+      - ${GATEKEEPER_CONFIG:?GATEKEEPER_CONFIG is required}:/etc/gatekeeper:ro
+      - ${GATEKEEPER_LOGS:?GATEKEEPER_LOGS is required}:/var/log/gatekeeper
+      # The node root at the same path as on the host: the docker CLI here
+      # reads compose files from it, and the engine mounts from it.
+      - /mnt/${NODE_POOL}/castor/node:/mnt/${NODE_POOL}/castor/node
+    networks:
+      castor-gk: {}
+      # The TrueNAS middleware API (ws_url in toolkits.yaml) is on the host.
+      host-api: {}
+    extra_hosts:
+      - truenas.lan:host-gateway
+    restart: unless-stopped
+
+secrets:
+  gatekeeper_token:
+    file: ${SECRETS_DIR:?SECRETS_DIR is required}/gatekeeper_token
+  link_cert:
+    file: ${SECRETS_DIR}/link.crt
+  link_key:
+    file: ${SECRETS_DIR}/link.key
+  link_peers:
+    file: ${SECRETS_DIR}/castord.crt
+
+networks:
+  castor-link:
+    name: castor-link
+    internal: true
+  castor-gk:
+    internal: true
+  # Only gatekeeper is on it, to reach the host's middleware. Limit it with a
+  # NAS firewall rule to the middleware's port: gatekeeper needs nothing else
+  # outside castor-gk.
+  host-api: {}

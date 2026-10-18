@@ -459,6 +459,12 @@ impl Images {
             node.docker(args, false).await?;
             return Ok(());
         };
+        if node.is_gatekeeper() && reg.token.is_some() {
+            return Err(format!(
+                "{}: a registry token can't go through gatekeeper; publish the images or log gatekeeper's Docker in",
+                reg.repo
+            ));
+        }
         let pinned = self.pinned(image).await?;
         let pull = vec!["pull".to_owned(), "-q".into(), pinned.clone()];
         match &reg.token {
@@ -853,7 +859,7 @@ mod tests {
         let row = crate::node::NodeRow {
             id: "n1".into(),
             name: "nas".into(),
-            kind: "TRUENAS".into(),
+            kind: "MAC".into(),
             role: "TENANTS".into(),
             ssh_host: "10.0.0.5".into(),
             ssh_user: "deploy".into(),

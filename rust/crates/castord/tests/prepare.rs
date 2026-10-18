@@ -38,7 +38,7 @@ async fn remote_node_gets_files_then_edge_and_tools() {
     let ca = std::env::temp_dir().join(format!("castord-ca-{}", hex8()));
     std::fs::create_dir_all(&ca).unwrap();
     let fake = Fake::new(vec![("tar -C", Ok("TAR")), ("network inspect", Err("no such network"))]);
-    let n = node("TRUENAS", Some("10.0.0.5:8480"), fake.clone());
+    let n = node("MAC", Some("10.0.0.5:8480"), fake.clone());
     assert_eq!(n.edge.as_ref().unwrap().url, "http://10.0.0.5:8480");
     assert_eq!(n.auth_host_ip.as_deref(), Some("10.0.0.1"));
     n.prepare(&ca, &Images::build()).await.unwrap();
@@ -66,7 +66,7 @@ async fn remote_node_gets_files_then_edge_and_tools() {
     std::fs::remove_dir_all(&ca).unwrap();
     // A missing CA bundle stops before it is sent.
     let fake = Fake::new(vec![]);
-    let e = node("TRUENAS", None, fake.clone())
+    let e = node("MAC", None, fake.clone())
         .prepare(Path::new("/nonexistent-ca"), &Images::build())
         .await
         .unwrap_err();
@@ -108,7 +108,7 @@ async fn edge_hosts() {
 #[tokio::test]
 async fn places_once() {
     let Some(db) = db().await else { return };
-    let w = world(&db, "TRUENAS").await;
+    let w = world(&db, "MAC").await;
     let placed = rows(
         &db,
         r#"SELECT name FROM "Node" WHERE id = (SELECT "nodeId" FROM "Tenant" WHERE id = $1)"#,

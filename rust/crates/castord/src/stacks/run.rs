@@ -571,7 +571,9 @@ impl Deploy<'_> {
             },
         )?;
         let text = serde_json::to_string_pretty(&compose).map_err(|e| e.to_string())?;
-        let file = node.write_config(slug, &format!("stacks/{}/compose.json", s.name), &text)?;
+        let file = node
+            .write_config(slug, &format!("stacks/{}/compose.json", s.name), &text)
+            .await?;
         node.docker(
             strings(&[
                 "compose",

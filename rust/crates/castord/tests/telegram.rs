@@ -34,7 +34,7 @@ fn sent(log: &std::sync::Mutex<Vec<String>>) -> Vec<String> {
 #[tokio::test]
 async fn pairs_talks_and_disconnects() {
     let Some(db) = db().await else { return };
-    let w = world(&db, "TRUENAS").await;
+    let w = world(&db, "MAC").await;
     let (user, member) = (format!("u{}", hex8()), format!("m{}", hex8()));
     let tg_user: i64 = 4_000_000 + i64::from(u16::from_str_radix(&hex8()[..4], 16).unwrap());
     sqlx::query(r#"INSERT INTO "User" (id, "authentikSub", email) VALUES ($1, $1, $1 || '@x.test')"#)

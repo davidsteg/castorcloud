@@ -57,7 +57,7 @@ fn leak(s: String) -> &'static str {
 async fn incremental_when_the_chain_is_intact_else_a_new_generation() {
     let Some(db) = db().await else { return };
     let _one = RUN_ALL.lock().await;
-    let w = world(&db, "TRUENAS").await;
+    let w = world(&db, "MAC").await;
     let s = w.slug.clone();
     sqlx::query(r#"INSERT INTO "TenantBackup" ("tenantId", generation, "lastSnapshot", "updatedAt") VALUES ($1, 2, 'cb-20261015T0000Z', now())"#)
         .bind(&w.tenant)
@@ -140,7 +140,7 @@ async fn incremental_when_the_chain_is_intact_else_a_new_generation() {
 async fn a_failed_send_is_recorded_once_and_its_snapshot_dropped() {
     let Some(db) = db().await else { return };
     let _one = RUN_ALL.lock().await;
-    let w = world(&db, "TRUENAS").await;
+    let w = world(&db, "MAC").await;
     let s = w.slug.clone();
     let fake = Fake::new(vec![
         ("castor-backup pool", Ok("pool 1000000 1000 ONLINE\n")),
@@ -191,7 +191,7 @@ async fn a_failed_send_is_recorded_once_and_its_snapshot_dropped() {
 async fn an_unhealthy_box_gets_nothing() {
     let Some(db) = db().await else { return };
     let _one = RUN_ALL.lock().await;
-    let w = world(&db, "TRUENAS").await;
+    let w = world(&db, "MAC").await;
     let fake = Fake::new(vec![("castor-backup pool", Ok("pool 1000000 1000 DEGRADED\n"))]);
     let c = control(fake.clone(), &w.traefik, None, "http://127.0.0.1:9");
     let err = backup::run_all(&c, &db, &settings()).await.unwrap_err();
@@ -209,7 +209,7 @@ async fn prunes_by_policy_forgets_deleted_tenants_and_verifies() {
     let Some(db) = db().await else { return };
     // Its tenant is active, so a concurrent run_all would back it up too.
     let _one = RUN_ALL.lock().await;
-    let w = world(&db, "TRUENAS").await;
+    let w = world(&db, "MAC").await;
     let s = w.slug.clone();
     let gone = format!("gone{}", hex8());
     // Two old backups on one day: the older goes; the box refuses one, which is fine.
@@ -263,7 +263,7 @@ async fn prunes_by_policy_forgets_deleted_tenants_and_verifies() {
 #[tokio::test]
 async fn database_dumps_are_sealed_to_the_offline_key() {
     let Some(db) = db().await else { return };
-    let w = world(&db, "TRUENAS").await;
+    let w = world(&db, "MAC").await;
     let keys: serde_json::Value =
         serde_json::from_str(include_str!("../../crypto/tests/fixtures/db-dump.json")).unwrap();
     let fake = Fake::new(vec![("pg_dumpall", Ok("-- PostgreSQL database cluster dump\n"))]);

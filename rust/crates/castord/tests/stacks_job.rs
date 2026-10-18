@@ -147,7 +147,7 @@ const INFO: &str = r#"{"SecurityOptions":["name=seccomp,profile=builtin","name=u
 #[tokio::test]
 async fn deploys_like_the_typescript_worker() {
     let Some(db) = db().await else { return };
-    let w = world(&db, "TRUENAS").await;
+    let w = world(&db, "MAC").await;
     let (s, t) = (w.slug.clone(), w.tenant.clone());
     setup(&db, &w).await;
     let fake = Fake::new(vec![
@@ -252,7 +252,7 @@ async fn deploys_like_the_typescript_worker() {
     assert_eq!(app["runtime"], "runsc");
     assert_eq!(
         app["volumes"][0]["source"],
-        format!("/mnt/tank/castor/s/{s}/linkding/data/data")
+        format!("/Volumes/tank/s/{s}/linkding/data/data")
     );
     assert_eq!(
         app["environment"]["LD_CSRF_TRUSTED_ORIGINS"],
@@ -358,7 +358,7 @@ async fn deploys_like_the_typescript_worker() {
 #[tokio::test]
 async fn refuses_a_node_without_userns_and_stops_when_suspended() {
     let Some(db) = db().await else { return };
-    let w = world(&db, "TRUENAS").await;
+    let w = world(&db, "MAC").await;
     let (s, t) = (w.slug.clone(), w.tenant.clone());
     setup(&db, &w).await;
     let fake = Fake::new(vec![("info --format", Ok(r#"{"SecurityOptions":["name=seccomp"]}"#))]);
@@ -406,7 +406,7 @@ async fn refuses_a_node_without_userns_and_stops_when_suspended() {
 #[tokio::test]
 async fn a_failing_deploy_fails_only_that_stack() {
     let Some(db) = db().await else { return };
-    let w = world(&db, "TRUENAS").await;
+    let w = world(&db, "MAC").await;
     let (s, t) = (w.slug.clone(), w.tenant.clone());
     setup(&db, &w).await;
     // linkding runs as "node", found in the image's own passwd; tools' image

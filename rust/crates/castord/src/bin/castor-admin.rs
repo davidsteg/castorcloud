@@ -1,8 +1,9 @@
 //! castor-admin: the control plane's ops CLI in Rust, with the settings of
 //! castord (the control plane's .env; see main.rs).
 //!
-//!   castor-admin node add <name> <user@host> --kind truenas|mac --pool <pool> --edge <host[:port]> --auth-host-ip <ip> [--capacity 20]
-//!   castor-admin node add <name> <user@host> --kind mac|truenas --role stacks --pool <pool> --edge <host[:port]> --control-plane-ip <ip> [--uid-base 100000] [--no-gvisor]
+//!   castor-admin node add <name> <castor-node:port> --kind truenas --pool <pool> --auth-host-ip <ip> [--capacity 20]
+//!   castor-admin node add <name> <user@host> --kind mac --pool <pool> --edge <host[:port]> --auth-host-ip <ip> [--capacity 20]
+//!   castor-admin node add <name> <user@host> --kind mac --role stacks --pool <pool> --edge <host[:port]> --control-plane-ip <ip> [--uid-base 100000] [--no-gvisor]
 //!   castor-admin node list | drain <name> | enable <name>
 //!   castor-admin backup status | list <slug> | run [<slug>] | verify
 //!   castor-admin backup restore <slug> [<gen>@<snap>] [--node <name>]
@@ -12,6 +13,7 @@
 //!   castor-admin staff list | add <email> | remove <email>
 //!   castor-admin delete-tenant <slug>
 //!   castor-admin e2e [--delete]
+//!   castor-admin gatekeeper tools <pool>   the castor gatekeeper instance's tools.yaml
 use std::io::Write;
 use std::os::unix::fs::OpenOptionsExt;
 use std::process::ExitCode;
@@ -19,7 +21,8 @@ use std::process::ExitCode;
 use castord::admin::{self, Args};
 use castord::{Control, backup, config};
 
-const USAGE: &str = "usage: castor-admin node|backup|staff|delete-tenant|e2e … (see the top of castor-admin.rs)";
+const USAGE: &str =
+    "usage: castor-admin node|backup|staff|delete-tenant|e2e|gatekeeper … (see the top of castor-admin.rs)";
 
 /// A new file only the operator can read (dumps hold every tenant's wrapped key).
 fn private_file(path: &str) -> Result<std::fs::File, String> {
@@ -125,6 +128,11 @@ async fn backup_cmd(a: &Args) -> Result<String, String> {
 async fn run(args: Vec<String>) -> Result<String, String> {
     let a = Args::parse(&args, &["no-gvisor", "delete"])?;
     match a.arg(0) {
+        // Needs neither the database nor the settings: the catalog is in the binary.
+        Some("gatekeeper") => match (a.arg(1), a.arg(2)) {
+            (Some("tools"), Some(pool)) if castord::valid::pool(pool) => castord::gatekeeper::tools_yaml(pool),
+            _ => Err("usage: castor-admin gatekeeper tools <pool>".into()),
+        },
         Some("node") => {
             let db = config::connect(4).await?;
             match a.arg(1).unwrap_or("list") {

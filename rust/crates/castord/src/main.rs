@@ -21,6 +21,9 @@
 //!   AI_USD_PER_CHF          CHF -> USD rate for AI budgets (default 1.1)
 //!   CA_DIR                  where ca-bundle.pem is for remote nodes (default .dev-certs)
 //!   CASTORD_EXTRA_CA_CERTS  a CA bundle to trust as well (the dev CA)
+//!   LINK_CERT_FILE, LINK_KEY_FILE   castord's certificate and key for the
+//!                           link to TrueNAS node roles (link.rs, docs/gatekeeper.md)
+//!   LINK_PEERS_FILE         the node roles' certificates, the only ones trusted
 //!   CASTOR_IMAGE_TAG        set: nodes pull Castor's images signed from GHCR
 //!                           (images.rs, docs/ci.md): CASTOR_COSIGN_PUBKEY,
 //!                           CASTOR_IMAGE_REPO, GHCR_PULL_USER, GHCR_PULL_TOKEN
