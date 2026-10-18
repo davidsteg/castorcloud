@@ -27,19 +27,19 @@ pub async fn connect(max: u32) -> Result<PgPool, String> {
 }
 
 /// Where a control-plane role would find a gatekeeper token it must not have.
-const GATEKEEPER_SECRET: &str = "/run/secrets/gatekeeper_token";
+const NODE_ROLE_FILE: &str = "/run/secrets/gatekeeper_token";
 
 /// A control-plane role holds no gatekeeper token: only the node role does
 /// (docs/gatekeeper.md). Refuses to start with one.
-pub fn refuse_node_secrets() -> Result<(), String> {
+pub fn control_plane_role_only() -> Result<(), String> {
     for name in ["GATEKEEPER_TOKEN", "GATEKEEPER_TOKEN_FILE", "GATEKEEPER_URL"] {
         if std::env::var_os(name).is_some() {
             return Err(format!("{name} belongs to the node role (castor node), not here"));
         }
     }
-    if std::path::Path::new(GATEKEEPER_SECRET).exists() {
+    if std::path::Path::new(NODE_ROLE_FILE).exists() {
         return Err(format!(
-            "{GATEKEEPER_SECRET} belongs to the node role (castor node), not here"
+            "{NODE_ROLE_FILE} belongs to the node role (castor node), not here"
         ));
     }
     Ok(())
@@ -47,7 +47,7 @@ pub fn refuse_node_secrets() -> Result<(), String> {
 
 /// The node role holds nothing of the control plane's: no database, no keys,
 /// no tokens or passwords. Settings ending in _FILE name its own files.
-pub fn refuse_control_plane_secrets(names: impl IntoIterator<Item = String>) -> Result<(), String> {
+pub fn node_role_only(names: impl IntoIterator<Item = String>) -> Result<(), String> {
     for name in names {
         let secret = ["SECRET", "PASSWORD", "TOKEN", "KEK", "KEY"]
             .iter()
@@ -61,7 +61,7 @@ pub fn refuse_control_plane_secrets(names: impl IntoIterator<Item = String>) -> 
 }
 
 pub fn control() -> Result<Control, String> {
-    refuse_node_secrets()?;
+    control_plane_role_only()?;
     let root = match var("CASTOR_ROOT") {
         Some(r) => PathBuf::from(r),
         None => std::env::current_dir().map_err(|e| e.to_string())?,
@@ -183,10 +183,7 @@ mod tests {
     #[test]
     fn the_node_role_refuses_control_plane_secrets() {
         let names = |v: &[&str]| v.iter().map(|s| (*s).to_owned()).collect::<Vec<_>>();
-        assert!(
-            refuse_control_plane_secrets(names(&["PATH", "NODE_POOL", "LINK_KEY_FILE", "GATEKEEPER_TOKEN_FILE"]))
-                .is_ok()
-        );
+        assert!(node_role_only(names(&["PATH", "NODE_POOL", "LINK_KEY_FILE", "GATEKEEPER_TOKEN_FILE"])).is_ok());
         for bad in [
             "VOLUME_KEK",
             "DATABASE_URL",
@@ -195,7 +192,7 @@ mod tests {
             "POSTGRES_PASSWORD",
             "GATEKEEPER_TOKEN",
         ] {
-            assert!(refuse_control_plane_secrets(names(&[bad])).is_err(), "{bad}");
+            assert!(node_role_only(names(&[bad])).is_err(), "{bad}");
         }
     }
 }

@@ -20,14 +20,14 @@ use castord::link;
 use zeroize::Zeroizing;
 
 async fn run() -> Result<(), String> {
-    castord::config::refuse_control_plane_secrets(std::env::vars_os().map(|(k, _)| k.to_string_lossy().into_owned()))?;
+    castord::config::node_role_only(std::env::vars_os().map(|(k, _)| k.to_string_lossy().into_owned()))?;
     let pool = var("NODE_POOL").ok_or("NODE_POOL is not set")?;
     if !castord::valid::pool(&pool) {
         return Err(format!("invalid NODE_POOL {pool}"));
     }
     let url = var("GATEKEEPER_URL").unwrap_or_else(|| "http://gatekeeper-castor:8080/mcp".into());
-    let token_file = var("GATEKEEPER_TOKEN_FILE").unwrap_or_else(|| "/run/secrets/gatekeeper_token".into());
-    let token = Zeroizing::new(std::fs::read_to_string(&token_file).map_err(|e| format!("{token_file}: {e}"))?);
+    let gk_file = var("GATEKEEPER_TOKEN_FILE").unwrap_or_else(|| "/run/secrets/gatekeeper_token".into());
+    let token = Zeroizing::new(std::fs::read_to_string(&gk_file).map_err(|e| format!("{gk_file}: {e}"))?);
     let gatekeeper = Gatekeeper::new(&url, token, castord::http::client(None)?)?;
 
     let file = |name: &str| var(name).ok_or_else(|| format!("{name} is not set"));
