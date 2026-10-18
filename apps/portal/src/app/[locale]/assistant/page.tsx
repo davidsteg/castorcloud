@@ -1,6 +1,14 @@
+import type { Metadata } from "next";
 import { getDictionary, type Locale } from "@/i18n";
 import { SubPage } from "@/components/site/SubPage";
 import { AssistantInfo } from "@/components/site/AssistantInfo";
+import { pageMetadata } from "@/lib/seo";
+
+export async function generateMetadata({ params }: { params: Promise<{ locale: Locale }> }): Promise<Metadata> {
+  const { locale } = await params;
+  const t = getDictionary(locale);
+  return pageMetadata(locale, "/assistant", { title: t.assistantInfo.title, description: t.assistantInfo.lead });
+}
 
 export default async function AssistantPage({ params }: { params: Promise<{ locale: Locale }> }) {
   const { locale } = await params;

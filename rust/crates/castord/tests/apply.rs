@@ -362,7 +362,7 @@ async fn provisions_like_the_typescript_worker() {
 
 /// A tenant on the local node with Photos only, the booking smaller than its
 /// volume: the stack stops for the LUKS shrink, the assistant's key is
-/// blocked, the edge route goes, and UPDATE queues the custom stacks.
+/// blocked, the route points at the skin proxy, and UPDATE queues the custom stacks.
 #[tokio::test]
 async fn update_on_the_local_node_shrinks_offline_and_follows_with_stacks() {
     let Some(db) = db().await else { return };
@@ -423,7 +423,11 @@ async fn update_on_the_local_node_shrinks_offline_and_follows_with_stacks() {
             .iter()
             .any(|c| c.contains("com.docker.compose.service=assistant-tools"))
     );
-    assert!(!w.traefik.join(format!("tenant-{s}.yml")).exists());
+    let route = std::fs::read_to_string(w.traefik.join(format!("tenant-{s}.yml"))).unwrap();
+    assert!(
+        route.contains(&format!("url: \"http://pc-t-{s}-skin-1:80\"")),
+        "{route}"
+    );
     assert!(gw_seen.lock().unwrap().iter().any(|l| l.starts_with("POST /key/block")));
     let volumes = std::fs::read_to_string(root.join(format!(".tenants/{s}/compose.volumes.yml"))).unwrap();
     assert!(

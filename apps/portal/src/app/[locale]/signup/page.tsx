@@ -1,3 +1,4 @@
+import type { Metadata } from "next";
 import Link from "next/link";
 import { STORAGE_UNIT_GB, formatChf, quote } from "@pc/pricing";
 import { auth, signIn } from "@/auth";
@@ -7,6 +8,9 @@ import { BETA } from "@/lib/config";
 import { stripe } from "@/lib/stripe";
 import { SiteHeader } from "@/components/site/SiteHeader";
 import { SignupForm } from "./SignupForm";
+import { PRIVATE_PAGE } from "@/lib/seo";
+
+export const metadata: Metadata = PRIVATE_PAGE;
 
 export default async function SignupPage({
   params,

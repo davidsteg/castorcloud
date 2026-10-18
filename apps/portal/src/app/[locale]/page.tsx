@@ -1,8 +1,10 @@
+import type { Metadata } from "next";
 import Image from "next/image";
 import Link from "next/link";
 import { SERVICES, SERVICE_KEYS, formatChf, quote } from "@pc/pricing";
 import { fill, getDictionary, type Locale } from "@/i18n";
-import { BRAND_NAME } from "@/lib/config";
+import { BRAND_NAME, appUrl } from "@/lib/config";
+import { jsonLd, pageMetadata } from "@/lib/seo";
 import { SiteHeader } from "@/components/site/SiteHeader";
 import { SiteFooter } from "@/components/site/SiteFooter";
 import { Showcase } from "@/components/site/Showcase";
@@ -10,6 +12,12 @@ import { ServiceCards } from "@/components/site/ServiceCards";
 import { MoreLink, StartBand } from "@/components/site/SubPage";
 import { OssGallery } from "@/components/site/OssGallery";
 import { FaqList } from "@/components/site/FaqList";
+
+export async function generateMetadata({ params }: { params: Promise<{ locale: Locale }> }): Promise<Metadata> {
+  const { locale } = await params;
+  const t = getDictionary(locale);
+  return pageMetadata(locale, "", { title: `${BRAND_NAME} – ${t.meta.title}`, description: t.meta.description });
+}
 
 // Home page: every important topic in brief; details live on topic pages.
 export default async function Landing({ params }: { params: Promise<{ locale: Locale }> }) {
@@ -25,6 +33,18 @@ export default async function Landing({ params }: { params: Promise<{ locale: Lo
     <>
       <SiteHeader locale={locale} t={t} />
       <main>
+        <script
+          type="application/ld+json"
+          dangerouslySetInnerHTML={{
+            __html: jsonLd({
+              "@context": "https://schema.org",
+              "@graph": [
+                { "@type": "Organization", "@id": appUrl("/#org"), name: BRAND_NAME, url: appUrl("/"), logo: appUrl("/logo.svg"), areaServed: "CH" },
+                { "@type": "WebSite", name: BRAND_NAME, url: appUrl(`/${locale}`), inLanguage: locale, publisher: { "@id": appUrl("/#org") } },
+              ],
+            }),
+          }}
+        />
         <section className="hero">
           <div className="container">
             <div>
