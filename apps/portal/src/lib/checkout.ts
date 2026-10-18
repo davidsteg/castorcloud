@@ -17,7 +17,8 @@ export async function checkoutUrl(tenantId: string, user: User, locale: Locale, 
     where: { id: tenantId, status: "PENDING", members: { some: { userId: user.id, role: "OWNER" } } },
     include: { services: { where: { enabled: true } } },
   });
-  if (!tenant) return null;
+  // Already paid; the subscription webhook will move it on.
+  if (!tenant || tenant.stripeSubscriptionId) return null;
 
   const s = stripe();
   if (!s) {
@@ -45,6 +46,12 @@ export async function checkoutUrl(tenantId: string, user: User, locale: Locale, 
     });
     customerId = customer.id;
     await prisma.tenant.update({ where: { id: tenant.id }, data: { stripeCustomerId: customerId } });
+  }
+
+  // One open checkout per tenant, so it can't be paid for twice.
+  const open = await s.checkout.sessions.list({ customer: customerId, status: "open", limit: 100 });
+  for (const session of open.data) {
+    if (session.metadata?.tenantId === tenant.id) await s.checkout.sessions.expire(session.id);
   }
 
   const checkout = await s.checkout.sessions.create({
