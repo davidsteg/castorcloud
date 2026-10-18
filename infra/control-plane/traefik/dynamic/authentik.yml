@@ -1,0 +1,12 @@
+# Authentik: sign-in for the portal and the tenants' apps.
+http:
+  routers:
+    authentik:
+      rule: 'Host(`auth.{{ env "BASE_DOMAIN" }}`)'
+      entryPoints: [websecure]
+      service: authentik
+  services:
+    authentik:
+      loadBalancer:
+        servers:
+          - url: "http://authentik-server:9000"

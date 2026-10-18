@@ -356,10 +356,11 @@ pub async fn apply(c: &Control, cx: &JobCx, job: &Job) -> Result<(), String> {
     }
 
     // Remote nodes: the control plane forwards the tenant's hosts to the node's edge.
+    // Without an edge, Traefik reaches the skin proxy on pc-edge directly.
     let route = c.traefik_dir.join(format!("tenant-{}.yml", t.slug));
     match &node.edge {
         Some(e) => write_route(&route, &render::edge_route(&t.slug, &c.platform, &e.url))?,
-        None => crate::suspend::remove_file(&route)?,
+        None => write_route(&route, &render::skin_route(&t.slug, &c.platform))?,
     }
 
     for s in &enabled {
