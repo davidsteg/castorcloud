@@ -207,6 +207,8 @@ async fn an_unhealthy_box_gets_nothing() {
 #[tokio::test]
 async fn prunes_by_policy_forgets_deleted_tenants_and_verifies() {
     let Some(db) = db().await else { return };
+    // Its tenant is active, so a concurrent run_all would back it up too.
+    let _one = RUN_ALL.lock().await;
     let w = world(&db, "TRUENAS").await;
     let s = w.slug.clone();
     let gone = format!("gone{}", hex8());
