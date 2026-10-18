@@ -1,4 +1,4 @@
-//! castor-node: the node role (docs/gatekeeper.md). The one holder of the
+//! castor-node-role: the node role (docs/gatekeeper.md). The one holder of the
 //! castor gatekeeper instance's token. It serves castord's calls over the
 //! link (castord::link): each must be a tool of the catalog for this pool,
 //! with parameters that pass the catalog's checks, and goes on to
@@ -39,7 +39,7 @@ async fn run() -> Result<(), String> {
     let listener = tokio::net::TcpListener::bind(&listen)
         .await
         .map_err(|e| format!("{listen}: {e}"))?;
-    eprintln!("castor-node: pool {pool}, serving castord on {listen}, gatekeeper at {url}");
+    eprintln!("castor-node-role: pool {pool}, serving castord on {listen}, gatekeeper at {url}");
     let tools = Arc::new(castord::gatekeeper::catalog(&pool));
     tokio::select! {
         r = link::serve(listener, tls, tools, Arc::new(gatekeeper)) => r,
@@ -52,7 +52,7 @@ async fn main() -> ExitCode {
     match run().await {
         Ok(()) => ExitCode::SUCCESS,
         Err(e) => {
-            eprintln!("castor-node: {e}");
+            eprintln!("castor-node-role: {e}");
             ExitCode::FAILURE
         }
     }

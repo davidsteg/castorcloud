@@ -10,7 +10,7 @@ enqueues jobs and seals secrets in formats these crates read.
 | Crate | Replaces | State |
 |---|---|---|
 | `crates/crypto` | `packages/core/src/crypto.ts` | done; format-compatible, tested in both directions |
-| `crates/node` | `infra/node/bin/castor-ssh`, `castor-zfs`, `castor-snap` | done; same commands and output, the scripts stay until every node runs it |
+| `crates/node` | `infra/node/bin/castor-ssh`, `castor-zfs`, `castor-snap` | done; same commands and output, for Mac nodes (TrueNAS nodes go through gatekeeper, docs/gatekeeper.md) |
 | `crates/castord` | `apps/provisioner/src/worker.ts` | done; every job kind and task (same queue SQL as `jobs.ts`) |
 | `castor-monitor` (in `crates/castord`) | `apps/provisioner/src/monitor.ts` | done; same checks, rules, alert table and settings |
 | `castor-telegram` (in `crates/castord`) | `apps/provisioner/src/telegram.ts` | done; same pairing, texts and settings |
@@ -87,6 +87,8 @@ once with `npm run stacks:json -w @pc/portal`. Settings:
 
 Restores need `BACKUP_TARGET` (the backup box's user@host). The stream goes from one ssh to the other through
 castord, still encrypted with the tenant's key, which castord never sends.
+With `BACKUP_TARGET=truenas-replication` castord doesn't restore; see
+docs/gatekeeper.md.
 
 ## castor-monitor
 
@@ -138,20 +140,17 @@ its pool is ONLINE (a stacks node also needs Docker with userns-remap and
 gVisor, or `--no-gvisor`), then prepares it. Files with secrets
 (`db-get`, `db-open`) are written with mode 0600.
 
-## castor-node on a node
+## castor-node on a Mac node
 
 One binary replaces the three node scripts; it picks the tool by the name it
-is installed under. CI builds it for TrueNAS SCALE in the `Rust core` job
-on every push to main (artifact `castor-node-x86_64-unknown-linux-musl`,
-with a SHA-256 file, kept 30 days). Mac minis build it themselves with
-`cargo build --release -p castor-node`. To switch
+is installed under. Mac minis build it themselves with
+`cargo build --release -p castor-node`. (CI still builds a Linux artifact,
+`castor-node-x86_64-unknown-linux-musl`, from when TrueNAS nodes used it.) To switch
 a node:
 
-1. Download the artifact from the CI run of the commit you deploy (on a
-   Mac, build it from that commit), check it with `shasum -a 256 -c castor-node.sha256`.
+1. Build it from the commit you deploy.
 2. Put it at `infra/node/bin/castor-node` in the copy of `infra/node` on the node.
-3. Re-run the node's setup script (`truenas/setup.sh` or
-   `macos/bootstrap.sh`). It installs the binary as `castor-ssh`,
+3. Re-run the node's setup script (`macos/bootstrap.sh`). It installs the binary as `castor-ssh`,
    `castor-zfs` and `castor-snap`, so `authorized_keys` and sudoers stay
    as they are. Without the binary it installs the shell scripts, as before.
 

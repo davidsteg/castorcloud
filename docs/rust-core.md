@@ -23,7 +23,8 @@ static binary per platform with a short, audited dependency list
 | Was | Became | Why |
 |---|---|---|
 | `packages/core/src/crypto.ts` | Rust `crates/crypto` (done) | Holds the keys; byte-compatible format, tested in both directions |
-| `infra/node/bin/castor-ssh`, `castor-zfs`, `castor-snap` | One Rust binary `castor-node` (done, `crates/node`) | Runs as root behind the SSH forced command: parsed, typed arguments instead of shell `case` patterns, unit tests for every refusal |
+| `infra/node/bin/castor-ssh`, `castor-zfs`, `castor-snap` | One Rust binary `castor-node` (done, `crates/node`), now for Mac nodes only | Runs as root behind the SSH forced command: parsed, typed arguments instead of shell `case` patterns, unit tests for every refusal |
+| SSH to TrueNAS nodes | The node role `castor-node-role` and gatekeeper (done, `crates/castord/src/link.rs`, `gatekeeper/`) | No host credential on the control plane: one tool of a fixed catalog per call over pinned mutual TLS, re-checked on the node ([gatekeeper.md](gatekeeper.md)) |
 | BullMQ + Redis job queue (`packages/core/src/jobs.ts`) | Postgres queue (done): the `Job` table, claimed with `FOR UPDATE SKIP LOCKED`, leases, and a `Schedule` table for recurring tasks | Postgres is already the source of truth; Redis is gone (one service and one unauthenticated port less), and a Rust worker claims jobs with the same SQL. The portal enqueues by inserting a row |
 | `apps/provisioner` worker: lifecycle, tenant rendering, placement, storage, nodes, ZFS, volumes, backups, retention, DB dumps | Rust daemon `castord` (tokio, sqlx), ported job kind by job kind (done) | The privileged orchestration; each job kind moved when its Rust version passed the same tests |
 | Monitoring and alert rules, Authentik and LLM-gateway clients, Telegram bot | Part of `castord` (done: `castor-monitor`, `castor-telegram`) | Plain HTTP and rules; no reason to keep a second runtime once the worker is Rust |
@@ -37,7 +38,7 @@ static binary per platform with a short, audited dependency list
 | Portal (`apps/portal`) | Next.js + TypeScript | UI, i18n, React server components, Stripe and Auth.js SDKs; Rust has no equivalent ecosystem for this |
 | Database schema and migrations | Prisma (`packages/db`) | The portal reads through Prisma; one owner of migrations. Rust reads the same tables with `sqlx` (queries checked against the schema in CI) |
 | Shared pricing (`packages/pricing`) | TypeScript | The portal renders it live. The few numbers the worker needs (storage quota) are mirrored in Rust and pinned by shared test fixtures |
-| SSH and Docker transport | OpenSSH and the Docker / Compose CLIs | OpenSSH is the most reviewed SSH implementation there is (known_hosts, key handling); Compose has no Rust implementation. Called with argument vectors, never through a shell |
+| SSH and Docker transport to Mac nodes | OpenSSH and the Docker / Compose CLIs | OpenSSH is the most reviewed SSH implementation there is (known_hosts, key handling); Compose has no Rust implementation. Called with argument vectors, never through a shell |
 | Node setup (`infra/node/macos`, `infra/node/truenas`) | Shell | One-time setup that drives the OS's own tools; nothing runs on it at request time |
 
 ## Order

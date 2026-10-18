@@ -176,7 +176,7 @@ mod tests {
     #![allow(clippy::unwrap_used)]
     use super::*;
 
-    // What infra/node/truenas/setup.sh writes.
+    // A TrueNAS castor.conf, as the removed SSH setup wrote it.
     const TRUENAS: &str = "# Written by infra/node/truenas/setup.sh. Read by castor-ssh and castor-zfs.
 POOL=tank
 DATASET_ROOT=tank/castor/t

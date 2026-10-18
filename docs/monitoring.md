@@ -31,8 +31,9 @@ database it can't reach.
 | Platform | no provisioner worker has been seen for 2 minutes (heartbeat, or a running job's lease); Authentik doesn't answer; the monitor can't reach its database | critical |
 
 Node facts come from the provisioner's node watcher (every 5 min), which
-probes each node over SSH as the locked-down `castor` user. The monitor reads
-them from the database and needs no SSH access of its own. Backup status comes
+probes each node: a TrueNAS node through gatekeeper's read-only TrueNAS
+queries, a Mac over SSH as the locked-down `castor` user. The monitor reads
+them from the database and needs no node access of its own. Backup status comes
 from the backup runs (docs/backups.md). Service probes also update each
 service's `healthy` flag in the database.
 
