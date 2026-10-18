@@ -484,11 +484,15 @@ pub async fn delete_tenant(db: &PgPool, slug: &str) -> Result<String, String> {
 
 /// `backup status`: the box, every tenant's last backup, problems, dumps.
 pub async fn backup_status(c: &Control, db: &PgPool, s: &backup::Settings) -> Result<String, String> {
-    let pool = backup::pool(c, s).await?;
-    let mut out = format!(
-        "backup box {}: {}, {} of {} MB used\n\n",
-        s.target, pool.health, pool.used_mb, pool.size_mb
-    );
+    let mut out = if s.replication() {
+        "backups by the NAS's replication task (the box's state is on the NAS)\n\n".to_owned()
+    } else {
+        let pool = backup::pool(c, s).await?;
+        format!(
+            "backup box {}: {}, {} of {} MB used\n\n",
+            s.target, pool.health, pool.used_mb, pool.size_mb
+        )
+    };
     #[allow(clippy::type_complexity)]
     let rows: Vec<(
         String,
@@ -527,7 +531,7 @@ pub async fn backup_status(c: &Control, db: &PgPool, s: &backup::Settings) -> Re
     for (slug, issues) in problems {
         let _ = writeln!(out, "  {slug}: {}", issues.join("; "));
     }
-    if s.db_public_key.is_some() {
+    if s.db_public_key.is_some() && !s.replication() {
         let dumps = backup::db_list(c, s).await?;
         let _ = write!(
             out,

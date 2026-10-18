@@ -298,3 +298,72 @@ async fn database_dumps_are_sealed_to_the_offline_key() {
     assert_eq!(sql, "-- PostgreSQL database cluster dump\n");
     cleanup(&db, &w).await;
 }
+
+/// On TrueNAS the NAS sends the backups: castord snapshots through
+/// gatekeeper, runs the replication task, records it, and keeps only the
+/// newest snapshot on the NAS.
+#[tokio::test]
+async fn truenas_backups_go_by_the_replication_task() {
+    let Some(db) = db().await else { return };
+    let _one = RUN_ALL.lock().await;
+    let w = world(&db, "TRUENAS").await;
+    let s = w.slug.clone();
+    let ds = format!("tank/castor/t/{s}");
+    let snaps = leak(format!(
+        r#"[{{"name": "{ds}@cb-20261001T0000Z"}}, {{"name": "{ds}@auto-2026"}}]"#
+    ));
+    let fake = Fake::new(vec![
+        (
+            "gk truenas.replication_query",
+            Ok(r#"[{"id": 1, "state": {"state": "FINISHED", "datetime": {"$date": 99999999999999}}}]"#),
+        ),
+        ("gk truenas.snapshot_query", Ok(snaps)),
+    ]);
+    let c = control(fake.clone(), &w.traefik, None, "http://127.0.0.1:9");
+    let mut settings = settings();
+    settings.target = backup::REPLICATION.into();
+    backup::run_all(&c, &db, &settings).await.unwrap();
+    let calls: Vec<String> = fake
+        .calls()
+        .into_iter()
+        .filter(|c| c.contains(&ds) || c.contains("replication"))
+        .collect();
+    let snap = calls[0]
+        .split("\"snapshot\":\"")
+        .nth(1)
+        .and_then(|r| r.split('"').next())
+        .unwrap()
+        .to_owned();
+    assert!(snap.starts_with("cb-2") && snap.ends_with('Z'), "{snap}");
+    assert_eq!(
+        calls,
+        vec![
+            format!(r#"gk truenas.snapshot_create {{"dataset":"{ds}","snapshot":"{snap}"}}"#),
+            "gk truenas.replication_run {}".to_owned(),
+            "gk truenas.replication_query {}".to_owned(),
+            format!(r#"gk truenas.snapshot_query {{"dataset":"{ds}"}}"#),
+            format!(r#"gk truenas.snapshot_delete {{"snapshot":"{ds}@cb-20261001T0000Z"}}"#),
+        ]
+    );
+    assert_eq!(backup_row(&db, &w.tenant).await, vec![format!("1 {snap} - t 0 -")]);
+
+    // A failed run is recorded, and its snapshot dropped.
+    let fake = Fake::new(vec![(
+        "gk truenas.replication_query",
+        Ok(
+            r#"[{"id": 1, "state": {"state": "ERROR", "datetime": {"$date": 99999999999999}, "error": "box unreachable"}}]"#,
+        ),
+    )]);
+    let c = control(fake.clone(), &w.traefik, None, "http://127.0.0.1:9");
+    backup::run_all(&c, &db, &settings).await.unwrap();
+    assert!(
+        fake.calls()
+            .iter()
+            .any(|c| c.starts_with(&format!(r#"gk truenas.snapshot_delete {{"snapshot":"{ds}@cb-"#))),
+        "{:?}",
+        fake.calls()
+    );
+    let row = backup_row(&db, &w.tenant).await;
+    assert!(row[0].ends_with("1 replication failed: box unreachable"), "{row:?}");
+    cleanup(&db, &w).await;
+}

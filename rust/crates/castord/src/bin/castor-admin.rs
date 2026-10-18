@@ -13,7 +13,7 @@
 //!   castor-admin staff list | add <email> | remove <email>
 //!   castor-admin delete-tenant <slug>
 //!   castor-admin e2e [--delete]
-//!   castor-admin gatekeeper tools <pool>   the castor gatekeeper instance's tools.yaml
+//!   castor-admin gatekeeper tools <pool> [<replication-task-id>]   gatekeeper-castor's tools.yaml
 use std::io::Write;
 use std::os::unix::fs::OpenOptionsExt;
 use std::process::ExitCode;
@@ -130,8 +130,14 @@ async fn run(args: Vec<String>) -> Result<String, String> {
     match a.arg(0) {
         // Needs neither the database nor the settings: the catalog is in the binary.
         Some("gatekeeper") => match (a.arg(1), a.arg(2)) {
-            (Some("tools"), Some(pool)) if castord::valid::pool(pool) => castord::gatekeeper::tools_yaml(pool),
-            _ => Err("usage: castor-admin gatekeeper tools <pool>".into()),
+            (Some("tools"), Some(pool)) if castord::valid::pool(pool) => {
+                let task = match a.arg(3) {
+                    Some(t) => Some(t.parse().map_err(|_| "the replication task is its number")?),
+                    None => None,
+                };
+                castord::gatekeeper::tools_yaml(pool, task)
+            }
+            _ => Err("usage: castor-admin gatekeeper tools <pool> [<replication-task-id>]".into()),
         },
         Some("node") => {
             let db = config::connect(4).await?;

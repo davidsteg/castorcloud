@@ -73,6 +73,29 @@ pub enum Check {
     Bytes,
     /// A dataset passphrase: 64 hex characters (HKDF of the volume key).
     Passphrase,
+    /// A backup snapshot's name: cb-<UTC time> (retention::snapshot_name).
+    SnapName,
+    /// A backup snapshot of a tenant's dataset: <root>/<slug>@cb-<UTC time>.
+    Snapshot {
+        root: String,
+    },
+}
+
+/// Stands for the replication task's id in a tool's params until
+/// tools_yaml writes the operator's (it lives in gatekeeper's tools.yaml only).
+pub const REPLICATION_TASK: &str = "<replication task>";
+
+const SNAP_RE: &str = "^cb-[0-9]{8}T[0-9]{4}Z$";
+
+/// cb-20260928T0605Z.
+fn snap_name(s: &str) -> bool {
+    let b = s.as_bytes();
+    b.len() == 17
+        && s.starts_with("cb-")
+        && b[3..11].iter().all(u8::is_ascii_digit)
+        && b[11] == b'T'
+        && b[12..16].iter().all(u8::is_ascii_digit)
+        && b[16] == b'Z'
 }
 
 /// The largest quota a tool accepts: 1 PB.
@@ -175,6 +198,15 @@ impl Check {
                 }
             }
             Check::Bytes => false,
+            Check::SnapName => snap_name(v),
+            Check::Snapshot { root } => v.split_once('@').is_some_and(|(ds, snap)| {
+                snap_name(snap)
+                    && Check::Dataset {
+                        root: root.clone(),
+                        child: false,
+                    }
+                    .ok(ds)
+            }),
             Check::Passphrase => v.len() == 64 && v.bytes().all(|b| b.is_ascii_digit() || (b'a'..=b'f').contains(&b)),
         }
     }
@@ -232,6 +264,12 @@ impl Check {
                 ("maximum", Value::from(MAX_BYTES)),
             ],
             Check::Passphrase => pattern("^[0-9a-f]{64}$".into()),
+            Check::SnapName => pattern(SNAP_RE.into()),
+            Check::Snapshot { root } => pattern(format!(
+                "^{}/[a-z0-9](?:[a-z0-9]|-(?!-)){{1,28}}[a-z0-9]@{}$",
+                regex_escape(root),
+                &SNAP_RE[1..SNAP_RE.len() - 1]
+            )),
         }
     }
 }
@@ -861,6 +899,58 @@ pub fn catalog(pool: &str) -> Vec<Tool> {
             serde_json::json!({"id": "{dataset}", "options": {"recursive": true, "force": true}}),
             vec![dataset(false, "<pool>/castor/t/<slug>.")],
         ),
+        truenas(
+            "truenas.snapshot_create",
+            "Snapshot a tenant for backup",
+            "A recursive snapshot cb-<UTC time> of the tenant's dataset, for the replication task to send.",
+            true,
+            "zfs.snapshot.create",
+            serde_json::json!({"data": {"dataset": "{dataset}", "name": "{snapshot}", "recursive": true}}),
+            vec![
+                dataset(false, "<pool>/castor/t/<slug>."),
+                param("snapshot", Check::SnapName, "cb-<UTC time>."),
+            ],
+        ),
+        truenas(
+            "truenas.snapshot_query",
+            "A tenant's backup snapshots",
+            "The snapshots of the tenant's dataset.",
+            false,
+            "zfs.snapshot.query",
+            serde_json::json!({"filters": [["dataset", "=", "{dataset}"]]}),
+            vec![dataset(false, "<pool>/castor/t/<slug>.")],
+        ),
+        truenas(
+            "truenas.snapshot_delete",
+            "Drop a backup snapshot",
+            "Only cb-* snapshots of tenant datasets; what the backup box keeps is its replication task's retention.",
+            true,
+            "zfs.snapshot.delete",
+            serde_json::json!({"id": "{snapshot}", "options": {"recursive": true}}),
+            vec![param(
+                "snapshot",
+                Check::Snapshot { root: datasets.clone() },
+                "<pool>/castor/t/<slug>@cb-<UTC time>.",
+            )],
+        ),
+        truenas(
+            "truenas.replication_run",
+            "Send the backups",
+            "Runs the replication task to the backup box that the operator set up (raw, encrypted).",
+            true,
+            "replication.run",
+            serde_json::json!({"id": REPLICATION_TASK}),
+            vec![],
+        ),
+        truenas(
+            "truenas.replication_query",
+            "How the backups went",
+            "The replication task's state: running, finished or failed, and when.",
+            false,
+            "replication.query",
+            serde_json::json!({"filters": [["id", "=", REPLICATION_TASK]]}),
+            vec![],
+        ),
     ]);
     let content = |description| Param {
         name: "content",
@@ -1170,7 +1260,9 @@ fn substitute(template: &str, values: &Map<String, Value>) -> Option<String> {
 
 /// gatekeeper's tools.yaml for the castor instance on this pool. Every
 /// scalar is a JSON string, which YAML reads as a double-quoted string.
-pub fn tools_yaml(pool: &str) -> Result<String, String> {
+/// `replication_task`: the id of the replication task to the backup box;
+/// without it the backup tools are left out.
+pub fn tools_yaml(pool: &str, replication_task: Option<u64>) -> Result<String, String> {
     if !valid::pool(pool) {
         return Err(format!("invalid pool name: {pool}"));
     }
@@ -1181,6 +1273,15 @@ pub fn tools_yaml(pool: &str) -> Result<String, String> {
         "tools:".to_owned(),
     ];
     for t in catalog(pool) {
+        let mut t = t;
+        if let Run::Truenas { params, .. } = &mut t.run {
+            let text = params.to_string();
+            if text.contains(REPLICATION_TASK) {
+                let Some(task) = replication_task else { continue };
+                *params = serde_json::from_str(&text.replace(&format!("\"{REPLICATION_TASK}\""), &task.to_string()))
+                    .map_err(|e| e.to_string())?;
+            }
+        }
         out.push(format!("  - id: {}", q(t.id)));
         out.push(format!("    toolkit: {}", q(t.toolkit())));
         out.push("    version: 1".into());
@@ -1267,9 +1368,9 @@ mod tests {
 
     #[test]
     fn the_example_tools_yaml_is_current() {
-        // Regenerate: castor-admin gatekeeper tools tank > infra/gatekeeper/tools.tank.yaml
+        // Regenerate: castor-admin gatekeeper tools tank 1 > infra/gatekeeper/tools.tank.yaml
         assert_eq!(
-            tools_yaml("tank").unwrap(),
+            tools_yaml("tank", Some(1)).unwrap(),
             include_str!("../../../../../infra/gatekeeper/tools.tank.yaml")
         );
     }
@@ -1390,9 +1491,11 @@ mod tests {
 
     #[test]
     fn yaml_is_valid_json_scalars() {
-        let y = tools_yaml("tank").unwrap();
+        let y = tools_yaml("tank", None).unwrap();
+        assert!(!y.contains("replication_run"));
+        assert!(tools_yaml("tank", Some(4)).unwrap().contains("      id: 4"));
         assert!(y.contains(r#"  - id: "docker.tenant_up""#));
         assert!(y.contains(r#"        secret: true"#));
-        assert!(tools_yaml("tank/x").is_err());
+        assert!(tools_yaml("tank/x", None).is_err());
     }
 }
