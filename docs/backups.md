@@ -6,8 +6,15 @@ encrypted, to a separate **backup box**: a second machine with its own ZFS pool
 (a second TrueNAS, later off-site in Switzerland). The box never holds a
 tenant key, so it can't read what it stores.
 
+**On a TrueNAS node** castord doesn't move the stream itself: with
+`BACKUP_TARGET=truenas-replication` it snapshots through gatekeeper and runs a
+TrueNAS replication task that sends the raw, still encrypted snapshots to the
+box. The box's retention is the task's. Setup and limits:
+[gatekeeper.md](gatekeeper.md#backups). The rest of this page describes the SSH
+path that Mac nodes use.
+
 ```
- node (TrueNAS / Mac mini)          control plane (provisioner)          backup box
+ node (Mac mini)                    control plane (provisioner)          backup box
  ─────────────────────────          ───────────────────────────          ──────────
  castor-snap snapshot    ◄── ssh ──  every 6 h, per active tenant
  castor-snap send  ───── raw stream (zfs send -w, ciphertext) ──────►  castor-backup recv
@@ -130,8 +137,8 @@ deletion is gone: 30 days after deletion at most.
 ## Setup
 
 1. The backup box: [infra/backup/README.md](../infra/backup/README.md).
-2. Nodes: `castor-snap` next to `castor-zfs`, allowed by the node's SSH gate
-   (`infra/node/bin/castor-snap`; the TrueNAS setup and macOS bootstrap install it). It reads the pool and dataset root from
+2. Mac nodes: `castor-snap` next to `castor-zfs`, allowed by the node's SSH gate
+   (`infra/node/bin/castor-snap`; the macOS bootstrap installs it). It reads the pool and dataset root from
    the node's `castor.conf`, like `castor-zfs`.
 3. `.env` on the control plane: `BACKUP_TARGET=castor-backup@<box>`,
    `BACKUP_DB_PUBLIC_KEY=…`, optionally `BACKUP_INTERVAL_HOURS` (default 6)

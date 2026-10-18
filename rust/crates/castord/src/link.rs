@@ -391,13 +391,13 @@ pub async fn serve(
     loop {
         let (tcp, peer) = listener.accept().await.map_err(|e| format!("accept: {e}"))?;
         let Ok(slot) = slots.clone().try_acquire_owned() else {
-            eprintln!("castor-node: {peer}: busy, refused");
+            eprintln!("castor-node-role: {peer}: busy, refused");
             continue;
         };
         let (tls, tools, upstream) = (tls.clone(), tools.clone(), upstream.clone());
         tokio::spawn(async move {
             if let Err(e) = handle(tcp, tls, &tools, upstream.as_ref()).await {
-                eprintln!("castor-node: {peer}: {e}");
+                eprintln!("castor-node-role: {peer}: {e}");
             }
             drop(slot);
         });
@@ -414,18 +414,18 @@ async fn handle(tcp: TcpStream, tls: TlsAcceptor, tools: &[Tool], upstream: &dyn
     .map_err(|_| "request timed out".to_owned())??;
     let answer = match checked_call(tools, &request) {
         Err(e) => {
-            eprintln!("castor-node: refused: {e}");
+            eprintln!("castor-node-role: refused: {e}");
             Answer::Err(e)
         }
         Ok(call) => {
             let name = call.name.clone();
             match upstream.call(call).await {
                 Ok(out) => {
-                    eprintln!("castor-node: {name}: ok");
+                    eprintln!("castor-node-role: {name}: ok");
                     Answer::Ok(out)
                 }
                 Err(e) => {
-                    eprintln!("castor-node: {name}: failed");
+                    eprintln!("castor-node-role: {name}: failed");
                     Answer::Err(e)
                 }
             }

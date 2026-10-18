@@ -26,7 +26,7 @@ Decisions taken (from Q&A):
  customer ──HTTPS──►│ Traefik ─► Portal (Next.js)   Authentik (IdP)          │
                     │            castord (Rust)       Postgres (+ job queue) │
                     └───────────────┬──────────────────────────────────────────┘
-                                    │ SSH / Docker API (provision, update, backup)
+                                    │ mTLS to the node role ─► gatekeeper (fixed tools)
                     ┌───────────────▼──── DATA-PLANE NODE(s) ─────────────────┐
                     │ Traefik (wildcard TLS, DNS-01) + "skin" middleware       │
                     │ shared stateless: immich-machine-learning, tika, gotenberg│
@@ -37,7 +37,7 @@ Decisions taken (from Q&A):
                     └──────────────────────────────────────────────────────────┘
 ```
 
-**Data-plane nodes are TrueNAS SCALE systems (proof of concept) and, later, Mac minis** (see `infra/node/truenas/README.md` and `infra/node/macos/README.md`): each one is an independent Docker host driven over SSH (TrueNAS: the system engine; Mac: Colima), with tenant data on per-tenant encrypted ZFS datasets whose size is the storage quota. Both use the same SSH gate and dataset helper (`infra/node/bin`); only the paths differ. There is no cluster: a tenant is placed on one node at provisioning (`rust/crates/castord/src/placement.rs`) and its data stays there. `*.domain` points at the control plane, whose Traefik terminates TLS and forwards each tenant's service hosts to that tenant's node (a generated `tenant-<slug>.yml` route), so DNS never changes per tenant. Each node runs a small edge Traefik for its stacks; the portal and Authentik stay on the control plane. The local Docker host (LUKS volumes via `pc-cryptd`) remains for development (`LOCAL_NODE=off` disables it).
+**Data-plane nodes are TrueNAS SCALE systems (proof of concept) and, later, Mac minis** (see `infra/node/truenas/README.md` and `infra/node/macos/README.md`): each one is an independent Docker host with tenant data on per-tenant encrypted ZFS datasets whose size is the storage quota. A TrueNAS node is reached only through gatekeeper (`docs/gatekeeper.md`): castord holds no host credential and asks the node role (`castor node`) over mutual TLS for one tool of a fixed catalog at a time; storage goes through the TrueNAS dataset API and backups through TrueNAS replication. Mac nodes are still driven over the SSH gate (`infra/node/bin`). There is no cluster: a tenant is placed on one node at provisioning (`rust/crates/castord/src/placement.rs`) and its data stays there. `*.domain` points at the control plane, whose Traefik terminates TLS and forwards each tenant's service hosts to that tenant's node (a generated `tenant-<slug>.yml` route), so DNS never changes per tenant. Each node runs a small edge Traefik for its stacks; the portal and Authentik stay on the control plane. The local Docker host (LUKS volumes via `pc-cryptd`) remains for development (`LOCAL_NODE=off` disables it).
 
 ### Domains (critical for seamless iframes + mobile apps)
 All under one registrable domain (e.g. `brand.cloud`) so embeds are **same-site** (no third-party-cookie problems):
@@ -67,7 +67,7 @@ All under one registrable domain (e.g. `brand.cloud`) so embeds are **same-site*
 1. Allocate slug + pick node (least-loaded), create DNS records.
 2. Authentik: group, user, 4 OIDC apps → client IDs/secrets.
 3. Render compose template + `.env` (secrets generated, stored encrypted in control-plane DB).
-4. Push to node over SSH, `docker compose up -d`, wait for health checks.
+4. Write the files and run `docker compose up -d` on the node through gatekeeper's fixed tools, wait for health checks.
 5. Post-setup via APIs: admin/service accounts, Immich OAuth + custom CSS config, API tokens for dashboard/agent (stored encrypted).
 6. Tenant `status=active` → email + portal redirect.
 Also: `suspend`, `resume`, `update` (rolling image bump), `export`, `delete` (GDPR) jobs. Idempotent steps, state machine per tenant.
@@ -88,7 +88,7 @@ Also: `suspend`, `resume`, `update` (rolling image bump), `export`, `delete` (GD
 ## Repository layout (npm workspaces + Turborepo monorepo)
 ```
 apps/portal/            Next.js (App Router): marketing, signup, tenant shell, admin console
-rust/                   castord worker (jobs queued in Postgres): tenant jobs, Authentik/SSH clients; castor-admin, castor-monitor, castor-telegram; castor-node
+rust/                   castord worker (jobs queued in Postgres): tenant jobs, Authentik client, node role (`castor node`) for gatekeeper; castor-admin, castor-monitor, castor-telegram
 packages/db/            Prisma schema and migrations of the control plane
 packages/brand/         theme tokens, theme.css, services/*.css, bridge.js
 packages/stack-templates/ compose + env templates per service, pinned versions

@@ -142,6 +142,7 @@ the control-plane database dump.
 
 - The custom-stacks edge (`docker cp` of routes) has no tool: a TrueNAS node
   takes no custom stacks.
-- Pulling from GHCR with a token needs gatekeeper's stdin support; until
-  then a TrueNAS node can't use `CASTOR_IMAGE_TAG` with a pull token.
+- Pulling from GHCR with a token: gatekeeper's stdin is fixed text, so a
+  token can't be passed per call, and a TrueNAS node can't use
+  `CASTOR_IMAGE_TAG` with a pull token.
 - The image keeps `docker-cli` and `openssh-client` while Mac nodes use them.

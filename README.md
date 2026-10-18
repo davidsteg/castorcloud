@@ -61,7 +61,7 @@ flowchart LR
     end
 
     subgraph NODE["Data-plane node"]
-        gate["castor-node<br/>SSH gate"]
+        gate["castor node role<br/>+ gatekeeper"]
         edge["Edge Traefik<br/>+ skin proxy"]
         subgraph STACK["Encrypted tenant stack"]
             apps["Immich, Paperless-ngx,<br/>Dawarich, AirTrail"]
@@ -84,12 +84,12 @@ flowchart LR
     castord -->|API| authentik
     traefik -->|tenant routes| edge
     traefik -->|forward auth| stacksnode
-    castord -->|SSH| gate
+    castord -->|mTLS, fixed tools| gate
     castord -->|SSH| stacksnode
     edge --> apps
     edge --> hermes
     hermes --> llm --> ai
-    gate -->|raw zfs send| backup
+    gate -->|TrueNAS replication| backup
 ```
 
 **How it fits together**
@@ -104,7 +104,9 @@ flowchart LR
   worker `castord` executes them (provision, update, suspend, resume, restore,
   revoke access, delete) and runs recurring tasks (backups, usage, retention).
 - **No cluster.** A tenant is placed on one node at provisioning and its data
-  stays there. Nodes are plain Docker hosts driven over a restricted SSH gate.
+  stays there. A TrueNAS node is reached only through gatekeeper: castord asks
+  the node role for one tool of a fixed catalog at a time, and only the node
+  role holds the gatekeeper token (`docs/gatekeeper.md`).
 - **Untrusted code elsewhere.** Customers' own apps run on separate stacks nodes
   with user-namespace remapping, gVisor and an egress allowlist, never next to
   tenant data.
@@ -182,7 +184,7 @@ Security is the first priority; details and honest limits are in
 | `packages/stacks` | Parser, validator and renderer for custom stacks |
 | `packages/brand` | Brand tokens, skin CSS injected into services, iframe bridge |
 | `packages/stack-templates` | Per-tenant compose (one profile per service), skin proxy, pinned versions |
-| `rust` | `castord` worker, `castor-admin`, `castor-monitor`, `castor-telegram` CLIs, `castor-node` gate on the nodes ([rust/README.md](rust/README.md)) |
+| `rust` | `castord` worker, `castor-admin`, `castor-monitor`, `castor-telegram` CLIs, the `castor-node-role` for gatekeeper nodes, the `castor-node` SSH gate on Mac nodes ([rust/README.md](rust/README.md)) |
 | `agent/tools` | Read-only MCP tools of the tenant assistant (Rust, image `pc-assistant-tools`) |
 | `infra/control-plane` | Traefik, Postgres, Authentik (+ blueprints) |
 | `infra/node` | Shared node services, LLM gateway, egress proxy, `cryptd` volume helper, TrueNAS and macOS setup |

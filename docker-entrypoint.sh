@@ -4,7 +4,7 @@ set -eu
 cmd=${1:-portal}
 [ $# -gt 0 ] && shift
 # Each role holds only its own secrets (docs/gatekeeper.md). The gatekeeper
-# token belongs to the node role; castor-node itself refuses the control
+# token belongs to the node role; castor-node-role itself refuses the control
 # plane's secrets.
 case "$cmd" in
   node|healthcheck) ;;
@@ -20,7 +20,7 @@ case "$cmd" in
   monitor)  exec castor-monitor "$@" ;;
   telegram) exec castor-telegram "$@" ;;
   admin)    exec castor-admin "$@" ;;
-  node)     exec castor-node "$@" ;;
+  node)     exec castor-node-role "$@" ;;
   migrate)  cd /app/packages/db && exec node /app/node_modules/prisma/build/index.js migrate deploy "$@" ;;
   # Only the portal listens; the other services count as healthy while running.
   healthcheck)
