@@ -1,3 +1,4 @@
+import type { Metadata } from "next";
 import Link from "next/link";
 import { redirect } from "next/navigation";
 import { prisma } from "@pc/db";
@@ -15,6 +16,9 @@ import { signOutAllDevices, signOutBrowser } from "@/lib/signout";
 import { itemKeyFromLookup, stripe } from "@/lib/stripe";
 import { SiteHeader } from "@/components/site/SiteHeader";
 import { StorageMeter } from "@/components/StorageMeter";
+import { PRIVATE_PAGE } from "@/lib/seo";
+
+export const metadata: Metadata = PRIVATE_PAGE;
 
 export default async function AccountPage({
   params,

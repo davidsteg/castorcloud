@@ -41,7 +41,10 @@ signup form ──► Tenant APPLIED ──approve──► PENDING ──Stripe
 ### Staff
 
 The admin console is only for users with `User.isStaff`; everyone else gets a
-404, and every action checks again. Grant it from the control plane (the
+404, and every action checks again. Its statistics panel shows totals only
+(clouds by status, estimated MRR, users, storage, backups, jobs, alerts,
+nodes): no tenant or person is named there, and no tenant content is read.
+Grant it from the control plane (the
 person must have signed in to the portal once):
 
 ```sh

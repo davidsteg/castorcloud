@@ -12,7 +12,10 @@ export function middleware(request: NextRequest) {
 
   if (slug) {
     url.pathname = `/tenant/${slug}${url.pathname === "/" ? "" : url.pathname}`;
-    return NextResponse.rewrite(url, { request: { headers: withLocale(request, DEFAULT_LOCALE) } });
+    const response = NextResponse.rewrite(url, { request: { headers: withLocale(request, DEFAULT_LOCALE) } });
+    // A customer's cloud is private: keep it out of search engines.
+    response.headers.set("X-Robots-Tag", "noindex, nofollow");
+    return response;
   }
 
   const first = url.pathname.split("/")[1];

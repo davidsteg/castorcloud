@@ -47,8 +47,9 @@ of them should carry the control plane.
 
 Pull requests build and scan (amd64). Pushes to `main` publish the images
 tagged with the full commit SHA and `main`, with an SBOM and build
-provenance attached: the node images for amd64 (TrueNAS) and arm64 (Mac
-minis), `castorcloud` for amd64. Deploy by digest or SHA tag, never `main`.
+provenance attached, all for amd64. A published release also builds the
+node images for arm64 (Mac minis); main doesn't, because arm64 builds run
+under emulation and take up to half an hour each. Deploy by digest or SHA tag, never `main`.
 Runtime images run as a non-root user; the castor image carries no npm,
 and the Rust node images are a static binary on an empty image.
 
@@ -80,6 +81,32 @@ with access to the repo can pull. Check once after the first publish:
 GitHub > Your profile > Packages > each `castorcloud*` package > Package
 settings: visibility **Private**, and under "Manage Actions access" only
 `davidsteg/castorcloud`, with the Write role.
+
+### Docker Hub
+
+Publishing a GitHub release builds, scans and publishes the images of its
+tag like a push to `main` (on GHCR tagged with the commit SHA and the release
+tag), and also pushes all four to one Docker Hub repository,
+`docker.io/davidsteg/castorcloud`, told apart by tag: the image's name plus
+the release tag (`castor-v1.2.0`, `assistant-tools-v1.2.0`, `egress-v1.2.0`,
+`cryptd-v1.2.0`), plus `<name>-<commit SHA>` and, unless the release is a
+pre-release, `<name>-latest`. Pushes to `main` don't go to Docker Hub. They stay separate
+images, so cryptd and assistant-tools carry no control plane. Each one is
+the same manifest and digest as on GHCR, signed with the same cosign key.
+
+For a release, the publish job pushes to Docker Hub only when all of this
+holds, and otherwise leaves a notice and pushes to GHCR alone:
+
+- the repository secrets `DOCKERHUB_USERNAME` and `DOCKERHUB_TOKEN` are set
+  (a Docker Hub personal access token with Read & Write, nothing more);
+- `COSIGN_PRIVATE_KEY` is set, so nothing unsigned reaches Docker Hub;
+- the repository exists and is **private**. The job asks the Docker Hub
+  API first and fails if it is public or missing, because a `docker push`
+  to a missing repository creates it with the account's default
+  visibility.
+
+Create the repository on Docker Hub as private before setting the secrets.
+Nodes still pull from GHCR (below); Docker Hub is a copy.
 
 ### How nodes get the images
 
