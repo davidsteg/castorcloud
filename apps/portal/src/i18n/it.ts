@@ -509,9 +509,9 @@ const it: Dictionary = {
   },
   beta: {
     tag: "Beta",
-    banner: "Per ora Castor Cloud gira sui nostri server in Svizzera e passerà a un’infrastruttura più grande quando saremo di più.",
+    banner: "Versione beta: per ora Castor Cloud funziona sui nostri server in Svizzera e passerà a un’infrastruttura più grande con la crescita del servizio.",
     more: "Come funziona la beta",
-    title: "L’homelab simpatico del tuo quartiere",
+    title: "Castor Cloud in versione beta",
     lead: "Durante la beta Castor Cloud gira nel nostro homelab: sui nostri server in Svizzera, non in un centro dati. Lo diciamo apertamente, perché devi sapere dove si trovano i tuoi dati. Quando si aggiungeranno altre persone, passeremo a un’infrastruttura più grande.",
     points: [
       { title: "Dove gira il tuo cloud", text: "Sui nostri server, in un homelab in Svizzera, con spazio cifrato per ogni cliente e backup cifrati su una macchina separata. È un impianto curato, ma non è un centro dati: una sola sede, senza alimentazione né linee Internet ridondanti." },
