@@ -370,6 +370,9 @@ p { margin: 0; }
 .beta-tag { display: inline-block; font-size: 11px; font-weight: 700; letter-spacing: 0.06em; text-transform: uppercase; padding: 2px 8px; border-radius: 999px; background: var(--pc-surface-2); color: var(--pc-muted); vertical-align: middle; }
 .admin-table { width: 100%; border-collapse: collapse; font-size: 14px; }
 .admin-table th, .admin-table td { text-align: left; padding: 10px 8px; border-bottom: 1px solid var(--pc-border); vertical-align: top; }
+.admin-stats { display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: 12px; }
+.admin-stat { display: flex; flex-direction: column; gap: 4px; padding: 12px; border: 1px solid var(--pc-border); border-radius: 8px; }
+.admin-stat strong { font-size: 22px; }
 
 /* -------------------------------------------------------- flow pages */
 .flow { max-width: 620px; margin: 0 auto; padding: 64px 24px; }
