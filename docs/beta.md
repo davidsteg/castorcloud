@@ -37,6 +37,17 @@ signup form ──► Tenant APPLIED ──approve──► PENDING ──Stripe
 - The Stripe webhook only provisions tenants that were `PENDING`, and a
   checkout session is only created for a `PENDING` tenant by its owner, so an
   application can't be paid for or provisioned before approval.
+- A tenant has one open checkout at a time (older ones are expired) and none
+  once it has a subscription. Provisioning starts only when the checkout is
+  paid; delayed payment methods wait for
+  `checkout.session.async_payment_succeeded`. Should a second checkout still
+  be paid, the webhook keeps the first subscription, cancels the second and
+  audits `billing.duplicate_subscription` so it can be refunded by hand.
+- Webhook events to enable in Stripe: `checkout.session.completed`,
+  `checkout.session.async_payment_succeeded`,
+  `customer.subscription.updated`, `customer.subscription.deleted`.
+- Only the owner can open the Stripe customer portal (invoices, payment
+  method, cancellation).
 
 ### Staff
 

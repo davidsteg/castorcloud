@@ -11,7 +11,7 @@ import { withdrawApplication } from "@/lib/applications";
 import { checkoutUrl } from "@/lib/checkout";
 import { accountUrl, startGitHubConnect } from "@/lib/github";
 import { subscribe, unsubscribe } from "@/lib/newsletter";
-import { currentUser, memberTenant, ownedTenant } from "@/lib/session";
+import { currentUser, ownedTenant } from "@/lib/session";
 import { signOutAllDevices, signOutBrowser } from "@/lib/signout";
 import { itemKeyFromLookup, stripe } from "@/lib/stripe";
 import { SiteHeader } from "@/components/site/SiteHeader";
@@ -125,9 +125,11 @@ export default async function AccountPage({
     redirect(accountUrl(locale, "disconnected"));
   }
 
+  // Owner only: the portal shows the owner's invoices and payment method
+  // and can cancel the subscription.
   async function billing(form: FormData) {
     "use server";
-    const tenant = await memberTenant(String(form.get("tenantId")));
+    const tenant = await ownedTenant(String(form.get("tenantId")));
     const s = stripe();
     if (!tenant?.stripeCustomerId || !s) return;
     const portal = await s.billingPortal.sessions.create({
@@ -192,7 +194,7 @@ export default async function AccountPage({
                 {tenant.status === "PROVISIONING" && (
                   <Link className="button small" href={`/${locale}/welcome/${tenant.id}`}>{t.welcome.title}</Link>
                 )}
-                {tenant.stripeCustomerId && (
+                {tenant.stripeCustomerId && tenant.members[0]?.role === "OWNER" && (
                   <form action={billing}>
                     <input type="hidden" name="tenantId" value={tenant.id} />
                     <button className="button secondary small" type="submit">{t.account.billing}</button>
