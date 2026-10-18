@@ -20,3 +20,6 @@ infra/control-plane/traefik/dynamic/stacks-*.yml
 rust/target/
 # Node helpers built from rust/crates/node (CI artifact or cargo build)
 infra/node/bin/castor-node
+
+# TypeScript incremental build cache
+*.tsbuildinfo

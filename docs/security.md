@@ -8,7 +8,7 @@ public security page (`/[locale]/security`) must never promise more than this.
 
 | Threat | Protected? | How |
 |---|---|---|
-| Stolen / decommissioned disks, hosting-provider staff with disk access | Yes | Per-tenant LUKS2 volume (AES-XTS-512); key never on the node's disk |
+| Stolen / decommissioned disks, hosting-provider staff with disk access | Yes | Per-tenant encrypted ZFS dataset (AES-256-GCM) on the nodes, LUKS2 volume on the local dev node; key never on the node's disk |
 | Backup box (or whoever steals it) reads backups | Yes | Raw ZFS sends: backups stay encrypted with the tenant's own key, which never reaches the box. See [backups.md](backups.md) |
 | Someone with the provisioner's key wipes the backups | Partially | The box itself refuses to delete anything younger than 7 days or a tenant's newest backup |
 | Another customer reads my data | Yes | Separate stack, private networks, separate DBs, separate OIDC apps restricted to the tenant group |
@@ -25,24 +25,31 @@ We therefore never claim "zero knowledge" or "we cannot read your data".
 
 ## Encryption at rest
 
-- **Volume per tenant**: `/srv/pc/volumes/<slug>.luks`, mounted at
-  `/srv/pc/tenants/<slug>`. All containers' data (databases, photos,
-  documents) live on it via `compose.volumes.yml`. The file is sized to the
-  booked storage, so it doubles as the storage quota.
+- **Storage per tenant**: on data-plane nodes (TrueNAS SCALE, Mac mini) an
+  encrypted ZFS dataset `<dataset root>/<slug>` (`encryption=aes-256-gcm`, its own
+  key), mounted under the node's tenant root. All containers' data
+  (databases, photos, documents) live on it. Its ZFS quota is the booked
+  storage, so it doubles as the storage quota. The local development node
+  (`LOCAL_NODE=on`) uses a LUKS2 file `/srv/pc/volumes/<slug>.luks` through
+  `pc-cryptd` instead.
 - **Keys**: 512 random bits per tenant (`VolumeKey`), stored only wrapped
-  (AES-256-GCM, tenant id as AAD) with `VOLUME_KEK`. The provisioner unwraps
-  in memory and passes the key to `pc-cryptd` on **stdin**; the helper keeps it
-  in `/dev/shm` of a short-lived container and deletes it. PBKDF2 is used
-  because the key is full-entropy (no password stretching needed) – this keeps
-  unlock cheap.
-- **Cost**: AES-NI makes dm-crypt overhead small (low single-digit % CPU for
+  (AES-256-GCM, tenant id as AAD) with `VOLUME_KEK`. castord unwraps it in
+  memory only for the call that needs it. ZFS gets a 256-bit key derived
+  from it with HKDF-SHA256 (`castor_crypto::dataset_key`), handed to the
+  node's dataset helper on **stdin** and passed to `zfs` through a pipe; the
+  local node's `pc-cryptd` gets the raw key the same way and keeps it in
+  `/dev/shm` of a short-lived container. Both wipe it afterwards; it never
+  touches the node's disk.
+- **Cost**: AES-NI keeps the overhead small (low single-digit % CPU for
   typical I/O). No per-file encryption, no impact on search/ML features.
-- **Crypto-shredding**: deleting a tenant destroys the LUKS header *and* the
-  wrapped key. Leftover copies or backups of the volume become unreadable.
+- **Crypto-shredding**: deleting a tenant destroys the dataset (or the LUKS
+  header) *and* the wrapped key. Leftover copies and backups, which are raw
+  encrypted ZFS streams, become unreadable.
   Encrypted control-plane database dumps still hold the wrapped key for up to
   30 days, so deletion is final at most 30 days later ([backups.md](backups.md)).
-- **Locking**: suspending a tenant closes the volume. After a node reboot all
-  volumes are closed until the provisioner re-opens them.
+- **Locking**: suspending a tenant unmounts the dataset and unloads its key
+  (closes the LUKS volume locally). After a node reboot all datasets stay
+  locked until castord re-opens them.
 - **Tenant secrets** (DB passwords, OIDC client secrets): `Secret` table,
   AES-256-GCM with `SECRETS_ENCRYPTION_KEY`, bound to tenant + name.
 

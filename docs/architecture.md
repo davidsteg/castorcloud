@@ -4,8 +4,7 @@
 Goal: sell customers a privacy-friendly replacement for Google Photos / Drive-docs / Timeline / flight history + an AI assistant, built on open-source apps:
 - **Immich** (photos), **Paperless-ngx** (documents), **Dawarich** (location timeline), **AirTrail** (flights), **Hermes Agent** (AI over the user's own data).
 
-The user must experience **one product**, not five third-party tools. The project folder is empty → greenfield.
-
+The user must experience **one product**, not five third-party tools. 
 Decisions taken (from Q&A):
 | Topic | Decision |
 |---|---|
@@ -25,7 +24,7 @@ Decisions taken (from Q&A):
 ```
                     ┌──────────────── CONTROL PLANE (1 host) ────────────────┐
  customer ──HTTPS──►│ Traefik ─► Portal (Next.js)   Authentik (IdP)          │
-                    │            Provisioner worker   Postgres (+ job queue) │
+                    │            castord (Rust)       Postgres (+ job queue) │
                     └───────────────┬──────────────────────────────────────────┘
                                     │ SSH / Docker API (provision, update, backup)
                     ┌───────────────▼──── DATA-PLANE NODE(s) ─────────────────┐
@@ -59,7 +58,7 @@ All under one registrable domain (e.g. `brand.cloud`) so embeds are **same-site*
 4. Service-specific CSS lives per service in `packages/brand/services/<service>.css` (it will need maintenance on upstream upgrades → pin versions, visual regression tests).
 
 ### Identity / SSO
-- Central Authentik. Per customer: a **group** `cust-<slug>`; per customer×service: an **OAuth2 provider + application** created by the provisioner via Authentik API, bound to that group only.
+- Central Authentik. Per customer: a **group** `cust-<slug>`; per customer×service: an **OAuth2 provider + application** created by castord via the Authentik API, bound to that group only.
 - Services: Immich OIDC (auto-register, auto-launch), Paperless (allauth OIDC), AirTrail OIDC, Dawarich OIDC (fallback: Traefik forward-auth + trusted header). Login once at portal → silent SSO inside every iframe.
 - Household members = extra users in the customer group (plan-limited).
 
@@ -79,21 +78,20 @@ Also: `suspend`, `resume`, `update` (rolling image bump), `export`, `delete` (GD
 - Chat UI inside the portal shell (streaming). Clear data-processing consent since data goes to an external LLM; redact/limit what's sent (only tool results, not bulk data).
 
 ### Storage quotas
-- The booked storage (units of 100 GB, `packages/pricing/src/storage.ts`) **is** the size of the tenant's LUKS volume, so a full volume is a full quota: no per-app quota settings to keep in sync.
-- Hourly the provisioner records usage per tenant (total from `df`, per service from `du` over the data directories) for the portal's storage meter, which warns at 80% and 95%.
-- Upgrades grow the volume online. Downgrades shrink it offline (stack stopped for a few minutes: `e2fsck`, `resize2fs`, LUKS resize) and only when the data fits with 10% to spare; otherwise the volume keeps its size, the job is audited (`volume.shrink_held`) and the portal asks the customer to delete files or book more.
-- Customers change storage on the account page, which only offers sizes that fit their data. The Stripe billing portal can still lower the quantity; the provisioner guard above covers that case.
+- The booked storage (units of 100 GB, `packages/pricing/src/storage.ts`) **is** the quota of the tenant's encrypted ZFS dataset (the LUKS volume's size on the local dev node), so a full dataset is a full quota: no per-app quota settings to keep in sync.
+- Hourly castord records usage per tenant (total and per service data directory) for the portal's storage meter, which warns at 80% and 95%.
+- Upgrades raise the quota online. Downgrades lower it only when the data fits with 10% to spare (`rust/crates/castord/src/apply.rs`); ZFS shrinks online, the local LUKS volume stops the stack for a few minutes. If the data doesn't fit, the storage keeps its size, the job is audited (`volume.shrink_held`) and the portal asks the customer to delete files or book more.
+- Customers change storage on the account page, which only offers sizes that fit their data. The Stripe billing portal can still lower the quantity; the guard above covers that case.
 
 ---
 
-## Repository layout (pnpm + Turborepo monorepo)
+## Repository layout (npm workspaces + Turborepo monorepo)
 ```
 apps/portal/            Next.js (App Router): marketing, signup, tenant shell, admin console
 rust/                   castord worker (jobs queued in Postgres): tenant jobs, Authentik/SSH clients; castor-admin, castor-monitor, castor-telegram; castor-node
-packages/db/            Prisma schema: Tenant, User, Node, ServiceInstance, Secret, Job, Plan
+packages/db/            Prisma schema and migrations of the control plane
 packages/brand/         theme tokens, theme.css, services/*.css, bridge.js
 packages/stack-templates/ compose + env templates per service, pinned versions
-packages/sdk/           typed clients for Immich/Paperless/Dawarich/AirTrail APIs (dashboard + agent)
 infra/control-plane/    docker-compose: traefik, authentik, postgres (portal and castord run on the host)
 infra/node/             node bootstrap (docker, traefik, skin proxy, shared ML/tika/gotenberg)
 agent/tools/            read-only MCP servers for the assistant, in Rust (Hermes runs from its upstream image)
