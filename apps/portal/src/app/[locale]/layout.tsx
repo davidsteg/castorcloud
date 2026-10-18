@@ -11,10 +11,10 @@ export async function generateMetadata({ params }: { params: Promise<{ locale: s
   const { locale } = await params;
   if (!isLocale(locale)) return {};
   const t = getDictionary(locale);
+  // Pages set their own title, canonical URL and hreflang (lib/seo.ts).
   return {
-    title: `${BRAND_NAME} – ${t.meta.title}`,
+    title: { default: `${BRAND_NAME} – ${t.meta.title}`, template: `%s | ${BRAND_NAME}` },
     description: t.meta.description,
-    alternates: { languages: Object.fromEntries(LOCALES.map((l) => [`${l}-CH`, `/${l}`])) },
   };
 }
 

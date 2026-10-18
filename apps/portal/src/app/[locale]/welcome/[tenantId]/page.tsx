@@ -1,9 +1,13 @@
+import type { Metadata } from "next";
 import { notFound } from "next/navigation";
 import { getDictionary, type Locale } from "@/i18n";
 import { BASE_DOMAIN, PUBLIC_SCHEME } from "@/lib/config";
 import { memberTenant } from "@/lib/session";
 import { SiteHeader } from "@/components/site/SiteHeader";
 import { ProvisioningProgress } from "./ProvisioningProgress";
+import { PRIVATE_PAGE } from "@/lib/seo";
+
+export const metadata: Metadata = PRIVATE_PAGE;
 
 export default async function WelcomePage({ params }: { params: Promise<{ locale: Locale; tenantId: string }> }) {
   const { locale, tenantId } = await params;

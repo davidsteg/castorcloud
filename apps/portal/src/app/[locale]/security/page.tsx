@@ -1,5 +1,13 @@
+import type { Metadata } from "next";
 import { getDictionary, type Locale } from "@/i18n";
 import { SubPage } from "@/components/site/SubPage";
+import { pageMetadata } from "@/lib/seo";
+
+export async function generateMetadata({ params }: { params: Promise<{ locale: Locale }> }): Promise<Metadata> {
+  const { locale } = await params;
+  const t = getDictionary(locale);
+  return pageMetadata(locale, "/security", { title: t.security.title, description: t.security.lead });
+}
 
 export default async function SecurityPage({ params }: { params: Promise<{ locale: Locale }> }) {
   const { locale } = await params;
