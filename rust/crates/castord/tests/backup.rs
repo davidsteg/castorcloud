@@ -19,6 +19,9 @@ fn settings() -> backup::Settings {
         interval_hours: 6.0,
         db_public_key: None,
         pg_container: "pc-control-plane-postgres-1".into(),
+        pg_host: None,
+        db_dir: None,
+        db_keep_days: 30,
         pg_user: "pc".into(),
     }
 }
@@ -296,6 +299,64 @@ async fn database_dumps_are_sealed_to_the_offline_key() {
         .read_to_string(&mut sql)
         .unwrap();
     assert_eq!(sql, "-- PostgreSQL database cluster dump\n");
+    cleanup(&db, &w).await;
+}
+
+/// With TrueNAS replication the sealed dump goes to BACKUP_DB_DIR, a dataset
+/// the NAS replicates; pg_dumpall runs over the network, not `docker exec`.
+#[tokio::test]
+async fn database_dumps_go_to_the_dump_dir_with_replication() {
+    let Some(db) = db().await else { return };
+    let w = world(&db, "MAC").await;
+    let keys: serde_json::Value =
+        serde_json::from_str(include_str!("../../crypto/tests/fixtures/db-dump.json")).unwrap();
+    let fake = Fake::new(vec![("pg_dumpall", Ok("-- dump\n"))]);
+    let c = control(fake.clone(), &w.traefik, None, "http://127.0.0.1:9");
+    let mut s = settings();
+    s.target = backup::REPLICATION.into();
+    s.db_public_key = Some(keys["publicKey"].as_str().unwrap().into());
+    s.pg_host = Some("postgres".into());
+    assert!(
+        backup::dump_database(&c, &s)
+            .await
+            .unwrap_err()
+            .contains("BACKUP_DB_DIR")
+    );
+    let dir = std::env::temp_dir().join(format!("castor-dumps-{}", hex8()));
+    std::fs::create_dir(&dir).unwrap();
+    // An old dump goes once a newer one is there; other files stay.
+    let old = dir.join("cp-20200101t0230.sql.gz.enc");
+    std::fs::write(&old, b"old").unwrap();
+    std::fs::File::options()
+        .write(true)
+        .open(&old)
+        .unwrap()
+        .set_modified(std::time::SystemTime::UNIX_EPOCH)
+        .unwrap();
+    std::fs::write(dir.join("notes.txt"), b"keep").unwrap();
+    s.db_dir = Some(dir.to_string_lossy().into_owned());
+
+    let name = backup::dump_database(&c, &s).await.unwrap();
+    assert_eq!(
+        fake.calls(),
+        vec!["pg_dumpall -h postgres -U pc --no-password --clean --if-exists".to_owned()]
+    );
+    assert!(!old.exists());
+    assert!(dir.join("notes.txt").exists());
+    let path = backup::db_path(&s, &name).unwrap().unwrap();
+    use std::os::unix::fs::PermissionsExt as _;
+    assert_eq!(std::fs::metadata(&path).unwrap().permissions().mode() & 0o777, 0o600);
+    let gz = castor_crypto::dump::open(&std::fs::read(&path).unwrap(), keys["secretKey"].as_str().unwrap()).unwrap();
+    let mut sql = String::new();
+    flate2::read::GzDecoder::new(gz.as_slice())
+        .read_to_string(&mut sql)
+        .unwrap();
+    assert_eq!(sql, "-- dump\n");
+    let listed = backup::db_list(&c, &s).await.unwrap();
+    assert_eq!(listed.len(), 1);
+    assert_eq!(listed[0].0, name);
+    assert!(backup::db_path(&s, "../etc/passwd").is_err());
+    std::fs::remove_dir_all(&dir).unwrap();
     cleanup(&db, &w).await;
 }
 

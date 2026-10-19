@@ -134,9 +134,17 @@ only the newest snapshot on the NAS, the base of the next incremental send.
 castord can't delete anything on the box: what it keeps is the task's
 retention.
 
+The nightly control-plane dump (02:30) is sealed to `BACKUP_DB_PUBLIC_KEY`
+and written to `BACKUP_DB_DIR`, the dataset `<pool>/castor/dumps` mounted
+into castord (owned by uid 1000). castord runs `pg_dumpall` against
+`BACKUP_PG_HOST` and keeps dumps for `BACKUP_DB_KEEP_DAYS` (30), always the
+newest. To get them to the box, add a periodic snapshot task on
+`<pool>/castor/dumps` (daily, after 02:30) and add that dataset and that
+snapshot task to the replication task. `castor-admin backup db-list` and
+`db-get` read the directory.
+
 Not yet with replication: restoring from the box (replicate back by hand on
-the NAS, then open the tenant), the weekly verify (scrub the box's pool), and
-the control-plane database dump.
+the NAS, then open the tenant) and the weekly verify (scrub the box's pool).
 
 ## Not through gatekeeper yet
 

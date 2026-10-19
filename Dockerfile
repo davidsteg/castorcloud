@@ -47,9 +47,10 @@ RUN npm run build -w @pc/portal && rm -rf apps/portal/.next/cache \
     node_modules/@next/swc-*-gnu node_modules/@img/sharp-linux-* node_modules/@img/sharp-libvips-linux-*
 
 FROM node:24-alpine@sha256:44fce696f38ba8c987c4db89954051000bbd05ffd8d8659ba15ed4a8602e937f
-# castord drives nodes with the docker CLI and OpenSSH. The runtime never
+# castord drives nodes with the docker CLI and OpenSSH, and dumps the
+# control plane with pg_dumpall (the server's major version). The runtime never
 # installs packages, so npm, corepack and yarn go (and their CVEs with them).
-RUN apk add --no-cache docker-cli docker-cli-compose openssh-client tar \
+RUN apk add --no-cache docker-cli docker-cli-compose openssh-client postgresql17-client tar \
  && rm -rf /usr/local/lib/node_modules/npm /usr/local/lib/node_modules/corepack \
     /usr/local/bin/npm /usr/local/bin/npx /usr/local/bin/corepack \
     /opt/yarn-* /usr/local/bin/yarn /usr/local/bin/yarnpkg
