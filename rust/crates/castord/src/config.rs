@@ -173,6 +173,14 @@ pub fn backup_settings() -> Result<Option<crate::backup::Settings>, String> {
         db_public_key,
         pg_container: var("BACKUP_PG_CONTAINER").unwrap_or_else(|| "pc-control-plane-postgres-1".into()),
         pg_user: var("POSTGRES_USER").unwrap_or_else(|| "pc".into()),
+        pg_host: var("BACKUP_PG_HOST"),
+        db_dir: var("BACKUP_DB_DIR"),
+        db_keep_days: var("BACKUP_DB_KEEP_DAYS")
+            .unwrap_or_else(|| "30".into())
+            .parse()
+            .ok()
+            .filter(|d| *d > 0)
+            .ok_or("BACKUP_DB_KEEP_DAYS must be a whole number of days above 0")?,
     }))
 }
 

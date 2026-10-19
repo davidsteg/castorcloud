@@ -20,7 +20,8 @@
 #   pc-edge   Traefik to the tenant stacks, which gatekeeper starts
 #
 # Before the first start: move the TrueNAS web UI off ports 80/443, create
-# the datasets <pool>/castor/node and <pool>/castor/t, and put the files
+# the datasets <pool>/castor/node, <pool>/castor/t and <pool>/castor/dumps
+# (chown 1000 the last), and put the files
 # listed under "secrets" below into SECRETS_DIR (docs/gatekeeper.md).
 name: castor
 
@@ -153,11 +154,16 @@ services:
       LINK_CERT_FILE: /run/secrets/castord_cert
       LINK_KEY_FILE: /run/secrets/castord_key
       LINK_PEERS_FILE: /run/secrets/node_cert
+      # The nightly dump: pg_dumpall over cp, sealed, into the dumps dataset.
+      BACKUP_PG_HOST: postgres
+      BACKUP_DB_DIR: /backups
     secrets: [castord_cert, castord_key, node_cert]
     volumes:
       # Tenant routes for Traefik, and the files castord renders per tenant.
       - routes:/app/infra/control-plane/traefik/dynamic
       - tenants:/app/.tenants
+      # Sealed dumps only (owned by uid 1000); the NAS replicates the dataset.
+      - ${DUMPS_DIR:?DUMPS_DIR is required}:/backups
     depends_on:
       migrate: {condition: service_completed_successfully}
     networks: [cp, link]

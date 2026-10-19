@@ -103,6 +103,17 @@ async fn backup_cmd(a: &Args) -> Result<String, String> {
             let (Some(name), Some(out)) = (a.arg(2), a.arg(3)) else {
                 return Err("usage: backup db-get <name> <out-file>".into());
             };
+            if let Some(path) = backup::db_path(&s, name)? {
+                let mut from = std::fs::File::open(&path).map_err(|e| format!("{}: {e}", path.display()))?;
+                let mut file = private_file(out)?;
+                if let Err(e) = std::io::copy(&mut from, &mut file) {
+                    let _ = std::fs::remove_file(out);
+                    return Err(format!("db-get {name}: {e}"));
+                }
+                return Ok(format!(
+                    "saved {out} (still encrypted; open it with db-open on a trusted machine)"
+                ));
+            }
             let cmd = backup::db_get_cmd(&s, name)?;
             let file = private_file(out)?;
             // Streamed to the file: a dump may be larger than memory allows.

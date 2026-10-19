@@ -55,6 +55,14 @@ pub struct Settings {
     /// The control-plane Postgres container, for pg_dumpall.
     pub pg_container: String,
     pub pg_user: String,
+    /// Postgres host to dump over the network instead of `docker exec`
+    /// (BACKUP_PG_HOST; the password comes from POSTGRES_PASSWORD).
+    pub pg_host: Option<String>,
+    /// A directory for the sealed dumps instead of the box (BACKUP_DB_DIR):
+    /// on TrueNAS a dataset the replication task sends to the box.
+    pub db_dir: Option<String>,
+    /// Days a dump stays in db_dir; the newest always stays.
+    pub db_keep_days: u32,
 }
 
 impl Settings {
@@ -118,8 +126,14 @@ pub async fn pool_health(c: &Control, s: &Settings) -> Result<String, String> {
     Ok(pool(c, s).await?.health)
 }
 
-/// The database dumps on the box: (name, bytes), oldest first.
+/// The database dumps on the box (or in db_dir): (name, bytes), oldest first.
 pub async fn db_list(c: &Control, s: &Settings) -> Result<Vec<(String, u64)>, String> {
+    if let Some(dir) = &s.db_dir {
+        return Ok(dir_dumps(dir)?
+            .into_iter()
+            .map(|(name, bytes, _)| (name, bytes))
+            .collect());
+    }
     Ok(on_box(c, s, &["db-list"])
         .await?
         .lines()
@@ -130,18 +144,104 @@ pub async fn db_list(c: &Control, s: &Settings) -> Result<Vec<(String, u64)>, St
         .collect())
 }
 
-/// The command that writes one dump (still sealed) to stdout.
-pub fn db_get_cmd(s: &Settings, name: &str) -> Result<Cmd, String> {
-    let ok = name.starts_with("cp-")
+fn dump_name_ok(name: &str) -> bool {
+    name.starts_with("cp-")
         && name.ends_with(".sql.gz.enc")
         && name.len() <= 64
         && name
             .bytes()
-            .all(|b| b.is_ascii_alphanumeric() || b == b'-' || b == b'.');
-    if !ok {
+            .all(|b| b.is_ascii_alphanumeric() || b == b'-' || b == b'.')
+}
+
+/// The command that writes one dump (still sealed) to stdout.
+pub fn db_get_cmd(s: &Settings, name: &str) -> Result<Cmd, String> {
+    if !dump_name_ok(name) {
         return Err(format!("not a dump name: {name:?} (see db-list)"));
     }
     box_cmd(s, &["db-get", name])
+}
+
+/// Where one dump is when they go to db_dir; None when they go to the box.
+pub fn db_path(s: &Settings, name: &str) -> Result<Option<std::path::PathBuf>, String> {
+    if !dump_name_ok(name) {
+        return Err(format!("not a dump name: {name:?} (see db-list)"));
+    }
+    Ok(s.db_dir.as_ref().map(|d| std::path::Path::new(d).join(name)))
+}
+
+/// The dumps in `dir`: (name, bytes, modified), oldest first.
+fn dir_dumps(dir: &str) -> Result<Vec<(String, u64, SystemTime)>, String> {
+    let mut out = Vec::new();
+    for e in std::fs::read_dir(dir).map_err(|e| format!("{dir}: {e}"))? {
+        let e = e.map_err(|e| format!("{dir}: {e}"))?;
+        let name = e.file_name().to_string_lossy().into_owned();
+        if !dump_name_ok(&name) {
+            continue;
+        }
+        let meta = e.metadata().map_err(|e| format!("{name}: {e}"))?;
+        if meta.is_file() {
+            out.push((name, meta.len(), meta.modified().unwrap_or(UNIX_EPOCH)));
+        }
+    }
+    // The names carry the time, so they sort by it.
+    out.sort();
+    Ok(out)
+}
+
+/// Writes a sealed dump to `dir` (0600, renamed into place when complete),
+/// then removes the dumps older than `keep_days`, never the newest.
+fn put_in_dir(dir: &str, name: &str, sealed: &[u8], keep_days: u32) -> Result<(), String> {
+    use std::os::unix::fs::OpenOptionsExt;
+    let base = std::path::Path::new(dir);
+    let tmp = base.join(format!(".{name}.part"));
+    let mut f = std::fs::OpenOptions::new()
+        .write(true)
+        .create_new(true)
+        .mode(0o600)
+        .open(&tmp)
+        .map_err(|e| format!("{}: {e}", tmp.display()))?;
+    let written = f.write_all(sealed).and_then(|()| f.sync_all());
+    drop(f);
+    if let Err(e) = written.and_then(|()| std::fs::rename(&tmp, base.join(name))) {
+        let _ = std::fs::remove_file(&tmp);
+        return Err(format!("{dir}/{name}: {e}"));
+    }
+    let cutoff = SystemTime::now() - std::time::Duration::from_secs(u64::from(keep_days) * 86_400);
+    let dumps = dir_dumps(dir)?;
+    for (old, _, modified) in dumps.iter().take(dumps.len().saturating_sub(1)) {
+        if *modified < cutoff {
+            std::fs::remove_file(base.join(old)).map_err(|e| format!("{dir}/{old}: {e}"))?;
+            eprintln!("[backup-database] removed {old}, older than {keep_days} days");
+        }
+    }
+    Ok(())
+}
+
+/// pg_dumpall of the whole cluster: in its container, or over the network
+/// when BACKUP_PG_HOST is set.
+fn pg_dumpall(s: &Settings) -> Cmd {
+    let Some(host) = &s.pg_host else {
+        return Cmd::new(
+            "docker",
+            strings(&[
+                "exec",
+                &s.pg_container,
+                "pg_dumpall",
+                "-U",
+                &s.pg_user,
+                "--clean",
+                "--if-exists",
+            ]),
+        );
+    };
+    let mut cmd = Cmd::new(
+        "pg_dumpall",
+        strings(&["-h", host, "-U", &s.pg_user, "--no-password", "--clean", "--if-exists"]),
+    );
+    if let Ok(password) = std::env::var("POSTGRES_PASSWORD") {
+        cmd.env.push(("PGPASSWORD", password));
+    }
+    cmd
 }
 
 /// Removes data a restore set aside on the tenant's node ("before-restore-…").
@@ -766,31 +866,17 @@ pub async fn problems(db: &PgPool, s: &Settings) -> Result<Vec<(String, Vec<Stri
 }
 
 /// pg_dumpall of the control plane (portal and Authentik, with the wrapped
-/// tenant keys), gzipped and sealed to the offline key, stored on the box.
+/// tenant keys), gzipped and sealed to the offline key, stored on the box
+/// or in db_dir.
 pub async fn dump_database(c: &Control, s: &Settings) -> Result<String, String> {
-    if s.replication() {
-        return Err("database dumps to the box need ssh; not with TrueNAS replication yet".into());
+    if s.replication() && s.db_dir.is_none() {
+        return Err("BACKUP_DB_DIR is not set: the control-plane database is NOT backed up".into());
     }
     let Some(public) = &s.db_public_key else {
         return Err("BACKUP_DB_PUBLIC_KEY is not set: the control-plane database is NOT backed up".into());
     };
     let recipient = castor_crypto::dump::public_key(public).map_err(|e| e.to_string())?;
-    let sql = Zeroizing::new(
-        c.exec
-            .run_bytes(Cmd::new(
-                "docker",
-                strings(&[
-                    "exec",
-                    &s.pg_container,
-                    "pg_dumpall",
-                    "-U",
-                    &s.pg_user,
-                    "--clean",
-                    "--if-exists",
-                ]),
-            ))
-            .await?,
-    );
+    let sql = Zeroizing::new(c.exec.run_bytes(pg_dumpall(s)).await?);
     let mut gz = flate2::write::GzEncoder::new(Vec::new(), flate2::Compression::default());
     gz.write_all(&sql).map_err(|e| format!("gzip: {e}"))?;
     let plain = Zeroizing::new(gz.finish().map_err(|e| format!("gzip: {e}"))?);
@@ -802,9 +888,13 @@ pub async fn dump_database(c: &Control, s: &Settings) -> Result<String, String> 
         stamp.trim_start_matches("cb-").trim_end_matches('Z').to_lowercase()
     );
     let kb = (sealed.len() + 512) / 1024;
-    let mut put = box_cmd(s, &["db-put", &name])?;
-    put.input = Some(Zeroizing::new(sealed));
-    c.exec.run(put).await?;
+    if let Some(dir) = &s.db_dir {
+        put_in_dir(dir, &name, &sealed, s.db_keep_days)?;
+    } else {
+        let mut put = box_cmd(s, &["db-put", &name])?;
+        put.input = Some(Zeroizing::new(sealed));
+        c.exec.run(put).await?;
+    }
     eprintln!("[backup-database] database dump {name}, {kb} KB");
     Ok(name)
 }
