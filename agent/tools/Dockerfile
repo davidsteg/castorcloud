@@ -2,7 +2,7 @@
 # the repo root:
 #   docker build -f agent/tools/Dockerfile -t pc-assistant-tools:2 .
 # A static binary on an empty image: no shell, no runtime, nothing else to use.
-FROM rust:1.98-alpine@sha256:7cc1c22d77d9432f7fe012a70e6d3e555af54c2a6832700ed7d553f1769ae89f AS build
+FROM rust:1.99-alpine@sha256:b1d5dd5a22a09404d3e798c0cf051b689077360374eb505fa5bb93c479693d87 AS build
 WORKDIR /src
 COPY agent/tools/Cargo.toml agent/tools/Cargo.lock ./
 COPY agent/tools/src src
