@@ -25,14 +25,21 @@
 # listed under "secrets" below into SECRETS_DIR (docs/gatekeeper.md).
 name: castor
 
-x-castor: &castor
+x-castor-image: &castor-image
   image: ghcr.io/davidsteg/castorcloud:${CASTOR_VERSION:?CASTOR_VERSION is required}
-  env_file: .env
   read_only: true
   tmpfs: [/tmp]
   cap_drop: [ALL]
   security_opt: [no-new-privileges:true]
   restart: unless-stopped
+
+# castord and monitor read the whole .env. The portal and migrate get only
+# what they use (below): the portal faces the internet, so it never holds
+# VOLUME_KEK, the Authentik admin token, the LiteLLM master key or the
+# Cloudflare token.
+x-castor: &castor
+  <<: *castor-image
+  env_file: .env
 
 services:
   traefik:
@@ -130,16 +137,46 @@ services:
     restart: unless-stopped
 
   migrate:
-    <<: *castor
+    <<: *castor-image
     command: ["migrate"]
+    environment:
+      DATABASE_URL: ${DATABASE_URL:?DATABASE_URL is required}
     restart: "no"
     depends_on:
       postgres: {condition: service_healthy}
     networks: [cp]
 
   portal:
-    <<: *castor
+    <<: *castor-image
     command: ["portal"]
+    # Everything the portal reads (apps/portal, packages/*), and nothing else.
+    # A setting it starts to read must be added here.
+    environment:
+      DATABASE_URL: ${DATABASE_URL:?DATABASE_URL is required}
+      AUTH_SECRET: ${AUTH_SECRET:?AUTH_SECRET is required}
+      PORTAL_OIDC_CLIENT_ID: ${PORTAL_OIDC_CLIENT_ID:?PORTAL_OIDC_CLIENT_ID is required}
+      PORTAL_OIDC_CLIENT_SECRET: ${PORTAL_OIDC_CLIENT_SECRET:?PORTAL_OIDC_CLIENT_SECRET is required}
+      # Opens tenant secrets (assistant keys) and seals stack definitions.
+      SECRETS_ENCRYPTION_KEY: ${SECRETS_ENCRYPTION_KEY:?SECRETS_ENCRYPTION_KEY is required}
+      BASE_DOMAIN: ${BASE_DOMAIN:?BASE_DOMAIN is required}
+      PUBLIC_SCHEME: ${PUBLIC_SCHEME:-http}
+      BRAND_NAME: ${BRAND_NAME:-Castor Cloud}
+      BETA: ${BETA:-}
+      AI_PROVIDER: ${AI_PROVIDER:-}
+      LLM_GATEWAY_URL: ${LLM_GATEWAY_URL:-http://localhost:4000}
+      STACKS_DOMAIN: ${STACKS_DOMAIN:-}
+      STRIPE_SECRET_KEY: ${STRIPE_SECRET_KEY:-}
+      STRIPE_WEBHOOK_SECRET: ${STRIPE_WEBHOOK_SECRET:-}
+      DEV_SKIP_PAYMENT: ${DEV_SKIP_PAYMENT:-}
+      MAIL_SMTP_URL: ${MAIL_SMTP_URL:-}
+      MAIL_FROM: ${MAIL_FROM:-}
+      APPLICATIONS_NOTIFY_TO: ${APPLICATIONS_NOTIFY_TO:-}
+      TELEGRAM_BOT_USERNAME: ${TELEGRAM_BOT_USERNAME:-}
+      GITHUB_APP_CLIENT_ID: ${GITHUB_APP_CLIENT_ID:-}
+      GITHUB_APP_CLIENT_SECRET: ${GITHUB_APP_CLIENT_SECRET:-}
+      GITHUB_APP_SLUG: ${GITHUB_APP_SLUG:-}
+      GITHUB_APP_PRIVATE_KEY: ${GITHUB_APP_PRIVATE_KEY:-}
+      GITHUB_APP_WEBHOOK_SECRET: ${GITHUB_APP_WEBHOOK_SECRET:-}
     # Next.js writes its cache next to the build.
     read_only: false
     depends_on:
