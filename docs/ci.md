@@ -2,7 +2,7 @@
 
 Three GitHub Actions workflows run on every pull request and on `main`.
 Every third-party action is pinned to a commit SHA and every scanner image to
-a digest; Dependabot (`.github/dependabot.yml`) proposes updates weekly.
+a digest; Dependabot (`.github/dependabot.yml`) proposes updates monthly (security updates right away).
 
 | Workflow | Job | Fails when |
 | --- | --- | --- |
