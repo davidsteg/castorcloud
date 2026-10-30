@@ -114,7 +114,9 @@ Deleting a tenant destroys the data and keys, so it needs no revocation.
 
 - Backup box off-site in Switzerland, and a restore drill before launch ([backups.md](backups.md)).
 - KEK in HSM/Vault; Authentik service-account token; Stripe restricted key.
-- Rate limiting on signup/login; CSP for the portal; security headers (HSTS).
+- Rate limiting on signup/login; a full CSP (script-src) for the portal. The
+  portal already sends HSTS, `frame-ancestors 'none'`, nosniff and a
+  Referrer-Policy (`apps/portal/next.config.ts`).
 - Monitoring and alerting (volume fill level ≥ 90 %, failed jobs).
 - Legal texts (Impressum, privacy policy per revDSG incl. Stripe/Google/LLM
   sub-processors, terms), reviewed by counsel.
