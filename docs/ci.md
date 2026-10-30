@@ -75,6 +75,32 @@ cosign verify --key cosign.pub --insecure-ignore-tlog \
 
 Keep `cosign.key` offline; commit only `cosign.pub` if nodes should verify.
 
+### Mirror
+
+After signing, each image is copied to `registry.bridgemill.ch` under the
+same path (`registry.bridgemill.ch/davidsteg/castorcloud*`), with the same
+digest and tags and with its signature, SBOM and attestations
+(`cosign copy`). GHCR stays the source: only signed images are mirrored,
+and a failed mirror shows as a warning without holding back the release.
+
+It runs when the repository secrets `REGISTRY_USER` and `REGISTRY_PASSWORD`
+are set (plus `COSIGN_PRIVATE_KEY`). The registry must:
+
+- be reachable from GitHub-hosted runners over HTTPS with a valid
+  certificate; there is no insecure fallback;
+- allow no anonymous access, reading included. CI gets a push-only account;
+  anything that pulls gets its own read-only account;
+- keep its admin interface off the internet.
+
+Pull by digest and verify against `cosign.pub`:
+
+```sh
+cosign verify --key cosign.pub --insecure-ignore-tlog \
+  registry.bridgemill.ch/davidsteg/castorcloud@sha256:<digest>
+```
+
+castord still resolves and pulls from GHCR; nodes don't use the mirror yet.
+
 ### Private packages
 
 The packages inherit this private repository's access, so only accounts
