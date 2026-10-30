@@ -62,6 +62,9 @@ jobs:
             context: .
             file: Dockerfile
             platforms: linux/amd64
+            # Rebuilt every time: its apk packages float, so a cached layer
+            # would keep shipping fixed CVEs.
+            fresh: runtime
           # Runs per tenant on nodes.
           - name: assistant-tools
             image: castorcloud-assistant-tools
@@ -96,6 +99,7 @@ jobs:
           tags: scan/${{ matrix.name }}:${{ github.sha }}
           outputs: type=docker,dest=${{ runner.temp }}/image.tar
           cache-from: type=gha,scope=${{ matrix.name }}
+          no-cache-filters: ${{ matrix.fresh }}
           cache-to: type=gha,scope=${{ matrix.name }},mode=max
 
       # HIGH and CRITICAL with a fix available fail the build. Accepted
@@ -167,6 +171,7 @@ jobs:
           sbom: true
           provenance: mode=max
           cache-from: type=gha,scope=${{ matrix.name }}
+          no-cache-filters: ${{ matrix.fresh }}
 
       # Signed with a private key, not keyless: keyless signing would publish
       # this private repo's name and workflow to the public Rekor log.

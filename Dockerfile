@@ -46,7 +46,7 @@ ENV BASE_DOMAIN=$BASE_DOMAIN NEXT_TELEMETRY_DISABLED=1
 RUN npm run build -w @pc/portal && rm -rf apps/portal/.next/cache \
     node_modules/@next/swc-*-gnu node_modules/@img/sharp-linux-* node_modules/@img/sharp-libvips-linux-*
 
-FROM node:24-alpine@sha256:44fce696f38ba8c987c4db89954051000bbd05ffd8d8659ba15ed4a8602e937f
+FROM node:24-alpine@sha256:44fce696f38ba8c987c4db89954051000bbd05ffd8d8659ba15ed4a8602e937f AS runtime
 # castord drives nodes with the docker CLI and OpenSSH, and dumps the
 # control plane with pg_dumpall (the server's major version). The runtime never
 # installs packages, so npm, corepack and yarn go (and their CVEs with them).
