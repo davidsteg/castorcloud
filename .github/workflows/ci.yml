@@ -133,11 +133,11 @@ jobs:
           cargo clippy --locked --all-targets -- -D warnings
           cargo test --locked
           cargo audit --deny warnings
-          docker build -q -t castor.local/egress:2 .
 
       # The assistant's read-only MCP tools: their own crate too, built on each
       # node into the tenant image (castord's node.rs), so they have their own
-      # lockfile. The key-issuing tests use the test database above.
+      # lockfile. The key-issuing tests use the test database above. Both
+      # images are built and scanned by the Images workflow, not here.
       - name: Assistant tools
         working-directory: agent/tools
         run: |
@@ -145,7 +145,6 @@ jobs:
           cargo clippy --locked --all-targets -- -D warnings
           cargo test --locked
           cargo audit --deny warnings
-          docker build -q -t pc-assistant-tools:2 -f Dockerfile ../..
 
       # The node helpers (castor-ssh, castor-zfs, castor-snap) as one static
       # binary for TrueNAS SCALE; cargo test above already ran its tests. The

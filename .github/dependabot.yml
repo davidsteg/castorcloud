@@ -1,11 +1,13 @@
 # Keeps pinned actions, base image digests, npm packages and crates current.
-# Security updates arrive as soon as an advisory is published; the rest weekly.
+# Security updates arrive as soon as an advisory is published; the rest
+# monthly, since each update pull request runs every workflow twice (it also
+# needs a VERSION commit).
 version: 2
 updates:
   - package-ecosystem: github-actions
     directory: /
     schedule:
-      interval: weekly
+      interval: monthly
     groups:
       actions:
         patterns: ["*"]
@@ -17,7 +19,7 @@ updates:
       - /infra/node/cryptd
       - /infra/node/egress
     schedule:
-      interval: weekly
+      interval: monthly
     groups:
       base-images:
         patterns: ["*"]
@@ -29,7 +31,7 @@ updates:
   - package-ecosystem: npm
     directory: /
     schedule:
-      interval: weekly
+      interval: monthly
     open-pull-requests-limit: 5
     groups:
       minor-and-patch:
@@ -42,7 +44,7 @@ updates:
       - /agent/tools
       - /infra/node/egress
     schedule:
-      interval: weekly
+      interval: monthly
     open-pull-requests-limit: 5
     groups:
       minor-and-patch:
