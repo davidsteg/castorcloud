@@ -46,6 +46,20 @@ jobs:
           BASE_REF: ${{ github.base_ref }}
         run: .github/scripts/version.sh
 
+      # Shows on every run (pull requests too) whether the next publish will
+      # be signed and mirrored. Prints only set/missing, never a value.
+      - name: Publish secrets
+        env:
+          COSIGN_PRIVATE_KEY: ${{ secrets.COSIGN_PRIVATE_KEY != '' }}
+          COSIGN_PASSWORD: ${{ secrets.COSIGN_PASSWORD != '' }}
+          REGISTRY_USER: ${{ secrets.REGISTRY_USER != '' }}
+          REGISTRY_PASSWORD: ${{ secrets.REGISTRY_PASSWORD != '' }}
+        run: |
+          for name in COSIGN_PRIVATE_KEY COSIGN_PASSWORD REGISTRY_USER REGISTRY_PASSWORD; do
+            if [ "${!name}" = true ]; then state=set; else state=missing; echo "::warning::${name} is not set."; fi
+            echo "- \`${name}\`: ${state}" >> "$GITHUB_STEP_SUMMARY"
+          done
+
   scan:
     name: Build and scan (${{ matrix.name }})
     runs-on: ubuntu-latest
