@@ -32,7 +32,10 @@ root), and gatekeeper gets the same check as a pattern.
   argv template produces exactly that line, and refuses anything else.
 - The node role checks every call against the catalog again (tool known, all
   parameters present and valid, nothing extra, the secret only where the tool
-  has one) before it forwards it.
+  has one) before it forwards it. It logs one line per call to stderr:
+  castord's address, the tool, the tenant's slug, dataset, snapshot or path,
+  and ok, failed or refused (with the reason). Never file content, e-mail
+  addresses or the secret; gatekeeper's `audit.jsonl` has the full record.
 - gatekeeper checks it a third time against Tier 1 and Tier 2.
 
 Generate Tier 2 for your pool:

@@ -200,10 +200,12 @@ async fn an_unhealthy_box_gets_nothing() {
     let err = backup::run_all(&c, &db, &settings()).await.unwrap_err();
     assert_eq!(err, "backup box pool is DEGRADED; not sending");
     assert_eq!(fake.calls(), vec![format!("{BOX} pool")]);
-    sqlx::query(r#"DELETE FROM "AuditLog" WHERE action = 'backup.box_unhealthy'"#)
-        .execute(&db)
-        .await
-        .unwrap();
+    delete_audit(
+        &db,
+        r#"DELETE FROM "AuditLog" WHERE action = 'backup.box_unhealthy'"#,
+        None,
+    )
+    .await;
     cleanup(&db, &w).await;
 }
 

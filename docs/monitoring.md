@@ -27,7 +27,7 @@ database it can't reach.
 | Backups | a tenant's newest backup is older than two intervals (a day for the first one); 2+ failed runs in a row; failed verification; backups switched off | critical / warning |
 | Certificates | the certificate Traefik serves for `BASE_DOMAIN` and `auth.` expires within 14 days (3: critical), is expired, or doesn't validate | warning / critical |
 | Sign-in security | 30+ failed sign-ins in 15 min; 10+ from one address or against one account; Authentik's suspicious-request events; an admin impersonating a user; an Authentik admin signing in | warning / critical |
-| Audit log | staff break-glass access, a restored backup, an unhealthy backup box | critical / warning |
+| Audit log | staff break-glass access, someone made staff, an operator requesting a tenant's deletion, a database dump downloaded from the backup box, a restored backup, an unhealthy backup box | critical / warning |
 | Platform | no provisioner worker has been seen for 2 minutes (heartbeat, or a running job's lease); Authentik doesn't answer; the monitor can't reach its database | critical |
 
 Node facts come from the provisioner's node watcher (every 5 min), which

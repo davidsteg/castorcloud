@@ -112,7 +112,12 @@ Deleting a tenant destroys the data and keys, so it needs no revocation.
 2. Break-glass (e.g. a support case the customer asked for): two people,
    time-limited, logged as `staff.break_glass` in `AuditLog` with reason,
    customer notified.
-3. `AuditLog` is append-only for the application; replicate it off-host.
+3. `AuditLog` is append-only: database triggers refuse UPDATE, DELETE and
+   TRUNCATE on it (migration `20261102220000_audit_log_append_only`). The
+   nightly sealed database dump keeps an off-host copy for 30 days
+   ([backups.md](backups.md)). A database superuser can still drop the
+   triggers; the application, Authentik and castord share that role today,
+   so a separate, non-owner role for the applications is the next step.
 
 ## Open items before launch
 

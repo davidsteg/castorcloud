@@ -249,17 +249,30 @@ pub async fn world(db: &PgPool, kind: &str) -> World {
     }
 }
 
+/// AuditLog is append-only (its triggers refuse UPDATE, DELETE and
+/// TRUNCATE); a test removes its own rows as superuser in replica mode,
+/// which skips them.
+pub async fn delete_audit(db: &PgPool, sql: &str, bind: Option<&str>) {
+    let mut tx = db.begin().await.unwrap();
+    sqlx::query("SET LOCAL session_replication_role = replica")
+        .execute(&mut *tx)
+        .await
+        .unwrap();
+    let mut q = sqlx::query(sql);
+    if let Some(b) = bind {
+        q = q.bind(b);
+    }
+    q.execute(&mut *tx).await.unwrap();
+    tx.commit().await.unwrap();
+}
+
 pub async fn cleanup(db: &PgPool, w: &World) {
     sqlx::query(r#"DELETE FROM "Tenant" WHERE id = $1"#)
         .bind(&w.tenant)
         .execute(db)
         .await
         .unwrap();
-    sqlx::query(r#"DELETE FROM "AuditLog" WHERE "tenantId" = $1"#)
-        .bind(&w.tenant)
-        .execute(db)
-        .await
-        .unwrap();
+    delete_audit(db, r#"DELETE FROM "AuditLog" WHERE "tenantId" = $1"#, Some(&w.tenant)).await;
     sqlx::query(r#"DELETE FROM "Node" WHERE id = ANY($1)"#)
         .bind(&w.nodes)
         .execute(db)

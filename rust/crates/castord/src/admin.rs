@@ -441,7 +441,7 @@ pub async fn staff_set(db: &PgPool, email: &str, staff: bool) -> Result<String, 
     let action = if staff { "staff.grant" } else { "staff.revoke" };
     audit(
         db,
-        "system",
+        "ops-cli",
         action,
         None,
         Some(json!({ "userId": id, "email": email })),

@@ -205,6 +205,35 @@ async fn registers_nodes() {
 }
 
 #[tokio::test]
+async fn the_audit_log_is_append_only() {
+    let Some(db) = db().await else { return };
+    let id = format!("a{}", hex8());
+    castord::db::audit(
+        &db,
+        "ops-cli",
+        "test.append_only",
+        None,
+        Some(serde_json::json!({ "id": id })),
+    )
+    .await
+    .unwrap();
+    for sql in [
+        r#"UPDATE "AuditLog" SET actor = 'x' WHERE details->>'id' = $1"#,
+        r#"DELETE FROM "AuditLog" WHERE details->>'id' = $1"#,
+    ] {
+        let e = sqlx::query(sql).bind(&id).execute(&db).await.unwrap_err();
+        assert!(e.to_string().contains("AuditLog is append-only"), "{e}");
+    }
+    let e = sqlx::query(r#"TRUNCATE "AuditLog""#).execute(&db).await.unwrap_err();
+    assert!(e.to_string().contains("AuditLog is append-only"), "{e}");
+    assert_eq!(
+        rows(&db, r#"SELECT actor FROM "AuditLog" WHERE details->>'id' = $1"#, &id).await,
+        ["ops-cli"]
+    );
+    delete_audit(&db, r#"DELETE FROM "AuditLog" WHERE details->>'id' = $1"#, Some(&id)).await;
+}
+
+#[tokio::test]
 async fn staff_and_tenants() {
     let Some(db) = db().await else { return };
     let user = format!("u{}", hex8());
@@ -224,6 +253,15 @@ async fn staff_and_tenants() {
     assert!(admin::staff_list(&db).await.unwrap().lines().any(|l| l == email));
     admin::staff_set(&db, &email, false).await.unwrap();
     assert!(!admin::staff_list(&db).await.unwrap().contains(&email));
+    assert_eq!(
+        rows(
+            &db,
+            r#"SELECT actor || ' ' || action FROM "AuditLog" WHERE details->>'userId' = $1 ORDER BY "createdAt", action"#,
+            &user
+        )
+        .await,
+        ["ops-cli staff.grant", "ops-cli staff.revoke"]
+    );
     assert!(
         admin::staff_set(&db, "nobody@x.test", true)
             .await

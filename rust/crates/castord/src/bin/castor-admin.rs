@@ -104,6 +104,15 @@ async fn backup_cmd(a: &Args) -> Result<String, String> {
             let (Some(name), Some(out)) = (a.arg(2), a.arg(3)) else {
                 return Err("usage: backup db-get <name> <out-file>".into());
             };
+            // Every tenant's wrapped key leaves the box: audited before it does.
+            castord::db::audit(
+                &db,
+                "ops-cli",
+                "backup.db_downloaded",
+                None,
+                Some(serde_json::json!({ "name": name })),
+            )
+            .await?;
             if let Some(path) = backup::db_path(&s, name)? {
                 let mut from = std::fs::File::open(&path).map_err(|e| format!("{}: {e}", path.display()))?;
                 let mut file = private_file(out)?;

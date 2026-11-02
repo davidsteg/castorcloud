@@ -592,12 +592,31 @@ pub fn auth_findings(events: &[AuthEvent], superusers: &HashSet<i64>, now: i64, 
 }
 
 /// Audit log actions the operator hears about the moment they happen.
-pub const AUDITED_ACTIONS: [&str; 3] = ["staff.break_glass", "backup.box_unhealthy", "backup.restored"];
+pub const AUDITED_ACTIONS: [&str; 6] = [
+    "staff.break_glass",
+    "staff.grant",
+    "tenant.delete_requested",
+    "backup.box_unhealthy",
+    "backup.restored",
+    "backup.db_downloaded",
+];
 
 fn audited(action: &str, slug: Option<&str>) -> Option<(Severity, String)> {
     let to = |prefix: &str| slug.map_or_else(String::new, |s| format!(" {prefix} {s}"));
     match action {
         "staff.break_glass" => Some((Severity::Critical, format!("Staff break-glass access{}", to("to")))),
+        "staff.grant" => Some((
+            Severity::Critical,
+            "Someone was made staff (castor-admin staff add)".into(),
+        )),
+        "tenant.delete_requested" => Some((
+            Severity::Warning,
+            format!("Deletion requested by an operator{}", to("for")),
+        )),
+        "backup.db_downloaded" => Some((
+            Severity::Warning,
+            "A database dump was downloaded from the backup box".into(),
+        )),
         "backup.box_unhealthy" => Some((Severity::Critical, "The backup box's pool is not healthy".into())),
         "backup.restored" => Some((Severity::Warning, format!("A backup was restored{}", to("for")))),
         _ => None,
@@ -1087,9 +1106,27 @@ mod tests {
             created_at: ago(1),
             details: None,
         };
-        let f = audit_findings(&[r("a1", "staff.break_glass"), r("a2", "volume.unlock")]);
-        assert_eq!(keys(&f), [("audit:a1", Severity::Critical)]);
+        let f = audit_findings(&[
+            r("a1", "staff.break_glass"),
+            r("a2", "volume.unlock"),
+            r("a3", "staff.grant"),
+            r("a4", "tenant.delete_requested"),
+            r("a5", "backup.db_downloaded"),
+            r("a6", "staff.revoke"),
+        ]);
+        assert_eq!(
+            keys(&f),
+            [
+                ("audit:a1", Severity::Critical),
+                ("audit:a3", Severity::Critical),
+                ("audit:a4", Severity::Warning),
+                ("audit:a5", Severity::Warning),
+            ]
+        );
         assert_eq!(f[0].summary, "Staff break-glass access to acme");
+        assert_eq!(f[2].summary, "Deletion requested by an operator for acme");
+        // Every action the check fetches has a rule.
+        assert!(AUDITED_ACTIONS.iter().all(|a| audited(a, None).is_some()));
     }
 
     // ------------------------------------------------------------ reconcile
