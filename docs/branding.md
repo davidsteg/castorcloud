@@ -44,3 +44,6 @@ only.
 branding, listed in `apps/portal/src/lib/screenshots.ts`. Third-party logos
 that the apps still show (Immich's top bar) are cropped out of the website
 images; the apps credit their projects in text on the open-source page.
+The sign-in screenshot (`login.webp`) is Authentik with the brand settings from
+`20-signup.yaml`, cropped to the sign-in card; the demo address is
+`anna@muster.example`.
