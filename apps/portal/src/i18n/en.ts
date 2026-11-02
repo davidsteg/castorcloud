@@ -50,6 +50,11 @@ const en = {
         text: "Every flight on a world map, with statistics, airlines and airports.",
         replaces: "TripIt, flight apps",
       },
+      files: {
+        name: "Files",
+        text: "Store, sync and share your files and folders – with password-protected links for anyone outside the household.",
+        replaces: "Google Drive, Dropbox, iCloud Drive",
+      },
       assistant: {
         name: "Assistant",
         text: "Ask questions about your own data: “When was I in Lisbon, and where is the hotel invoice?”",
@@ -204,6 +209,19 @@ const en = {
         ],
         import: "Bring your flights from myFlightradar24, App in the Air or JetLog by import.",
         apps: "In the browser on computer and phone.",
+      },
+      files: {
+        headline: "Your files, in your own cloud.",
+        lead: "A drive for the whole household: upload, organise and share files and folders, with previews for documents, photos and videos.",
+        bullets: [
+          "Personal folders for everyone, shared spaces for the household",
+          "Share files and folders by link, always protected by a password",
+          "Preview of PDFs, images, videos and text files",
+          "Version history and trash bin",
+          "Search by file name and content",
+        ],
+        import: "Download your Google Drive or Dropbox folder and drag it into the browser – folders stay as they are.",
+        apps: "In the browser on computer and phone. Desktop and phone sync apps follow later.",
       },
       assistant: {
         headline: "Ask your own data.",
@@ -433,7 +451,7 @@ const en = {
     title: "Storage",
     used: "{used} of {quota} used",
     notMeasured: "Usage is measured once an hour.",
-    parts: { photos: "Photos", docs: "Documents", places: "Timeline", flights: "Flights", system: "Databases & system" },
+    parts: { photos: "Photos", docs: "Documents", places: "Timeline", flights: "Flights", files: "Files", system: "Databases & system" },
     warn: "Your storage is {percent}% full. Book more storage before it runs out.",
     full: "Your storage is almost full. New uploads fail once it is full: delete files or book more storage.",
     held: "Your storage stays at {volume} until what you store ({used}) fits into the {quota} you booked, with 10% to spare. Delete files or book more.",

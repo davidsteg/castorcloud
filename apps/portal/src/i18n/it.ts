@@ -50,6 +50,11 @@ const it: Dictionary = {
         text: "Ogni volo sulla mappa del mondo, con statistiche, compagnie aeree e aeroporti.",
         replaces: "TripIt, app di voli",
       },
+      files: {
+        name: "File",
+        text: "Salva, sincronizza e condividi file e cartelle – con link protetti da password per chi è fuori dall'economia domestica.",
+        replaces: "Google Drive, Dropbox, iCloud Drive",
+      },
       assistant: {
         name: "Assistente",
         text: "Fai domande sui tuoi dati: «Quando sono stato a Lisbona e dov’è la fattura dell’hotel?»",
@@ -204,6 +209,19 @@ const it: Dictionary = {
         ],
         import: "Importa i tuoi voli da myFlightradar24, App in the Air o JetLog.",
         apps: "Nel browser su computer e telefono.",
+      },
+      files: {
+        headline: "I tuoi file, nel tuo cloud.",
+        lead: "Uno spazio per tutta l'economia domestica: carica, organizza e condividi file e cartelle, con anteprima di documenti, foto e video.",
+        bullets: [
+          "Cartelle personali per ognuno, spazi condivisi per l'economia domestica",
+          "Condividi file e cartelle tramite link, sempre protetti da password",
+          "Anteprima di PDF, immagini, video e file di testo",
+          "Cronologia delle versioni e cestino",
+          "Ricerca per nome e contenuto del file",
+        ],
+        import: "Scarica la tua cartella di Google Drive o Dropbox e trascinala nel browser – le cartelle restano come sono.",
+        apps: "Nel browser, su computer e telefono. Le app di sincronizzazione seguiranno più avanti.",
       },
       assistant: {
         headline: "Fai domande ai tuoi dati.",
@@ -433,7 +451,7 @@ const it: Dictionary = {
     title: "Spazio",
     used: "{used} di {quota} occupati",
     notMeasured: "L’utilizzo viene misurato ogni ora.",
-    parts: { photos: "Foto", docs: "Documenti", places: "Cronologia", flights: "Voli", system: "Database e sistema" },
+    parts: { photos: "Foto", docs: "Documenti", places: "Cronologia", flights: "Voli", files: "File", system: "Database e sistema" },
     warn: "Il tuo spazio è pieno al {percent}%. Prenota più spazio prima che si esaurisca.",
     full: "Il tuo spazio è quasi pieno. Quando è pieno, i nuovi caricamenti non riescono: elimina dei file o prenota più spazio.",
     held: "Il tuo spazio resta a {volume} finché i tuoi dati ({used}) non stanno, con il 10% di margine, nei {quota} prenotati. Elimina dei file o prenota più spazio.",

@@ -67,7 +67,7 @@ async fn deletes_like_the_typescript_worker() {
         "{ssh} compose -p {p} -f /repo/packages/stack-templates/tenant/compose.yml \
          --project-directory /Users/Shared/castor/files/templates/tenant \
          -f /repo/.tenants/{s}/compose.volumes.yml --env-file /repo/.tenants/{s}/tenant.env \
-         --profile photos --profile docs --profile places --profile flights --profile assistant \
+         --profile photos --profile docs --profile places --profile flights --profile files --profile assistant \
          down --volumes --remove-orphans"
     ));
     want.push(format!("{ssh} network rm {p}-shared"));
@@ -95,7 +95,7 @@ async fn deletes_like_the_typescript_worker() {
         want.push(format!("DELETE /api/v3/core/applications/stack-{s}--{st}/ auth=true "));
         want.push("DELETE /api/v3/providers/proxy/7/ auth=true ".to_owned());
     }
-    for svc in ["photos", "docs", "places", "flights"] {
+    for svc in ["photos", "docs", "places", "flights", "files"] {
         want.push(format!("DELETE /api/v3/core/applications/{s}-{svc}/ auth=true "));
         want.push("DELETE /api/v3/providers/oauth2/11/ auth=true ".to_owned());
     }

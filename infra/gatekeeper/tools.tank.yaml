@@ -119,6 +119,8 @@ tools:
       - "--profile"
       - "flights"
       - "--profile"
+      - "files"
+      - "--profile"
       - "assistant"
       - "stop"
     parameters:
@@ -169,6 +171,8 @@ tools:
       - "places"
       - "--profile"
       - "flights"
+      - "--profile"
+      - "files"
       - "--profile"
       - "assistant"
       - "down"
@@ -223,6 +227,8 @@ tools:
       - "--profile"
       - "flights"
       - "--profile"
+      - "files"
+      - "--profile"
       - "assistant"
       - "rm"
       - "-s"
@@ -236,7 +242,7 @@ tools:
         description: "The tenant's slug."
       service:
         type: "enum"
-        values: ["immich-server","immich-db","paperless","dawarich","dawarich-sidekiq","airtrail","assistant","assistant-init","assistant-tools"]
+        values: ["immich-server","immich-db","paperless","dawarich","dawarich-sidekiq","airtrail","opencloud","files-init","assistant","assistant-init","assistant-tools"]
         required: true
         description: "The compose service."
       volumes_file:

@@ -29,6 +29,9 @@ pub struct OidcApp<'a> {
     pub redirect_uris: &'a [Value],
     pub launch_url: &'a str,
     pub allowed_group_pk: &'a str,
+    /// A browser app (PKCE, no secret). Its access tokens are bearer tokens
+    /// the app checks itself, so they stay short-lived.
+    pub public: bool,
 }
 
 pub struct ProxyApp<'a> {
@@ -232,19 +235,28 @@ impl Authentik {
     /// Creates or updates a confidential OIDC provider and its application,
     /// open to the members of `allowed_group_pk` only.
     pub async fn ensure_oidc_app(&self, o: &OidcApp<'_>, d: &ProviderDefaults) -> Result<(), String> {
-        let body = json!({
+        let mut body = json!({
             "name": o.slug,
-            "client_type": "confidential",
+            "client_type": if o.public { "public" } else { "confidential" },
             "client_id": o.client_id,
-            "client_secret": o.client_secret,
-            "redirect_uris": o.redirect_uris,
-            "sub_mode": "hashed_user_id",
-            "include_claims_in_id_token": true,
-            "authorization_flow": d.authorization_flow,
-            "invalidation_flow": d.invalidation_flow,
-            "property_mappings": d.property_mappings,
-            "signing_key": d.signing_key,
         });
+        if !o.public {
+            body["client_secret"] = json!(o.client_secret);
+        }
+        for (key, value) in [
+            ("redirect_uris", json!(o.redirect_uris)),
+            ("sub_mode", json!("hashed_user_id")),
+            ("include_claims_in_id_token", json!(true)),
+            ("authorization_flow", json!(d.authorization_flow)),
+            ("invalidation_flow", json!(d.invalidation_flow)),
+            ("property_mappings", json!(d.property_mappings)),
+            ("signing_key", json!(d.signing_key)),
+        ] {
+            body[key] = value;
+        }
+        if o.public {
+            body["access_token_validity"] = json!("minutes=5");
+        }
         let provider = self.upsert_provider("/providers/oauth2/", o.slug, body).await?;
         self.ensure_app(o.slug, o.name, provider, o.launch_url, o.allowed_group_pk)
             .await

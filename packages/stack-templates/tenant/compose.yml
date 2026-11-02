@@ -36,7 +36,7 @@ services:
     labels:
       - traefik.enable=true
       - traefik.docker.network=pc-edge
-      - traefik.http.routers.pc-t-${SLUG}.rule=Host(`photos-${SLUG}.${BASE_DOMAIN}`) || Host(`docs-${SLUG}.${BASE_DOMAIN}`) || Host(`places-${SLUG}.${BASE_DOMAIN}`) || Host(`flights-${SLUG}.${BASE_DOMAIN}`) || Host(`assistant-${SLUG}.${BASE_DOMAIN}`)
+      - traefik.http.routers.pc-t-${SLUG}.rule=Host(`photos-${SLUG}.${BASE_DOMAIN}`) || Host(`docs-${SLUG}.${BASE_DOMAIN}`) || Host(`places-${SLUG}.${BASE_DOMAIN}`) || Host(`flights-${SLUG}.${BASE_DOMAIN}`) || Host(`files-${SLUG}.${BASE_DOMAIN}`) || Host(`assistant-${SLUG}.${BASE_DOMAIN}`)
       - traefik.http.routers.pc-t-${SLUG}.entrypoints=websecure
       - traefik.http.services.pc-t-${SLUG}.loadbalancer.server.port=80
     depends_on:
@@ -44,6 +44,7 @@ services:
       paperless: { condition: service_started, required: false }
       dawarich: { condition: service_started, required: false }
       airtrail: { condition: service_started, required: false }
+      opencloud: { condition: service_started, required: false }
       assistant: { condition: service_started, required: false }
     networks: [internal, assistant, pc-edge]
     restart: unless-stopped
@@ -244,6 +245,81 @@ services:
     networks: [internal]
     restart: unless-stopped
 
+  # --------------------------------------------------------------- files
+  # OpenCloud (Apache-2.0 server, AGPL-3.0 web app), sold as "Files": we
+  # don't use its name or logo (docs/files.md). Sign-in only through the
+  # tenant's Authentik app: no built-in IdP, no basic auth, no app tokens.
+  # OpenCloud refuses anyone whose token lacks the tenant's groups.
+  files-init:
+    image: ${NGINX_IMAGE} # any small image with sh and chown
+    profiles: [files]
+    # The volume roots come from the storage as root; OpenCloud runs as 1000.
+    entrypoint: ["/bin/sh", "-c", "chown 1000:1000 /etc/opencloud /var/lib/opencloud"]
+    volumes:
+      - files-config:/etc/opencloud
+      - files-data:/var/lib/opencloud
+    network_mode: none
+
+  opencloud:
+    image: opencloudeu/opencloud:${OPENCLOUD_VERSION}
+    profiles: [files]
+    user: "1000:1000"
+    cap_drop: [ALL]
+    security_opt: [no-new-privileges:true]
+    # First start writes opencloud.yaml with random internal secrets into the
+    # config volume; later starts keep it.
+    entrypoint: ["/bin/sh", "-c", "opencloud init || true; exec opencloud server"]
+    environment:
+      OC_URL: ${SCHEME}://files-${SLUG}.${BASE_DOMAIN}
+      OC_LOG_LEVEL: warn
+      OC_INSECURE: "false"
+      PROXY_TLS: "false"
+      PROXY_HTTP_ADDR: 0.0.0.0:9200
+      # Identity: Authentik only. The built-in user directory (idm) stays,
+      # filled on first sign-in; its admin can't sign in (no basic auth, no IdP).
+      OC_EXCLUDE_RUN_SERVICES: idp
+      IDM_ADMIN_PASSWORD: ${FILES_ADMIN_PASSWORD}
+      OC_OIDC_ISSUER: ${SCHEME}://${AUTH_HOST}/application/o/${SLUG}-files/
+      OC_OIDC_CLIENT_ID: ${FILES_OIDC_CLIENT_ID}
+      WEB_OIDC_CLIENT_ID: ${FILES_OIDC_CLIENT_ID}
+      WEB_OIDC_SCOPE: openid profile email
+      PROXY_OIDC_REWRITE_WELLKNOWN: "true"
+      PROXY_OIDC_ACCESS_TOKEN_VERIFY_METHOD: jwt
+      PROXY_AUTOPROVISION_ACCOUNTS: "true"
+      PROXY_USER_OIDC_CLAIM: sub
+      PROXY_USER_CS3_CLAIM: username
+      PROXY_AUTOPROVISION_CLAIM_USERNAME: sub
+      # No group sync: a member's Authentik groups (other households) stay out.
+      PROXY_AUTOPROVISION_CLAIM_GROUPS: castor_no_group_sync
+      GRAPH_USERNAME_MATCH: none
+      GRAPH_ASSIGN_DEFAULT_USER_ROLE: "false"
+      SETTINGS_SETUP_DEFAULT_ASSIGNMENTS: "false"
+      PROXY_ROLE_ASSIGNMENT_DRIVER: oidc
+      PROXY_ENABLE_BASIC_AUTH: "false"
+      PROXY_ENABLE_APP_AUTH: "false"
+      # Space quotas: the tenant's storage quota is the limit.
+      GRAPH_SPACES_DEFAULT_QUOTA: "0"
+      # Sharing: links need a password, no guest accounts.
+      OC_SHARING_PUBLIC_SHARE_MUST_HAVE_PASSWORD: "true"
+      OC_SHARING_PUBLIC_WRITEABLE_SHARE_MUST_HAVE_PASSWORD: "true"
+      OC_ENABLE_GUEST_LINKS: "false"
+      FRONTEND_CHECK_FOR_UPDATES: "false"
+      # Replaces upstream's CSP, which would add its app store and update hosts.
+      PROXY_CSP_CONFIG_FILE_OVERRIDE_LOCATION: /etc/castor/csp.yaml
+      SSL_CERT_FILE: /etc/pc-ca/ca-bundle.pem
+    volumes:
+      - ${CA_DIR}:/etc/pc-ca:ro
+      - files-config:/etc/opencloud
+      - files-data:/var/lib/opencloud
+      # Rendered by castord: role mapping (proxy.yaml) and CSP.
+      - ${TENANT_DIR}/opencloud-proxy.yaml:/etc/opencloud/proxy.yaml:ro
+      - ${TENANT_DIR}/opencloud-csp.yaml:/etc/castor/csp.yaml:ro
+    extra_hosts: *auth-host
+    depends_on:
+      files-init: { condition: service_completed_successfully }
+    networks: [internal]
+    restart: unless-stopped
+
   # ----------------------------------------------------------- assistant
   # Hermes Agent, one profile per household member (own memory, own tool
   # token). Its API is only called by the portal's server, with the member's
@@ -311,6 +387,8 @@ volumes:
   places-watched:
   places-storage:
   flights-uploads:
+  files-config:
+  files-data:
 
 networks:
   internal:

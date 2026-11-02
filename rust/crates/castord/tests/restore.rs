@@ -73,7 +73,7 @@ async fn restores_like_the_typescript_worker() {
                  -f /repo/packages/stack-templates/tenant/compose.yml \
                  --project-directory /Users/Shared/castor/files/templates/tenant \
                  -f /repo/.tenants/{s}/compose.volumes.yml --env-file /repo/.tenants/{s}/tenant.env \
-                 --profile photos --profile docs --profile places --profile flights --profile assistant stop"
+                 --profile photos --profile docs --profile places --profile flights --profile files --profile assistant stop"
             ),
             format!("{GATE} castor-zfs close {s}"),
             format!("{GATE} castor-snap set-aside {s} {tag}"),

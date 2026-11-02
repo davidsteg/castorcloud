@@ -719,11 +719,13 @@ mod tests {
 
     #[test]
     fn usage_per_service() {
-        let by_dir = parse_usage("immich-db 5\nphotos 100\ndocs-media 7\nweird x\nassistant 3\n\nflights-uploads 1\n");
-        assert_eq!(by_dir.len(), 5);
+        let by_dir = parse_usage(
+            "immich-db 5\nphotos 100\ndocs-media 7\nweird x\nassistant 3\n\nflights-uploads 1\nfiles-data 40\n",
+        );
+        assert_eq!(by_dir.len(), 6);
         assert_eq!(
             usage_by_service(&by_dir).to_string(),
-            r#"{"photos":105,"docs":7,"places":0,"flights":1,"system":3}"#
+            r#"{"photos":105,"docs":7,"places":0,"flights":1,"files":40,"system":3}"#
         );
     }
 }

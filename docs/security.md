@@ -72,7 +72,11 @@ Never store these on data-plane nodes.
 
 - One IdP (Authentik) for the portal and every service; services have no
   local passwords (Immich password login off, Paperless regular login off,
-  Dawarich e-mail login off, AirTrail password form hidden).
+  Dawarich e-mail login off, AirTrail password form hidden, OpenCloud with
+  no built-in IdP, basic auth or app tokens).
+- Files (OpenCloud) checks the tenant itself too: tokens must come from the
+  tenant's own issuer, and only members of `cust-<slug>` or
+  `cust-<slug>-owners` get a role; anyone else is refused ([files.md](files.md)).
 - Each service app is bound to the tenant's Authentik group only.
 - Google and GitHub login use matching mode `email_deny`: they never attach
   to an existing account with the same e-mail (prevents account takeover).

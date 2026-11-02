@@ -175,7 +175,10 @@ async fn measure_records_usage_per_service() {
     let w = world(&db, "MAC").await;
     let fake = Fake::new(vec![
         ("castor-zfs status", Ok("open 120 102400 102400\n")),
-        ("castor-zfs usage", Ok("db 3\nphotos 100\nimmich-db 5\ndocs-media 12\n")),
+        (
+            "castor-zfs usage",
+            Ok("db 3\nphotos 100\nimmich-db 5\ndocs-media 12\nfiles-data 9\n"),
+        ),
     ]);
     let n = node("MAC", "TENANTS", fake);
     let s = TenantStorage::new(&n, &w.slug).unwrap();
@@ -188,7 +191,7 @@ async fn measure_records_usage_per_service() {
             &w.tenant
         )
         .await,
-        vec![r#"120 102400 {"docs": 12, "photos": 105, "places": 0, "system": 3, "flights": 0} true"#]
+        vec![r#"120 102400 {"docs": 12, "files": 9, "photos": 105, "places": 0, "system": 3, "flights": 0} true"#]
     );
     cleanup(&db, &w).await;
 }

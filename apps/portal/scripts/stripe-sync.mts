@@ -26,6 +26,7 @@ const NAMES: Record<string, string> = {
   docs: "Documents",
   places: "Timeline",
   flights: "Flights",
+  files: "Files",
   assistant: "Assistant",
   credit: "AI credit (CHF 1 per month)",
   stackram: "Own apps: memory (per 256 MB)",

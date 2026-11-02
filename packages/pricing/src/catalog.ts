@@ -2,7 +2,7 @@
 // consumer prices including Swiss VAT. Change prices here; Stripe prices are
 // synced from this file (apps/portal: npm run stripe:sync).
 
-export type ServiceKey = "photos" | "docs" | "places" | "flights" | "assistant";
+export type ServiceKey = "photos" | "docs" | "places" | "flights" | "files" | "assistant";
 
 export const CURRENCY = "chf";
 
@@ -39,13 +39,15 @@ export type CatalogItem = {
   project: OssProject | "platform" | null;
 };
 
-export type OssProject = "immich" | "paperless" | "dawarich" | "airtrail" | "hermes";
+export type OssProject = "immich" | "paperless" | "dawarich" | "airtrail" | "opencloud" | "hermes";
 
 export const OSS_PROJECTS: Record<OssProject, { name: string; url: string }> = {
   immich: { name: "Immich", url: "https://immich.app" },
   paperless: { name: "Paperless-ngx", url: "https://docs.paperless-ngx.com" },
   dawarich: { name: "Dawarich", url: "https://dawarich.app" },
   airtrail: { name: "AirTrail", url: "https://airtrail.johan.ohly.dk" },
+  // Credited by name only: OpenCloud's marks are not used for our product (docs/files.md).
+  opencloud: { name: "OpenCloud", url: "https://opencloud.eu" },
   hermes: { name: "Hermes Agent (Nous Research)", url: "https://nousresearch.com" },
 };
 
@@ -63,6 +65,8 @@ export const SERVICES: Record<ServiceKey, CatalogItem> = {
   docs: { key: "docs", priceRp: 200, costRp: 50, project: "paperless" },
   places: { key: "places", priceRp: 150, costRp: 30, project: "dawarich" },
   flights: { key: "flights", priceRp: 100, costRp: 15, project: "airtrail" },
+  // One OpenCloud per household (~0.5 GB memory); the files count against booked storage.
+  files: { key: "files", priceRp: 200, costRp: 40, project: "opencloud" },
   // Agent hosting and memory; the AI usage itself is paid by the monthly credit.
   assistant: { key: "assistant", priceRp: 300, costRp: 40, project: "hermes" },
 };

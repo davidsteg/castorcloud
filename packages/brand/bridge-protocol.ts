@@ -1,7 +1,7 @@
 // Messages exchanged between the portal shell (parent window) and the
 // bridge script injected into each embedded service (iframe).
 
-export type ServiceKey = "photos" | "docs" | "places" | "flights";
+export type ServiceKey = "photos" | "docs" | "places" | "flights" | "files";
 
 /** iframe -> shell */
 export type BridgeEvent =

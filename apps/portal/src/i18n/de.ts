@@ -51,6 +51,11 @@ const de: Dictionary = {
         text: "Jeder Flug auf der Weltkarte, mit Statistiken, Airlines und Flughäfen.",
         replaces: "TripIt, Flug-Apps",
       },
+      files: {
+        name: "Dateien",
+        text: "Dateien und Ordner speichern, synchronisieren und teilen – mit passwortgeschützten Links für alle ausserhalb des Haushalts.",
+        replaces: "Google Drive, Dropbox, iCloud Drive",
+      },
       assistant: {
         name: "Assistent",
         text: "Stellen Sie Fragen zu Ihren eigenen Daten: «Wann war ich in Lissabon, und wo ist die Hotelrechnung?»",
@@ -205,6 +210,19 @@ const de: Dictionary = {
         ],
         import: "Übernehmen Sie Ihre Flüge aus myFlightradar24, App in the Air oder JetLog per Import.",
         apps: "Im Browser auf Computer und Handy.",
+      },
+      files: {
+        headline: "Ihre Dateien, in Ihrer eigenen Cloud.",
+        lead: "Ein Laufwerk für den ganzen Haushalt: Dateien und Ordner hochladen, ordnen und teilen, mit Vorschau für Dokumente, Fotos und Videos.",
+        bullets: [
+          "Persönliche Ordner für alle, gemeinsame Bereiche für den Haushalt",
+          "Dateien und Ordner per Link teilen, immer mit Passwort geschützt",
+          "Vorschau von PDFs, Bildern, Videos und Textdateien",
+          "Versionsverlauf und Papierkorb",
+          "Suche nach Dateiname und Inhalt",
+        ],
+        import: "Laden Sie Ihren Google-Drive- oder Dropbox-Ordner herunter und ziehen Sie ihn in den Browser – die Ordner bleiben, wie sie sind.",
+        apps: "Im Browser auf Computer und Handy. Sync-Apps für Computer und Handy folgen später.",
       },
       assistant: {
         headline: "Fragen Sie Ihre eigenen Daten.",
@@ -434,7 +452,7 @@ const de: Dictionary = {
     title: "Speicher",
     used: "{used} von {quota} belegt",
     notMeasured: "Die Belegung wird stündlich gemessen.",
-    parts: { photos: "Fotos", docs: "Dokumente", places: "Zeitachse", flights: "Flüge", system: "Datenbanken & System" },
+    parts: { photos: "Fotos", docs: "Dokumente", places: "Zeitachse", flights: "Flüge", files: "Dateien", system: "Datenbanken & System" },
     warn: "Ihr Speicher ist zu {percent}% belegt. Buchen Sie mehr Speicher, bevor er voll ist.",
     full: "Ihr Speicher ist fast voll. Sobald er voll ist, schlagen neue Uploads fehl: Löschen Sie Dateien oder buchen Sie mehr Speicher.",
     held: "Ihr Speicher bleibt bei {volume}, bis Ihre Daten ({used}) mit 10% Reserve in die gebuchten {quota} passen. Löschen Sie Dateien oder buchen Sie mehr.",

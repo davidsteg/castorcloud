@@ -50,6 +50,11 @@ const fr: Dictionary = {
         text: "Chaque vol sur une carte du monde, avec statistiques, compagnies et aéroports.",
         replaces: "TripIt, applis de vols",
       },
+      files: {
+        name: "Fichiers",
+        text: "Enregistrez, synchronisez et partagez vos fichiers et dossiers – avec des liens protégés par mot de passe pour les personnes hors du foyer.",
+        replaces: "Google Drive, Dropbox, iCloud Drive",
+      },
       assistant: {
         name: "Assistant",
         text: "Posez des questions sur vos propres données : « Quand étais-je à Lisbonne, et où est la facture de l’hôtel ? »",
@@ -204,6 +209,19 @@ const fr: Dictionary = {
         ],
         import: "Reprenez vos vols depuis myFlightradar24, App in the Air ou JetLog par import.",
         apps: "Dans le navigateur sur ordinateur et téléphone.",
+      },
+      files: {
+        headline: "Vos fichiers, dans votre propre cloud.",
+        lead: "Un espace de stockage pour tout le foyer : téléversez, organisez et partagez fichiers et dossiers, avec aperçu des documents, photos et vidéos.",
+        bullets: [
+          "Dossiers personnels pour chacun, espaces partagés pour le foyer",
+          "Partage de fichiers et dossiers par lien, toujours protégé par un mot de passe",
+          "Aperçu des PDF, images, vidéos et fichiers texte",
+          "Historique des versions et corbeille",
+          "Recherche par nom de fichier et par contenu",
+        ],
+        import: "Téléchargez votre dossier Google Drive ou Dropbox et glissez-le dans le navigateur – les dossiers restent tels quels.",
+        apps: "Dans le navigateur, sur ordinateur et téléphone. Les apps de synchronisation suivront plus tard.",
       },
       assistant: {
         headline: "Interrogez vos propres données.",
@@ -433,7 +451,7 @@ const fr: Dictionary = {
     title: "Stockage",
     used: "{used} utilisés sur {quota}",
     notMeasured: "L’utilisation est mesurée toutes les heures.",
-    parts: { photos: "Photos", docs: "Documents", places: "Chronologie", flights: "Vols", system: "Bases de données et système" },
+    parts: { photos: "Photos", docs: "Documents", places: "Chronologie", flights: "Vols", files: "Fichiers", system: "Bases de données et système" },
     warn: "Votre stockage est plein à {percent} %. Réservez davantage de stockage avant qu’il soit plein.",
     full: "Votre stockage est presque plein. Une fois plein, les nouveaux envois échouent : supprimez des fichiers ou réservez davantage de stockage.",
     held: "Votre stockage reste à {volume} jusqu’à ce que vos données ({used}) tiennent, avec 10 % de marge, dans les {quota} réservés. Supprimez des fichiers ou réservez davantage.",

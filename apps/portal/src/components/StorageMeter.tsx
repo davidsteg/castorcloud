@@ -2,12 +2,13 @@ import type { Tenant } from "@pc/db";
 import { formatStorage, storageLevel, storageQuotaMb } from "@pc/pricing";
 import { fill, type Dictionary } from "@/i18n";
 
-const PARTS = ["photos", "docs", "places", "flights", "system"] as const;
+const PARTS = ["photos", "docs", "places", "flights", "files", "system"] as const;
 const COLORS: Record<(typeof PARTS)[number], string> = {
   photos: "var(--pc-series-4)",
   docs: "var(--pc-series-1)",
   places: "var(--pc-ok)",
   flights: "var(--pc-series-3)",
+  files: "var(--pc-series-6)",
   system: "var(--pc-series-2)",
 };
 

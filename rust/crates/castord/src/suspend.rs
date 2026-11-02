@@ -18,7 +18,7 @@ use crate::storage::{StacksStorage, Status, TenantStorage};
 use crate::{Control, Handler, Job, JobCx, valid};
 
 /// Compose profiles: one per stack service, plus the assistant (ALL_PROFILES).
-pub const ALL_PROFILES: [&str; 5] = ["photos", "docs", "places", "flights", "assistant"];
+pub const ALL_PROFILES: [&str; 6] = ["photos", "docs", "places", "flights", "files", "assistant"];
 pub use crate::stacks::edge::STACKS_EDGE;
 
 pub struct Suspend(pub Arc<Control>);

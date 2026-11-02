@@ -10,9 +10,16 @@ pub enum Service {
     Docs,
     Places,
     Flights,
+    Files,
 }
 
-pub const STACK_SERVICES: [Service; 4] = [Service::Photos, Service::Docs, Service::Places, Service::Flights];
+pub const STACK_SERVICES: [Service; 5] = [
+    Service::Photos,
+    Service::Docs,
+    Service::Places,
+    Service::Flights,
+    Service::Files,
+];
 
 pub struct ServiceDef {
     pub label: &'static str,
@@ -24,6 +31,8 @@ pub struct ServiceDef {
     pub extra_redirects: &'static [&'static str],
     /// Answered with < 400 once the service is up.
     pub health_path: &'static str,
+    /// A browser app without a client secret (OIDC public client, PKCE).
+    pub public_client: bool,
 }
 
 impl Service {
@@ -33,6 +42,7 @@ impl Service {
             Self::Docs => "docs",
             Self::Places => "places",
             Self::Flights => "flights",
+            Self::Files => "files",
         }
     }
 
@@ -49,6 +59,7 @@ impl Service {
                 redirect_paths: &["/auth/login", "/user-settings"],
                 extra_redirects: &["app.immich:///oauth-callback"],
                 health_path: "/api/server/ping",
+                public_client: false,
             },
             Self::Docs => ServiceDef {
                 label: "Documents",
@@ -57,6 +68,7 @@ impl Service {
                 redirect_paths: &["/accounts/oidc/authentik/login/callback/"],
                 extra_redirects: &[],
                 health_path: "/accounts/login/",
+                public_client: false,
             },
             Self::Places => ServiceDef {
                 label: "Timeline",
@@ -65,6 +77,7 @@ impl Service {
                 redirect_paths: &["/users/auth/openid_connect/callback"],
                 extra_redirects: &[],
                 health_path: "/api/v1/health",
+                public_client: false,
             },
             Self::Flights => ServiceDef {
                 label: "Flights",
@@ -73,6 +86,18 @@ impl Service {
                 redirect_paths: &["/login"],
                 extra_redirects: &[],
                 health_path: "/login",
+                public_client: false,
+            },
+            // OpenCloud, sold under our own name: its web app signs in as a
+            // public client; no desktop or phone apps yet (docs/files.md).
+            Self::Files => ServiceDef {
+                label: "Files",
+                containers: &["opencloud", "files-init"],
+                volumes: &["files-config", "files-data"],
+                redirect_paths: &["/oidc-callback.html", "/oidc-silent-redirect.html"],
+                extra_redirects: &[],
+                health_path: "/status.php",
+                public_client: true,
             },
         }
     }
@@ -167,7 +192,7 @@ pub fn redirect_uris(slug: &str, p: &Platform, s: Service) -> Vec<Value> {
         .collect()
 }
 
-pub const SECRET_KEYS: [&str; 15] = [
+pub const SECRET_KEYS: [&str; 16] = [
     "IMMICH_DB_PASSWORD",
     "DB_ROOT_PASSWORD",
     "PAPERLESS_DB_PASSWORD",
@@ -183,6 +208,7 @@ pub const SECRET_KEYS: [&str; 15] = [
     "DAWARICH_SECRET_KEY_BASE",
     "ASSISTANT_ADMIN_KEY",
     "LLM_VIRTUAL_KEY",
+    "FILES_ADMIN_PASSWORD",
 ];
 
 /// Ordered name -> value, as JavaScript objects keep insertion order.
@@ -263,6 +289,53 @@ pub fn paperless_providers(slug: &str, p: &Platform, secrets: &Vars) -> Value {
                 "secret": get(secrets, "DOCS_OIDC_CLIENT_SECRET"),
                 "settings": { "server_url": format!("{}.well-known/openid-configuration", n.issuer(Service::Docs)) },
             }],
+        },
+    })
+}
+
+/// OpenCloud's proxy.yaml (Files): who may sign in and with which role.
+/// Only members of the tenant's Authentik groups get a role; anyone else is
+/// refused by OpenCloud itself, even with a token Authentik signed.
+pub fn opencloud_proxy(slug: &str, p: &Platform) -> Value {
+    let n = Names::new(slug, p);
+    json!({
+        "oidc": { "access_token_verify_method": "jwt" },
+        "role_assignment": {
+            "driver": "oidc",
+            "oidc_role_mapper": {
+                "role_claim": "groups",
+                // First match wins: owners manage spaces, members use them.
+                "role_mapping": [
+                    { "role_name": "spaceadmin", "claim_value": n.owners_group() },
+                    { "role_name": "user", "claim_value": n.members_group() },
+                ],
+            },
+        },
+    })
+}
+
+/// OpenCloud's CSP (Files): upstream's policy without third-party hosts
+/// (app store, update check, map tiles, office, diagrams), plus our sign-in
+/// host and framing by the tenant portal only.
+pub fn opencloud_csp(slug: &str, p: &Platform) -> Value {
+    let n = Names::new(slug, p);
+    let auth = format!("{}://{}/", p.scheme, n.auth_host());
+    let portal = n.portal_origin();
+    json!({
+        "directives": {
+            "child-src": ["'self'"],
+            "connect-src": ["'self'", "blob:", auth],
+            "default-src": ["'none'"],
+            "font-src": ["'self'"],
+            "frame-ancestors": ["'self'", portal],
+            "frame-src": ["'self'", "blob:", auth],
+            "img-src": ["'self'", "data:", "blob:"],
+            "manifest-src": ["'self'"],
+            "media-src": ["'self'"],
+            "object-src": ["'self'", "blob:"],
+            "script-src": ["'self'", "'unsafe-inline'", auth],
+            "style-src": ["'self'", "'unsafe-inline'", "blob:"],
+            "worker-src": ["'self'", "blob:"],
         },
     })
 }
@@ -355,6 +428,7 @@ pub fn tenant_env(o: &EnvInput) -> Result<String, String> {
         ("OAUTH_ALLOW_INSECURE_HTTP", (o.p.scheme == "http").to_string()),
         ("PLACES_OIDC_CLIENT_ID", n.app_slug(Service::Places)),
         ("FLIGHTS_OIDC_CLIENT_ID", n.app_slug(Service::Flights)),
+        ("FILES_OIDC_CLIENT_ID", n.app_slug(Service::Files)),
         (
             "PAPERLESS_SOCIALACCOUNT_PROVIDERS",
             paperless_providers(o.slug, o.p, o.secrets).to_string(),
@@ -476,12 +550,40 @@ mod tests {
     fn secrets_are_kept_and_filled() {
         let (s, created) = ensure_secrets(&vec![("IMMICH_DB_PASSWORD".into(), "keep".into())]).unwrap();
         assert_eq!(get(&s, "IMMICH_DB_PASSWORD"), "keep");
-        assert_eq!(created.len(), 14);
+        assert_eq!(created.len(), 15);
         assert_eq!(get(&s, "DB_ROOT_PASSWORD").len(), 48);
         assert_eq!(get(&s, "DAWARICH_SECRET_KEY_BASE").len(), 128);
         assert!(get(&s, "LLM_VIRTUAL_KEY").starts_with("sk-castor-") && get(&s, "LLM_VIRTUAL_KEY").len() == 74);
         let (again, none) = ensure_secrets(&s).unwrap();
         assert!(none.is_empty() && again == s);
+    }
+
+    #[test]
+    fn files_roles_and_csp_are_the_tenants() {
+        let p = Platform {
+            base_domain: "x.ch".into(),
+            scheme: "https".into(),
+            brand_name: "Castor".into(),
+            time_zone: "UTC".into(),
+            auth_host_ip: "1.2.3.4".into(),
+        };
+        let roles = opencloud_proxy("anna", &p);
+        assert_eq!(
+            roles["role_assignment"]["oidc_role_mapper"]["role_mapping"][0]["claim_value"],
+            "cust-anna-owners"
+        );
+        assert_eq!(
+            roles["role_assignment"]["oidc_role_mapper"]["role_mapping"][1]["claim_value"],
+            "cust-anna"
+        );
+        let csp = opencloud_csp("anna", &p);
+        assert_eq!(
+            csp["directives"]["frame-ancestors"],
+            json!(["'self'", "https://anna.x.ch"])
+        );
+        assert_eq!(csp["directives"]["connect-src"][2], "https://auth.x.ch/");
+        let d = Service::Files.def();
+        assert!(d.public_client && Service::parse("files") == Some(Service::Files));
     }
 
     #[test]

@@ -35,7 +35,7 @@ async fn suspends_like_the_typescript_worker() {
                 "{ssh} compose -p pc-t-{s} -f /repo/packages/stack-templates/tenant/compose.yml \
                  --project-directory /Users/Shared/castor/files/templates/tenant \
                  -f /repo/.tenants/{s}/compose.volumes.yml --env-file /repo/.tenants/{s}/tenant.env \
-                 --profile photos --profile docs --profile places --profile flights --profile assistant stop"
+                 --profile photos --profile docs --profile places --profile flights --profile files --profile assistant stop"
             ),
             format!("{gate} close {s}"),
         ]

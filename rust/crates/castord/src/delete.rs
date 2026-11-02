@@ -23,7 +23,7 @@ use crate::{Control, Handler, Job, JobCx, valid};
 pub const SHARED_CONTAINERS: [&str; 3] = ["pc-node-immich-ml", "pc-node-tika", "pc-node-gotenberg"];
 pub const LLM_GATEWAY: &str = "pc-node-llm-gateway";
 /// Services with their own OIDC application (STACK_SERVICES).
-pub const STACK_SERVICES: [&str; 4] = ["photos", "docs", "places", "flights"];
+pub const STACK_SERVICES: [&str; 5] = ["photos", "docs", "places", "flights", "files"];
 
 pub struct Delete(pub Arc<Control>);
 
