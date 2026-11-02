@@ -3,6 +3,7 @@
 # Run from this directory of a castorcloud checkout on the NAS:
 #
 #   cp beta.env.example .env    # fill in, chmod 600
+#   docker login registry.bridgemill.ch   # read-only account (docs/ci.md)
 #   docker compose up -d
 #
 # Who holds what:
@@ -39,7 +40,7 @@ x-logging: &logging
 
 x-castor-image: &castor-image
   logging: *logging
-  image: ghcr.io/davidsteg/castorcloud:${CASTOR_VERSION:?CASTOR_VERSION is required}
+  image: registry.bridgemill.ch/davidsteg/castorcloud:${CASTOR_VERSION:?CASTOR_VERSION is required}
   read_only: true
   tmpfs: [/tmp]
   cap_drop: [ALL]
@@ -247,7 +248,7 @@ services:
 
   node:
     logging: *logging
-    image: ghcr.io/davidsteg/castorcloud:${CASTOR_VERSION}
+    image: registry.bridgemill.ch/davidsteg/castorcloud:${CASTOR_VERSION}
     command: ["node"]
     # No env_file: the node role refuses the control plane's secrets.
     environment:
