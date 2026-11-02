@@ -55,6 +55,8 @@ The admin console is only for users with `User.isStaff`; everyone else gets a
 404, and every action checks again. Its statistics panel shows totals only
 (clouds by status, estimated MRR, users, storage, backups, jobs, alerts,
 nodes): no tenant or person is named there, and no tenant content is read.
+`/<locale>/admin/audit` shows `AuditLog` read-only, newest first, filtered by
+action (or a prefix like `staff.`), cloud or actor.
 Grant it from the control plane (the
 person must have signed in to the portal once):
 
@@ -63,6 +65,65 @@ castor-admin staff add you@example.ch
 castor-admin staff list
 castor-admin staff remove you@example.ch
 ```
+
+## Database roles
+
+The portal, castord, the monitor and castor-admin connect as `castor_app`,
+which reads and writes rows but owns nothing: it can't change the schema, and
+it can only add to `AuditLog` (docs/security.md, Database roles). The nightly
+dump runs as the read-only `castor_backup`. Only Postgres, Authentik and
+`migrate` use the owner (`POSTGRES_USER`).
+
+Set both roles up once, on the NAS in this checkout's `infra/beta`, before
+starting a release that has them (v0.7.4 or later). The compose file refuses
+to start without `APP_DATABASE_URL` and `BACKUP_PG_PASSWORD`.
+
+```sh
+# 1. Two passwords (hex, so they need no escaping in a URL).
+APP_PW=$(openssl rand -hex 32); BACKUP_PW=$(openssl rand -hex 32)
+
+# 2. The roles with their passwords; the migration adds their grants.
+docker compose exec -T postgres psql -v ON_ERROR_STOP=1 -U pc -d portal \
+  -v app="$APP_PW" -v backup="$BACKUP_PW" <<'SQL'
+SELECT 'CREATE ROLE castor_app' WHERE NOT EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'castor_app') \gexec
+SELECT 'CREATE ROLE castor_backup' WHERE NOT EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'castor_backup') \gexec
+ALTER ROLE castor_app LOGIN PASSWORD :'app';
+ALTER ROLE castor_backup LOGIN PASSWORD :'backup';
+SQL
+
+# 3. .env: the applications' URL and the backup password.
+printf 'APP_DATABASE_URL=postgresql://castor_app:%s@postgres:5432/portal\nBACKUP_PG_PASSWORD=%s\n' \
+  "$APP_PW" "$BACKUP_PW" >> .env
+unset APP_PW BACKUP_PW
+
+# 4. The new release: set CASTOR_VERSION in .env, then
+docker compose up -d
+```
+
+`migrate` runs first and grants the roles their rights; the other services
+start after it. To check:
+
+```sh
+docker compose exec -T postgres psql -U pc -d portal -tAc \
+  "SELECT has_table_privilege('castor_app', '\"AuditLog\"', 'DELETE')"   # f
+docker compose logs --tail 20 castord monitor portal   # no "permission denied"
+./castor-admin backup db-dump   # a dump as castor_backup
+```
+
+A row that must be changed by hand needs the owner:
+`docker compose exec postgres psql -U pc -d portal`.
+
+## castor-admin and logs
+
+On the NAS, run castor-admin through `infra/beta/castor-admin` (e.g.
+`infra/beta/castor-admin staff list`): it runs it in the castord container
+with your NAS account as `CASTOR_OPERATOR`, so the audit log records
+`ops-cli:<account>` as the actor instead of a bare `ops-cli`.
+
+Every container's log is rotated (10 files of 20 MB, `x-logging` in
+docker-compose.yml) and goes with the container when it is recreated. What
+must last is in `AuditLog` (in the nightly sealed dump) and gatekeeper's
+`audit.jsonl` below `GATEKEEPER_LOGS`.
 
 ## Newsletter
 

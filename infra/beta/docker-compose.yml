@@ -6,8 +6,10 @@
 #   docker compose up -d
 #
 # Who holds what:
-#   portal, castord, monitor   the database and the keys (.env); no gatekeeper
+#   portal, castord, monitor   the database as castor_app (castord dumps it as
+#                              castor_backup) and the keys (.env); no gatekeeper
 #                              token, no docker.sock, no host mounts
+#   migrate, Postgres, Authentik   the database owner (POSTGRES_PASSWORD)
 #   node (castor node)         the gatekeeper token only; refuses any other secret
 #   gatekeeper-castor          docker.sock and the TrueNAS API key
 #
@@ -25,7 +27,18 @@
 # listed under "secrets" below into SECRETS_DIR (docs/gatekeeper.md).
 name: castor
 
+# Every container's stdout/stderr: rotated, at most 10 x 20 MB each, so logs
+# can't fill the pool. They are diagnostics and go with the container; the
+# records that must last are AuditLog (Postgres, in the nightly sealed dump)
+# and gatekeeper's audit.jsonl (GATEKEEPER_LOGS).
+x-logging: &logging
+  driver: json-file
+  options:
+    max-size: 20m
+    max-file: "10"
+
 x-castor-image: &castor-image
+  logging: *logging
   image: ghcr.io/davidsteg/castorcloud:${CASTOR_VERSION:?CASTOR_VERSION is required}
   read_only: true
   tmpfs: [/tmp]
@@ -43,6 +56,7 @@ x-castor: &castor
 
 services:
   traefik:
+    logging: *logging
     image: traefik:v3.6
     command:
       - --providers.file.directory=/etc/traefik/dynamic
@@ -78,6 +92,7 @@ services:
     restart: unless-stopped
 
   postgres:
+    logging: *logging
     image: postgres:17-alpine
     environment:
       POSTGRES_USER: ${POSTGRES_USER}
@@ -93,6 +108,7 @@ services:
     restart: unless-stopped
 
   authentik-server:
+    logging: *logging
     image: ghcr.io/goauthentik/server:${AUTHENTIK_TAG}
     command: server
     environment: &authentik-env
@@ -129,6 +145,7 @@ services:
     restart: unless-stopped
 
   authentik-worker:
+    logging: *logging
     image: ghcr.io/goauthentik/server:${AUTHENTIK_TAG}
     command: worker
     environment: *authentik-env
@@ -143,6 +160,7 @@ services:
   migrate:
     <<: *castor-image
     command: ["migrate"]
+    # The tables' owner: only migrations change the schema.
     environment:
       DATABASE_URL: ${DATABASE_URL:?DATABASE_URL is required}
     restart: "no"
@@ -156,7 +174,7 @@ services:
     # Everything the portal reads (apps/portal, packages/*), and nothing else.
     # A setting it starts to read must be added here.
     environment:
-      DATABASE_URL: ${DATABASE_URL:?DATABASE_URL is required}
+      DATABASE_URL: ${APP_DATABASE_URL:?APP_DATABASE_URL is required (docs/beta.md, Database roles)}
       AUTH_SECRET: ${AUTH_SECRET:?AUTH_SECRET is required}
       PORTAL_OIDC_CLIENT_ID: ${PORTAL_OIDC_CLIENT_ID:?PORTAL_OIDC_CLIENT_ID is required}
       PORTAL_OIDC_CLIENT_SECRET: ${PORTAL_OIDC_CLIENT_SECRET:?PORTAL_OIDC_CLIENT_SECRET is required}
@@ -191,6 +209,13 @@ services:
     <<: *castor
     command: ["castord"]
     environment:
+      # castor_app and castor_backup, never the owner or superuser
+      # (docs/security.md, Database roles): .env's owner credentials are
+      # blanked here, so castord never holds them.
+      DATABASE_URL: ${APP_DATABASE_URL:?APP_DATABASE_URL is required (docs/beta.md, Database roles)}
+      POSTGRES_PASSWORD: ""
+      BACKUP_PG_USER: castor_backup
+      BACKUP_PG_PASSWORD: ${BACKUP_PG_PASSWORD:?BACKUP_PG_PASSWORD is required (docs/beta.md, Database roles)}
       LOCAL_NODE: "off"
       LINK_CERT_FILE: /run/secrets/castord_cert
       LINK_KEY_FILE: /run/secrets/castord_key
@@ -212,11 +237,16 @@ services:
   monitor:
     <<: *castor
     command: ["monitor"]
+    environment:
+      DATABASE_URL: ${APP_DATABASE_URL:?APP_DATABASE_URL is required (docs/beta.md, Database roles)}
+      POSTGRES_PASSWORD: ""
+      BACKUP_PG_PASSWORD: ""
     depends_on:
       migrate: {condition: service_completed_successfully}
     networks: [cp]
 
   node:
+    logging: *logging
     image: ghcr.io/davidsteg/castorcloud:${CASTOR_VERSION}
     command: ["node"]
     # No env_file: the node role refuses the control plane's secrets.
@@ -238,6 +268,7 @@ services:
     restart: unless-stopped
 
   gatekeeper-castor:
+    logging: *logging
     image: ${GATEKEEPER_IMAGE:?GATEKEEPER_IMAGE is required}
     container_name: gatekeeper-castor
     # Headless: no console, no admin endpoint. The TrueNAS API key is the

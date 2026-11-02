@@ -172,7 +172,10 @@ pub fn backup_settings() -> Result<Option<crate::backup::Settings>, String> {
         interval_hours,
         db_public_key,
         pg_container: var("BACKUP_PG_CONTAINER").unwrap_or_else(|| "pc-control-plane-postgres-1".into()),
-        pg_user: var("POSTGRES_USER").unwrap_or_else(|| "pc".into()),
+        pg_user: var("BACKUP_PG_USER")
+            .or_else(|| var("POSTGRES_USER"))
+            .unwrap_or_else(|| "pc".into()),
+        pg_read_only: var("BACKUP_PG_USER").is_some(),
         pg_host: var("BACKUP_PG_HOST"),
         db_dir: var("BACKUP_DB_DIR"),
         db_keep_days: var("BACKUP_DB_KEEP_DAYS")

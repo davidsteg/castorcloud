@@ -55,8 +55,13 @@ pub struct Settings {
     /// The control-plane Postgres container, for pg_dumpall.
     pub pg_container: String,
     pub pg_user: String,
+    /// pg_user is the read-only castor_backup role (BACKUP_PG_USER), not a
+    /// superuser: it can't read role passwords, so the dump leaves them out
+    /// (set them again after restoring one; docs/backups.md).
+    pub pg_read_only: bool,
     /// Postgres host to dump over the network instead of `docker exec`
-    /// (BACKUP_PG_HOST; the password comes from POSTGRES_PASSWORD).
+    /// (BACKUP_PG_HOST; the password comes from BACKUP_PG_PASSWORD, or
+    /// POSTGRES_PASSWORD without BACKUP_PG_USER).
     pub pg_host: Option<String>,
     /// A directory for the sealed dumps instead of the box (BACKUP_DB_DIR):
     /// on TrueNAS a dataset the replication task sends to the box.
@@ -220,25 +225,29 @@ fn put_in_dir(dir: &str, name: &str, sealed: &[u8], keep_days: u32) -> Result<()
 /// pg_dumpall of the whole cluster: in its container, or over the network
 /// when BACKUP_PG_HOST is set.
 fn pg_dumpall(s: &Settings) -> Cmd {
+    let read_only: &[&str] = if s.pg_read_only { &["--no-role-passwords"] } else { &[] };
     let Some(host) = &s.pg_host else {
-        return Cmd::new(
-            "docker",
-            strings(&[
-                "exec",
-                &s.pg_container,
-                "pg_dumpall",
-                "-U",
-                &s.pg_user,
-                "--clean",
-                "--if-exists",
-            ]),
-        );
+        let mut args = strings(&[
+            "exec",
+            &s.pg_container,
+            "pg_dumpall",
+            "-U",
+            &s.pg_user,
+            "--clean",
+            "--if-exists",
+        ]);
+        args.extend(strings(read_only));
+        return Cmd::new("docker", args);
     };
-    let mut cmd = Cmd::new(
-        "pg_dumpall",
-        strings(&["-h", host, "-U", &s.pg_user, "--no-password", "--clean", "--if-exists"]),
-    );
-    if let Ok(password) = std::env::var("POSTGRES_PASSWORD") {
+    let mut args = strings(&["-h", host, "-U", &s.pg_user, "--no-password", "--clean", "--if-exists"]);
+    args.extend(strings(read_only));
+    let mut cmd = Cmd::new("pg_dumpall", args);
+    let password = if s.pg_read_only {
+        crate::config::var("BACKUP_PG_PASSWORD")
+    } else {
+        crate::config::var("POSTGRES_PASSWORD")
+    };
+    if let Some(password) = password {
         cmd.env.push(("PGPASSWORD", password));
     }
     cmd
@@ -961,5 +970,40 @@ impl Task for VerifyBackups {
 
     async fn run(&self, db: &PgPool) -> Result<(), String> {
         verify_all(&self.0, db, &self.1).await
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn the_backup_role_dumps_without_role_passwords() {
+        let mut s = Settings {
+            target: "backup@box".into(),
+            interval_hours: 6.0,
+            db_public_key: None,
+            pg_container: "pg".into(),
+            pg_user: "pc".into(),
+            pg_read_only: false,
+            pg_host: None,
+            db_dir: None,
+            db_keep_days: 30,
+        };
+        assert_eq!(
+            pg_dumpall(&s).args.join(" "),
+            "exec pg pg_dumpall -U pc --clean --if-exists"
+        );
+        s.pg_user = "castor_backup".into();
+        s.pg_read_only = true;
+        assert_eq!(
+            pg_dumpall(&s).args.join(" "),
+            "exec pg pg_dumpall -U castor_backup --clean --if-exists --no-role-passwords"
+        );
+        s.pg_host = Some("postgres".into());
+        assert_eq!(
+            pg_dumpall(&s).args.join(" "),
+            "-h postgres -U castor_backup --no-password --clean --if-exists --no-role-passwords"
+        );
     }
 }

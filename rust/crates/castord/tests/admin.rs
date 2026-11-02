@@ -230,7 +230,38 @@ async fn the_audit_log_is_append_only() {
         rows(&db, r#"SELECT actor FROM "AuditLog" WHERE details->>'id' = $1"#, &id).await,
         ["ops-cli"]
     );
+    // castor_app, the role the applications connect as, can only add rows,
+    // and can't drop the triggers or skip them.
+    let mut tx = db.begin().await.unwrap();
+    sqlx::query("SET LOCAL ROLE castor_app")
+        .execute(&mut *tx)
+        .await
+        .unwrap();
+    sqlx::query(
+        r#"INSERT INTO "AuditLog" (id, actor, action, details) VALUES ($1, 'ops-cli', 'test.append_only', jsonb_build_object('id', $1::text))"#,
+    )
+    .bind(format!("{id}x"))
+    .execute(&mut *tx)
+    .await
+    .unwrap();
+    for sql in [
+        r#"DELETE FROM "AuditLog" WHERE details->>'id' = $1"#,
+        r#"DROP TRIGGER "AuditLog_append_only" ON "AuditLog""#,
+        "SET session_replication_role = replica",
+    ] {
+        sqlx::query("SAVEPOINT s").execute(&mut *tx).await.unwrap();
+        let q = sqlx::query(sql);
+        let q = if sql.contains("$1") { q.bind(&id) } else { q };
+        let e = q.execute(&mut *tx).await.unwrap_err().to_string();
+        assert!(
+            e.contains("permission denied") || e.contains("must be owner"),
+            "{sql}: {e}"
+        );
+        sqlx::query("ROLLBACK TO SAVEPOINT s").execute(&mut *tx).await.unwrap();
+    }
+    tx.commit().await.unwrap();
     delete_audit(&db, r#"DELETE FROM "AuditLog" WHERE details->>'id' = $1"#, Some(&id)).await;
+    delete_audit(&db, r#"DELETE FROM "AuditLog" WHERE id = $1"#, Some(&format!("{id}x"))).await;
 }
 
 #[tokio::test]

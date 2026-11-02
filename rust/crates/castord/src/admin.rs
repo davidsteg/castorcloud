@@ -60,6 +60,24 @@ fn sql(e: sqlx::Error) -> String {
     e.to_string()
 }
 
+/// Who ran castor-admin, for the audit log: `ops-cli:<CASTOR_OPERATOR>`, or
+/// `ops-cli` when it isn't set. The wrapper infra/beta/castor-admin sets it
+/// to the NAS account that ran it. Only a plain name is taken.
+pub fn actor() -> String {
+    operator_actor(crate::config::var("CASTOR_OPERATOR").as_deref())
+}
+
+fn operator_actor(operator: Option<&str>) -> String {
+    match operator {
+        Some(o)
+            if (1..=64).contains(&o.len()) && o.bytes().all(|b| b.is_ascii_alphanumeric() || b"._@-".contains(&b)) =>
+        {
+            format!("ops-cli:{o}")
+        }
+        _ => "ops-cli".into(),
+    }
+}
+
 /// As formatStorage in @pc/pricing.
 pub fn format_storage(mb: f64) -> String {
     if mb < 1024.0 {
@@ -316,7 +334,7 @@ pub async fn node_add(c: &Control, db: &PgPool, a: &Args) -> Result<String, Stri
         details["runtime"] = json!(runtime);
         details["controlPlaneIps"] = json!(ips);
     }
-    audit(db, "ops-cli", "node.registered", None, Some(details)).await?;
+    audit(db, &actor(), "node.registered", None, Some(details)).await?;
     let _ = write!(
         out,
         "node {name} is ready for {}",
@@ -337,7 +355,7 @@ pub async fn node_enable(db: &PgPool, name: &str, enable: bool) -> Result<String
         return Err(format!("no node {name}"));
     }
     let action = if enable { "node.enabled" } else { "node.drained" };
-    audit(db, "ops-cli", action, None, Some(json!({ "name": name }))).await?;
+    audit(db, &actor(), action, None, Some(json!({ "name": name }))).await?;
     Ok(format!(
         "{name}: {}",
         if enable {
@@ -441,7 +459,7 @@ pub async fn staff_set(db: &PgPool, email: &str, staff: bool) -> Result<String, 
     let action = if staff { "staff.grant" } else { "staff.revoke" };
     audit(
         db,
-        "ops-cli",
+        &actor(),
         action,
         None,
         Some(json!({ "userId": id, "email": email })),
@@ -470,7 +488,7 @@ pub async fn delete_tenant(db: &PgPool, slug: &str) -> Result<String, String> {
     let id = tenant_id(db, slug).await?;
     audit(
         db,
-        "ops-cli",
+        &actor(),
         "tenant.delete_requested",
         Some(&id),
         Some(json!({ "slug": slug })),
@@ -559,11 +577,12 @@ pub async fn retry(db: &PgPool, slug: &str) -> Result<String, String> {
     .map_err(sql)?;
     sqlx::query(
         r#"INSERT INTO "AuditLog" (id, actor, action, "tenantId", details, "createdAt")
-           VALUES ($1, 'ops-cli', 'tenant.retry', $2, $3::jsonb, now() AT TIME ZONE 'UTC')"#,
+           VALUES ($1, $4, 'tenant.retry', $2, $3::jsonb, now() AT TIME ZONE 'UTC')"#,
     )
     .bind(crate::db::new_id()?)
     .bind(&id)
     .bind(json!({ "slug": slug, "kind": kind, "failedJob": job_id, "job": new }).to_string())
+    .bind(actor())
     .execute(&mut *tx)
     .await
     .map_err(sql)?;
@@ -726,7 +745,7 @@ pub async fn backup_restore(
     let from = format!("{}@{}", b.gen_, b.snap);
     audit(
         db,
-        "ops-cli",
+        &actor(),
         "backup.restore_requested",
         Some(&id),
         Some(json!({ "from": from, "node": onto.map(str::to_owned).or(current) })),
@@ -751,7 +770,7 @@ pub async fn backup_discard(c: &Control, db: &PgPool, slug: &str, tag: &str) -> 
     backup::discard(c, db, &id, tag).await?;
     audit(
         db,
-        "ops-cli",
+        &actor(),
         "backup.set_aside_discarded",
         Some(&id),
         Some(json!({ "tag": tag })),
@@ -919,6 +938,16 @@ async fn wait_for(db: &PgPool, tenant: &str, status: &[&str]) -> Result<String, 
 mod tests {
     #![allow(clippy::unwrap_used)]
     use super::*;
+
+    #[test]
+    fn the_operator_is_a_plain_name() {
+        assert_eq!(operator_actor(Some("david")), "ops-cli:david");
+        assert_eq!(operator_actor(Some("truenas_admin")), "ops-cli:truenas_admin");
+        assert_eq!(operator_actor(None), "ops-cli");
+        for bad in ["", "a b", "x\nforged", "ops;rm", &"a".repeat(65)] {
+            assert_eq!(operator_actor(Some(bad)), "ops-cli", "{bad:?}");
+        }
+    }
 
     #[test]
     fn arguments() {

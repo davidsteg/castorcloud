@@ -130,6 +130,11 @@ castor-admin backup db-open dump.enc secret.txt dump.sql.gz   # on a trusted mac
 gunzip -c dump.sql.gz | docker exec -i pc-control-plane-postgres-1 psql -U pc -d postgres
 ```
 
+With `BACKUP_PG_USER` (the read-only `castor_backup` role, the beta's
+setting) the dump has no role passwords: a superuser's password can't be read
+without being one. After a restore, set the passwords of `castor_app` and
+`castor_backup` again as in [beta.md](beta.md#database-roles), step 2.
+
 Because old dumps still hold a deleted tenant's wrapped key, a deleted
 tenant's data is unrecoverable for good once the newest dump from before the
 deletion is gone: 30 days after deletion at most.
