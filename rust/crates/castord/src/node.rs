@@ -798,13 +798,14 @@ impl Node {
 }
 
 /// What the skin proxy serves under /_brand/ (not the design sources).
-const BRAND: [&str; 6] = [
+const BRAND: [&str; 7] = [
     "tokens.css",
     "theme.css",
     "bridge.js",
     "logo.svg",
     "icon.svg",
     "services",
+    "opencloud",
 ];
 
 /// Regular files below `path` (or `path` itself), sorted; links are refused.

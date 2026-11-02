@@ -139,7 +139,9 @@ services:
       # Service account for the provisioner, dashboard and assistant.
       PAPERLESS_ADMIN_USER: pc-service
       PAPERLESS_ADMIN_PASSWORD: ${PAPERLESS_SERVICE_PASSWORD}
+      # Branding through Paperless' own settings (docs/branding.md).
       PAPERLESS_APP_TITLE: ${BRAND_NAME}
+      PAPERLESS_APP_LOGO: /logo/castor-logo.svg
       # SSO only; customers never see a Paperless login form.
       PAPERLESS_APPS: allauth.socialaccount.providers.openid_connect
       PAPERLESS_SOCIALACCOUNT_PROVIDERS: ${PAPERLESS_SOCIALACCOUNT_PROVIDERS}
@@ -155,6 +157,7 @@ services:
       - ${CA_DIR}:/etc/pc-ca:ro
       - docs-data:/usr/src/paperless/data
       - docs-media:/usr/src/paperless/media
+      - ${BRAND_DIR}/icon.svg:/usr/src/paperless/media/logo/castor-logo.svg:ro
       - docs-consume:/usr/src/paperless/consume
     extra_hosts: *auth-host
     depends_on:
@@ -306,6 +309,12 @@ services:
       FRONTEND_CHECK_FOR_UPDATES: "false"
       # Replaces upstream's CSP, which would add its app store and update hosts.
       PROXY_CSP_CONFIG_FILE_OVERRIDE_LOCATION: /etc/castor/csp.yaml
+      # Branding through OpenCloud's own theme loader (docs/branding.md):
+      # name, logo and colours from packages/brand/opencloud, nothing patched.
+      WEB_ASSET_THEMES_PATH: /etc/castor/themes
+      WEB_UI_THEME_PATH: /themes/castor/theme.json
+      # No feedback link to OpenCloud's survey site in the top bar.
+      WEB_OPTION_DISABLE_FEEDBACK_LINK: "true"
       SSL_CERT_FILE: /etc/pc-ca/ca-bundle.pem
     volumes:
       - ${CA_DIR}:/etc/pc-ca:ro
@@ -314,6 +323,7 @@ services:
       # Rendered by castord: role mapping (proxy.yaml) and CSP.
       - ${TENANT_DIR}/opencloud-proxy.yaml:/etc/opencloud/proxy.yaml:ro
       - ${TENANT_DIR}/opencloud-csp.yaml:/etc/castor/csp.yaml:ro
+      - ${BRAND_DIR}/opencloud:/etc/castor/themes:ro
     # OpenCloud also calls its own public address: an upload that carries its
     # data in the first request is passed on to OC_URL/data. It goes the
     # same way in as the issuer, through Traefik, which routes files-<slug>

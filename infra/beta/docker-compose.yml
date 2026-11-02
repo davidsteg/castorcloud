@@ -119,6 +119,10 @@ services:
     volumes:
       - authentik-media:/media
       - ../control-plane/authentik/blueprints:/blueprints/custom:ro
+      # Login page logo, icon and background (only these files, read-only).
+      - ../../packages/brand/logo.svg:/media/public/castor/logo.svg:ro
+      - ../../packages/brand/icon.svg:/media/public/castor/icon.svg:ro
+      - ../../packages/brand/login-background.svg:/media/public/castor/login-background.svg:ro
     depends_on:
       postgres: {condition: service_healthy}
     networks: [cp, pc-edge]

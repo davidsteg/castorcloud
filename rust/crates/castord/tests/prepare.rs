@@ -52,7 +52,9 @@ async fn remote_node_gets_files_then_edge_and_tools() {
             format!("{gate} templates"),
             format!("tar -C {r}/infra/node -cf - compose.yml litellm"),
             format!("{gate} node"),
-            format!("tar -C {r}/packages/brand -cf - tokens.css theme.css bridge.js logo.svg icon.svg services"),
+            format!(
+                "tar -C {r}/packages/brand -cf - tokens.css theme.css bridge.js logo.svg icon.svg services opencloud"
+            ),
             format!("{gate} brand"),
             format!("tar -C {c} -cf - ca-bundle.pem"),
             format!("{gate} ca"),
