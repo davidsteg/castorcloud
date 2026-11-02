@@ -170,18 +170,87 @@ entries:
         - !Find [authentik_sources_oauth.oauthsource, [slug, google]]
         - !Find [authentik_sources_oauth.oauthsource, [slug, github]]
 
-  # Login pages in the portal's look.
+  # Login page under our own name. A flow of our own (not the upstream
+  # default-authentication-flow, whose title Authentik's default blueprint
+  # resets) that reuses the upstream default stages and the brand points to.
+  - model: authentik_blueprints.metaapplyblueprint
+    attrs:
+      identifiers:
+        name: Default - Authentication flow
+      required: true
+  - model: authentik_flows.flow
+    id: castor-login
+    identifiers:
+      slug: castor-login
+    attrs:
+      name: !Format ["%s login", !Env PC_BRAND_NAME]
+      title: !Format ["Sign in to %s", !Env PC_BRAND_NAME]
+      designation: authentication
+      authentication: none
+  - model: authentik_flows.flowstagebinding
+    identifiers:
+      target: !KeyOf castor-login
+      order: 10
+    attrs:
+      stage: !Find [authentik_stages_identification.identificationstage, [name, default-authentication-identification]]
+  - model: authentik_flows.flowstagebinding
+    id: castor-login-password-binding
+    identifiers:
+      target: !KeyOf castor-login
+      order: 20
+    attrs:
+      stage: !Find [authentik_stages_password.passwordstage, [name, default-authentication-password]]
+      re_evaluate_policies: true
+  # Skip the password after a social login (same policy as upstream).
+  - model: authentik_policies.policybinding
+    identifiers:
+      target: !KeyOf castor-login-password-binding
+      order: 10
+    attrs:
+      policy: !Find [authentik_policies_expression.expressionpolicy, [name, default-authentication-flow-password-stage]]
+      failure_result: true
+  - model: authentik_flows.flowstagebinding
+    identifiers:
+      target: !KeyOf castor-login
+      order: 30
+    attrs:
+      stage: !Find [authentik_stages_authenticator_validate.authenticatorvalidatestage, [name, default-authentication-mfa-validation]]
+  - model: authentik_flows.flowstagebinding
+    identifiers:
+      target: !KeyOf castor-login
+      order: 100
+    attrs:
+      stage: !Find [authentik_stages_user_login.userloginstage, [name, default-authentication-login]]
+
+  # Login pages in the portal's look: only official brand settings and
+  # PatternFly CSS variables (no selectors into component internals), so an
+  # Authentik upgrade can't break it. Logo, icon and background are
+  # packages/brand, mounted read-only at /media/public/castor.
   - model: authentik_brands.brand
     identifiers:
       domain: !Format ["auth.%s", !Env PC_BASE_DOMAIN]
     attrs:
       branding_title: !Env PC_BRAND_NAME
+      branding_logo: /media/public/castor/logo.svg
+      branding_favicon: /media/public/castor/icon.svg
+      branding_default_flow_background: /media/public/castor/login-background.svg
+      flow_authentication: !KeyOf castor-login
+      # Always light: the logo's navy beaver disappears on the dark theme.
+      attributes:
+        settings:
+          theme:
+            base: light
       branding_custom_css: |
-        :root {
+        :root, :host {
           --pf-global--primary-color--100: #d52b1e;
           --pf-global--primary-color--200: #b82317;
           --pf-global--link--Color: #d52b1e;
-          --ak-accent: #d52b1e;
+          --pf-global--link--Color--hover: #b82317;
+          --pf-c-button--m-primary--BackgroundColor: #d52b1e;
+          --pf-c-button--m-primary--hover--BackgroundColor: #b82317;
+          --pf-c-button--m-primary--focus--BackgroundColor: #b82317;
+          --pf-c-button--m-primary--active--BackgroundColor: #b82317;
+          --pf-global--FontFamily--sans-serif: Inter, system-ui, -apple-system, "Segoe UI", sans-serif;
+          --pf-global--FontFamily--heading--sans-serif: Inter, system-ui, -apple-system, "Segoe UI", sans-serif;
+          --ak-flow-footer-color: #5b6878;
         }
-        .pf-c-background-image, .ak-login-container { background: #f7f9fb !important; }
-        body { font-family: Inter, system-ui, -apple-system, "Segoe UI", sans-serif; }

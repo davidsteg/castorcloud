@@ -30,7 +30,7 @@ export function OssGallery({ t, compact = false }: { t: Dictionary; compact?: bo
                   <span className="bubble bot">{t.showcase.sample.answer}</span>
                 </span>
               ) : (
-                // No screenshot (OpenCloud: its marks would show; docs/files.md).
+                // No screenshot yet.
                 <span className="oss-chat" aria-hidden>
                   <span className="bubble bot">{t.services.items[SERVICE_KEYS.find((s) => SERVICES[s].project === key) ?? "files"].text}</span>
                 </span>

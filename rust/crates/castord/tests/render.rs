@@ -39,10 +39,21 @@ fn renders_what_typescript_renders() {
         parse_env_file(include_str!("../../../../packages/stack-templates/versions.env")),
         versions
     );
+    // The fixture predates the brand colours; they are checked on their own.
+    let mut immich = immich_config("anna", &p, &secrets);
+    let theme = immich.as_object_mut().unwrap().remove("theme").unwrap();
     assert_eq!(
-        serde_json::to_string_pretty(&immich_config("anna", &p, &secrets)).unwrap(),
+        serde_json::to_string_pretty(&immich).unwrap(),
         f["immich"].as_str().unwrap()
     );
+    let css = theme["customCss"].as_str().unwrap();
+    assert!(css.starts_with("html:root{--immich-ui-primary-50:"), "{css}");
+    assert!(
+        css.contains("--immich-primary:213 43 30}") && css.contains("--immich-dark-primary:239 74 60}"),
+        "{css}"
+    );
+    // Colour variables only: nothing that targets Immich's markup or loads anything.
+    assert!(!css.contains("display") && !css.contains("url(") && !css.contains("@import"));
     for (key, assistant) in [
         ("env", &[][..]),
         ("env_assistant", &[Service::Photos, Service::Flights][..]),

@@ -13,8 +13,9 @@ booked like the other services (CHF 2.00 a month, `packages/pricing`).
   is not used to advertise our product: OpenCloud GmbH's terms need written
   consent for commercial use of its marks.
 - We run the upstream image unchanged (`opencloudeu/opencloud`, production
-  channel, `OPENCLOUD_VERSION` in `versions.env`). Configuration and the skin
-  proxy's injected CSS are not changes to the code. If we ever patch the web
+  channel, `OPENCLOUD_VERSION` in `versions.env`). Configuration and our
+  theme (name, logo, colours through OpenCloud's own theme loader,
+  [branding.md](branding.md)) are not changes to the code. If we ever patch the web
   app (AGPL-3.0), its source must be offered to every user.
 - OpenCloud gets its share of the 10 % open-source donation.
 
@@ -57,4 +58,3 @@ password → 401, CSP as rendered. Refused tokens answer 500 rather than 403
 
 - Desktop and phone apps (see above).
 - Office editing (Collabora): needs a subscription for production hosting.
-- Our logo in the web app's top bar (`packages/brand/services/files.css`).
