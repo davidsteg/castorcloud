@@ -14,6 +14,8 @@ a digest; Dependabot (`.github/dependabot.yml`) proposes updates monthly (securi
 | Security | Dockerfile lint (hadolint) | a warning in any Dockerfile (`.hadolint.yaml`) |
 | Images | Build and scan | Trivy finds a fixable high or critical CVE not in `.trivyignore` |
 
+A fourth workflow, Branches, keeps the branch list clean (below).
+
 Security also runs weekly, so new advisories for unchanged code show up.
 Code scanning uploads need GitHub Code Security on a private repo, so CodeQL
 results are shown in the job summary instead of the Security tab.
@@ -161,6 +163,26 @@ GHCR_PULL_TOKEN=ghp_...                        # read:packages only
 With `CASTOR_IMAGE_TAG` unset, nodes build the images from the checkout, as
 in development. Setting it without `CASTOR_COSIGN_PUBKEY` is an error, so
 production never runs an unsigned image.
+
+## Branch cleanup
+
+The Branches workflow (`.github/workflows/branches.yml`, script
+`.github/scripts/prune-branches.sh`) deletes finished branches right after a
+pull request closes, and daily at 03:41 UTC for anything missed (pull
+requests closed by Dependabot or from forks get a read-only token). A branch
+is deleted when no open pull request uses it, as head or base, and either
+
+- a closed pull request (merged or not) had it as head and the branch still
+  points at that pull request's last commit, so the commits stay reachable
+  and "Restore branch" on the pull request brings it back; or
+- every commit on it is already on `main`.
+
+It never deletes `main`, protected branches, branches with commits added
+after their pull request closed, or unmerged work that has no pull request
+yet; those are listed in the run summary. Run it by hand under Actions >
+Branches > Run workflow, with "dry run" to only list what it would delete.
+The job's token has `contents: write` (to delete refs) and
+`pull-requests: read`, nothing else, and always runs `main`'s script.
 
 ## Accepted findings
 
