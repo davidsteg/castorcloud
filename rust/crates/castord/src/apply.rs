@@ -386,13 +386,25 @@ pub async fn apply(c: &Control, cx: &JobCx, job: &Job) -> Result<(), String> {
     }
 
     for s in &enabled {
-        wait_healthy(c, &format!("{}{}", n.service_origin(*s), s.def().health_path), s.key()).await?;
+        let url = format!("{}{}", n.service_origin(*s), s.def().health_path);
+        let watch = Watch {
+            node: &node,
+            slug: &t.slug,
+            containers: s.def().containers,
+        };
+        wait_healthy(c, cx, job, &url, s.key(), Some(watch)).await?;
     }
     if enabled.contains(&Service::Photos) {
         immich_service_account(c, &n, &t.slug, &secrets).await?;
     }
     if with_assistant {
-        wait_healthy(c, &format!("{}/health", n.assistant_origin()), "assistant").await?;
+        let url = format!("{}/health", n.assistant_origin());
+        let watch = Watch {
+            node: &node,
+            slug: &t.slug,
+            containers: &ASSISTANT_CONTAINERS,
+        };
+        wait_healthy(c, cx, job, &url, "assistant", Some(watch)).await?;
     }
     for s in &enabled {
         let version = match s {
@@ -634,13 +646,81 @@ async fn resize(
 }
 
 /// Until the URL answers below 400 (404: no route yet, 5xx: still booting).
-async fn wait_healthy(c: &Control, url: &str, label: &str) -> Result<(), String> {
+/// Where to look while a service isn't healthy yet: its containers in the
+/// tenant's compose project.
+struct Watch<'a> {
+    node: &'a Node,
+    slug: &'a str,
+    containers: &'a [&'a str],
+}
+
+/// How often (in polls) the containers are looked at, and how many looks in a
+/// row a container may be failing before the attempt gives up.
+const WATCH_EVERY: u32 = 6;
+const WATCH_STRIKES: u32 = 3;
+
+/// Waits until `url` answers below 400. Names the service in the job log, and
+/// gives up early when one of its containers keeps failing (restarting, or
+/// exited with an error) instead of waiting the whole health timeout.
+async fn wait_healthy(
+    c: &Control,
+    cx: &JobCx,
+    job: &Job,
+    url: &str,
+    label: &str,
+    watch: Option<Watch<'_>>,
+) -> Result<(), String> {
     let deadline = tokio::time::Instant::now() + c.health_timeout;
+    let mut polls: u32 = 0;
+    let mut strikes: u32 = 0;
+    let mut announced = false;
+    let mut answered = false;
     while tokio::time::Instant::now() < deadline {
         if let Ok(res) = c.http.get(url).send().await
             && res.status().as_u16() < 400
         {
-            return Ok(());
+            // Two answers in a row, and none of its containers failing: an app
+            // can answer once while starting and then crash (AirTrail does
+            // when it can't fetch its airport data).
+            let stable = match &watch {
+                Some(w) => failing(&w.node.docker(ps_args(w), true).await.unwrap_or_default(), w.containers).is_empty(),
+                None => true,
+            };
+            if answered && stable {
+                return Ok(());
+            }
+            answered = stable;
+            tokio::time::sleep(c.health_every).await;
+            continue;
+        }
+        answered = false;
+        if !announced {
+            cx.log(job, &format!("waiting for {label} ({url})")).await;
+            announced = true;
+        }
+        polls += 1;
+        if let Some(w) = &watch
+            && polls.is_multiple_of(WATCH_EVERY)
+        {
+            // Through gatekeeper this needs the docker.tenant_ps tool; a node
+            // without it just waits for the timeout as before.
+            match w.node.docker(ps_args(w), true).await {
+                Ok(ps) if !failing(&ps, w.containers).is_empty() => {
+                    let bad = failing(&ps, w.containers);
+                    strikes += 1;
+                    if strikes >= WATCH_STRIKES {
+                        return Err(format!(
+                            "{label} not healthy: {} keeps failing (on the node: docker logs {})",
+                            bad.join(", "),
+                            bad.iter()
+                                .map(|b| format!("pc-t-{}-{b}-1", w.slug))
+                                .collect::<Vec<_>>()
+                                .join(" ")
+                        ));
+                    }
+                }
+                _ => strikes = 0,
+            }
         }
         tokio::time::sleep(c.health_every).await;
     }
@@ -648,6 +728,38 @@ async fn wait_healthy(c: &Control, url: &str, label: &str) -> Result<(), String>
         "{label} not healthy after {}s ({url})",
         c.health_timeout.as_secs()
     ))
+}
+
+fn ps_args(w: &Watch<'_>) -> Vec<String> {
+    compose_args(w.node, w.slug, &ALL_PROFILES, &["ps", "-a", "--format", "json"])
+}
+
+/// The containers among `containers` that `docker compose ps -a --format json`
+/// shows restarting, dead, or exited with a non-zero code (one-shot init
+/// containers exit 0). Compose prints one object per line, older versions one
+/// array.
+pub fn failing(ps: &str, containers: &[&str]) -> Vec<String> {
+    let rows: Vec<serde_json::Value> = match serde_json::from_str::<serde_json::Value>(ps.trim()) {
+        Ok(serde_json::Value::Array(a)) => a,
+        _ => ps.lines().filter_map(|l| serde_json::from_str(l.trim()).ok()).collect(),
+    };
+    let mut out: Vec<String> = rows
+        .iter()
+        .filter(|r| {
+            r.get("Service")
+                .and_then(|v| v.as_str())
+                .is_some_and(|s| containers.contains(&s))
+        })
+        .filter(|r| {
+            let state = r.get("State").and_then(|v| v.as_str()).unwrap_or("");
+            let code = r.get("ExitCode").and_then(|v| v.as_i64()).unwrap_or(0);
+            state == "restarting" || state == "dead" || (state == "exited" && code != 0)
+        })
+        .filter_map(|r| r.get("Service").and_then(|v| v.as_str()).map(str::to_owned))
+        .collect();
+    out.sort();
+    out.dedup();
+    out
 }
 
 /// The Immich admin the dashboard and assistant use; customers sign in via SSO.

@@ -480,6 +480,98 @@ pub async fn delete_tenant(db: &PgPool, slug: &str) -> Result<String, String> {
     Ok(format!("queued DELETE for {slug} (job {job})"))
 }
 
+/// A job row as `retry` reads it: id, kind, status, params, error.
+type JobRow = (String, String, String, Option<serde_json::Value>, Option<String>);
+
+/// Job kinds `retry` may queue again: they bring the stack to its booked
+/// state and are safe to run twice. DELETE, RESTORE and SUSPEND are not.
+pub const RETRYABLE: [&str; 4] = ["PROVISION", "UPDATE", "RESUME", "STACKS"];
+
+/// `retry <slug>`: queues the tenant's newest job again when it failed after
+/// its last attempt and is one of RETRYABLE. Refused while the tenant has a job
+/// queued or running, or when anything newer succeeded since. A failed
+/// PROVISION also takes the tenant from FAILED back to PROVISIONING (only
+/// PROVISION marks a tenant FAILED, and only after payment). One transaction,
+/// audited as `tenant.retry`.
+pub async fn retry(db: &PgPool, slug: &str) -> Result<String, String> {
+    let sql = |e: sqlx::Error| e.to_string();
+    let mut tx = db.begin().await.map_err(sql)?;
+    let (id, status): (String, String) =
+        sqlx::query_as(r#"SELECT id, status::text FROM "Tenant" WHERE slug = $1 FOR UPDATE"#)
+            .bind(slug)
+            .fetch_optional(&mut *tx)
+            .await
+            .map_err(sql)?
+            .ok_or_else(|| format!("no tenant {slug}"))?;
+    let open: i64 =
+        sqlx::query_scalar(r#"SELECT count(*) FROM "Job" WHERE "tenantId" = $1 AND status IN ('QUEUED', 'RUNNING')"#)
+            .bind(&id)
+            .fetch_one(&mut *tx)
+            .await
+            .map_err(sql)?;
+    if open > 0 {
+        return Err(format!("{slug} has a job queued or running; nothing to retry"));
+    }
+    let last: Option<JobRow> = sqlx::query_as(
+        r#"SELECT id, kind::text, status::text, params, error FROM "Job"
+           WHERE "tenantId" = $1 ORDER BY "createdAt" DESC LIMIT 1"#,
+    )
+    .bind(&id)
+    .fetch_optional(&mut *tx)
+    .await
+    .map_err(sql)?;
+    let Some((job_id, kind, job_status, params, error)) = last else {
+        return Err(format!("{slug} has no jobs"));
+    };
+    if job_status != "FAILED" {
+        return Err(format!("{slug}: the newest job ({kind}) is {job_status}, not FAILED"));
+    }
+    if !RETRYABLE.contains(&kind.as_str()) {
+        return Err(format!(
+            "{slug}: the failed job is {kind}; retry only re-runs {}",
+            RETRYABLE.join(", ")
+        ));
+    }
+    if kind == "PROVISION" {
+        if status != "FAILED" {
+            return Err(format!("{slug} is {status}, not FAILED; nothing to retry"));
+        }
+        sqlx::query(
+            r#"UPDATE "Tenant" SET status = 'PROVISIONING', "updatedAt" = now() AT TIME ZONE 'UTC'
+               WHERE id = $1 AND status = 'FAILED'"#,
+        )
+        .bind(&id)
+        .execute(&mut *tx)
+        .await
+        .map_err(sql)?;
+    }
+    let new = crate::db::new_id()?;
+    sqlx::query(
+        r#"INSERT INTO "Job" (id, "tenantId", kind, params, "createdAt", "runAfter")
+           VALUES ($1, $2, $3::"JobKind", $4, now() AT TIME ZONE 'UTC', now() AT TIME ZONE 'UTC')"#,
+    )
+    .bind(&new)
+    .bind(&id)
+    .bind(&kind)
+    .bind(params)
+    .execute(&mut *tx)
+    .await
+    .map_err(sql)?;
+    sqlx::query(
+        r#"INSERT INTO "AuditLog" (id, actor, action, "tenantId", details, "createdAt")
+           VALUES ($1, 'ops-cli', 'tenant.retry', $2, $3::jsonb, now() AT TIME ZONE 'UTC')"#,
+    )
+    .bind(crate::db::new_id()?)
+    .bind(&id)
+    .bind(json!({ "slug": slug, "kind": kind, "failedJob": job_id, "job": new }).to_string())
+    .execute(&mut *tx)
+    .await
+    .map_err(sql)?;
+    tx.commit().await.map_err(sql)?;
+    let why = error.map(|e| format!("\nlast error: {e}")).unwrap_or_default();
+    Ok(format!("queued {kind} for {slug} again (job {new}){why}"))
+}
+
 // --------------------------------------------------------------- backups
 
 /// `backup status`: the box, every tenant's last backup, problems, dumps.

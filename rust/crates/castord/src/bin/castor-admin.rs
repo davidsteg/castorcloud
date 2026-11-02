@@ -12,6 +12,7 @@
 //!   castor-admin backup db-open <file> <secret-key-file> <out.sql.gz>
 //!   castor-admin staff list | add <email> | remove <email>
 //!   castor-admin delete-tenant <slug>
+//!   castor-admin retry <slug>          re-run a tenant's failed PROVISION/UPDATE/RESUME/STACKS
 //!   castor-admin e2e [--delete]
 //!   castor-admin gatekeeper tools <pool> [<replication-task-id>]   gatekeeper-castor's tools.yaml
 use std::io::Write;
@@ -22,7 +23,7 @@ use castord::admin::{self, Args};
 use castord::{Control, backup, config};
 
 const USAGE: &str =
-    "usage: castor-admin node|backup|staff|delete-tenant|e2e|gatekeeper … (see the top of castor-admin.rs)";
+    "usage: castor-admin node|backup|staff|delete-tenant|retry|e2e|gatekeeper … (see the top of castor-admin.rs)";
 
 /// A new file only the operator can read (dumps hold every tenant's wrapped key).
 fn private_file(path: &str) -> Result<std::fs::File, String> {
@@ -177,6 +178,10 @@ async fn run(args: Vec<String>) -> Result<String, String> {
         Some("delete-tenant") => {
             let slug = a.arg(1).ok_or("usage: delete-tenant <slug>")?;
             admin::delete_tenant(&config::connect(2).await?, slug).await
+        }
+        Some("retry") => {
+            let slug = a.arg(1).ok_or("usage: retry <slug>")?;
+            admin::retry(&config::connect(2).await?, slug).await
         }
         Some("e2e") => {
             let c = config::control()?;
