@@ -42,9 +42,12 @@ COPY packages packages
 COPY apps/portal apps/portal
 ARG BASE_DOMAIN=castorcloud.ch
 ENV BASE_DOMAIN=$BASE_DOMAIN NEXT_TELEMETRY_DISABLED=1
-# Alpine uses musl: drop the glibc builds of native modules.
+# Alpine uses musl: drop the glibc builds of native modules. The TypeScript
+# compiler (a Go binary since 7) is only needed for the build; next start and
+# prisma migrate run without it.
 RUN npm run build -w @pc/portal && rm -rf apps/portal/.next/cache \
-    node_modules/@next/swc-*-gnu node_modules/@img/sharp-linux-* node_modules/@img/sharp-libvips-linux-*
+    node_modules/@next/swc-*-gnu node_modules/@img/sharp-linux-* node_modules/@img/sharp-libvips-linux-* \
+    node_modules/typescript node_modules/@typescript
 
 FROM node:24-alpine@sha256:44fce696f38ba8c987c4db89954051000bbd05ffd8d8659ba15ed4a8602e937f AS runtime
 # castord drives nodes with the docker CLI and OpenSSH, and dumps the
