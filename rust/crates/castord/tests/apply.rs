@@ -205,7 +205,16 @@ async fn provisions_like_the_typescript_worker() {
         .collect();
     assert_eq!(puts.len(), 4 + 3 * 2, "{puts:#?}");
     assert!(puts.iter().any(|p| p.ends_with("assistant/members.json 644")));
-    let rest: Vec<String> = calls.iter().skip(5 + puts.len()).map(|l| mask(l)).collect();
+    // While waiting for a service, castord looks at its containers: twice for
+    // each of the two waits here (Photos, the assistant).
+    let ps = |l: &&String| l.ends_with(" ps -a --format json");
+    assert_eq!(calls.iter().filter(ps).count(), 2 * 2, "{calls:#?}");
+    let rest: Vec<String> = calls
+        .iter()
+        .skip(5 + puts.len())
+        .filter(|l| !ps(l))
+        .map(|l| mask(l))
+        .collect();
     let photos_only = compose.replace(" --profile assistant", "");
     assert_eq!(
         rest,
@@ -294,11 +303,12 @@ async fn provisions_like_the_typescript_worker() {
         "{gw:?}"
     );
     let apps = apps_seen.lock().unwrap().clone();
-    assert_eq!(apps[0], "GET /api/server/ping auth=false ");
-    assert!(apps[1].starts_with(&format!(
+    // A service counts as up after two answers in a row.
+    assert_eq!(apps[..2], ["GET /api/server/ping auth=false "; 2]);
+    assert!(apps[2].starts_with(&format!(
         r#"POST /api/auth/admin-sign-up auth=false {{"email":"service@{s}.castor.test","password":""#
     )));
-    assert_eq!(apps[2], "GET /health auth=false ");
+    assert_eq!(apps[3..5], ["GET /health auth=false "; 2]);
 
     assert_eq!(
         rows(&db, r#"SELECT status::text FROM "Tenant" WHERE id = $1"#, t).await,
@@ -537,4 +547,21 @@ async fn refusals_and_held_back_downgrades() {
     );
     teardown(&db, &w, &users).await;
     std::fs::remove_dir_all(&root).unwrap();
+}
+
+#[test]
+fn failing_containers() {
+    use castord::apply::failing;
+    let lines = r#"{"Service":"opencloud","State":"restarting","ExitCode":1}
+{"Service":"files-init","State":"exited","ExitCode":0}
+{"Service":"paperless","State":"exited","ExitCode":137}
+{"Service":"dawarich","State":"running","ExitCode":0}
+not json"#;
+    assert_eq!(failing(lines, &["opencloud", "files-init"]), ["opencloud"]);
+    assert_eq!(failing(lines, &["paperless"]), ["paperless"]);
+    assert!(failing(lines, &["dawarich", "files-init"]).is_empty());
+    // Older compose: one array.
+    let array = r#"[{"Service":"airtrail","State":"dead","ExitCode":0},{"Service":"airtrail","State":"restarting","ExitCode":1}]"#;
+    assert_eq!(failing(array, &["airtrail"]), ["airtrail"]);
+    assert!(failing("", &["airtrail"]).is_empty());
 }

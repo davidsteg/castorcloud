@@ -131,6 +131,7 @@ castor-admin backup db-keygen | db-dump | db-list | db-get <name> <out-file>
 castor-admin backup db-open <file> <secret-key-file> <out.sql.gz>
 castor-admin staff list | add <email> | remove <email>
 castor-admin delete-tenant <slug>
+castor-admin retry <slug>
 castor-admin e2e [--delete]
 ```
 
@@ -139,6 +140,20 @@ It replaced the TypeScript `npm run node`, `backup`, `staff`,
 its pool is ONLINE (a stacks node also needs Docker with userns-remap and
 gVisor, or `--no-gvisor`), then prepares it. Files with secrets
 (`db-get`, `db-open`) are written with mode 0600.
+
+`retry <slug>` queues a tenant's newest job again when it failed after its
+last attempt: PROVISION, UPDATE, RESUME or STACKS, which are safe to run twice
+(never DELETE, RESTORE or SUSPEND). It refuses while a job is queued or
+running, and a failed PROVISION takes the tenant from FAILED back to
+PROVISIONING. Audited as `tenant.retry`; prints the last error.
+
+While castord waits for a service to answer, the job log names it
+(`waiting for files (https://…)`). Every 30 s it looks at the service's
+containers (`docker compose ps`; on a TrueNAS node the gatekeeper tool
+`docker.tenant_ps`) and gives up after three looks in a row at a container
+that is restarting or exited with an error, naming it, instead of waiting the
+full 15 minutes. A service counts as up after two answers in a row with none
+of its containers failing.
 
 ## castor-node on a Mac node
 

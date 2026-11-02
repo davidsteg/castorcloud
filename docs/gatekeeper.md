@@ -42,7 +42,10 @@ docker run --rm "$CASTOR_IMAGE" admin gatekeeper tools tank > tools.yaml
 ```
 
 `infra/gatekeeper/tools.tank.yaml` is that output for the pool `tank`; a
-test fails when it is out of date. `infra/gatekeeper/toolkits.yaml` (Tier 1)
+test fails when it is out of date. Regenerate and redeploy it after every
+release that adds a tool (v0.7.2: `docker.tenant_ps`, read-only; without it
+castord just doesn't see a crash-looping container and waits the full health
+timeout). `infra/gatekeeper/toolkits.yaml` (Tier 1)
 and `identities.yaml` are examples to adapt.
 
 ## The link between castord and the node role

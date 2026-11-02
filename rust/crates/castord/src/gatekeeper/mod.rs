@@ -478,6 +478,17 @@ pub fn catalog(pool: &str) -> Vec<Tool> {
             timeout_s: 300,
         },
         Tool {
+            id: "docker.tenant_ps",
+            title: "List a tenant's containers",
+            description: "docker compose ps -a for pc-t-<slug>: each container's state and exit code, read while castord waits for a service.",
+            write: false,
+            idempotent: true,
+            run: docker(compose(true, &["ps", "-a", "--format", "json"])),
+            params: vec![slug()],
+            derived: tenant_files(),
+            timeout_s: 60,
+        },
+        Tool {
             id: "docker.revoke_photos",
             title: "End a person's Immich sessions",
             description: "Deletes the person's Immich sessions (and API keys unless web) in the tenant's database.",
