@@ -24,10 +24,10 @@ results are shown in the job summary instead of the Security tab.
 
 | Image | Dockerfile |
 | --- | --- |
-| `ghcr.io/davidsteg/castorcloud` | `Dockerfile` |
-| `ghcr.io/davidsteg/castorcloud-assistant-tools` | `agent/tools/Dockerfile` |
-| `ghcr.io/davidsteg/castorcloud-egress` | `infra/node/egress/Dockerfile` |
-| `ghcr.io/davidsteg/castorcloud-cryptd` | `infra/node/cryptd/Dockerfile` |
+| `registry.bridgemill.ch/davidsteg/castorcloud` | `Dockerfile` |
+| `registry.bridgemill.ch/davidsteg/castorcloud-assistant-tools` | `agent/tools/Dockerfile` |
+| `registry.bridgemill.ch/davidsteg/castorcloud-egress` | `infra/node/egress/Dockerfile` |
+| `registry.bridgemill.ch/davidsteg/castorcloud-cryptd` | `infra/node/cryptd/Dockerfile` |
 
 `castorcloud` holds the control plane's own services: the portal and the
 Rust binaries (`castord`, `castor-monitor`, `castor-telegram`,
@@ -35,8 +35,8 @@ Rust binaries (`castord`, `castor-monitor`, `castor-telegram`,
 own secrets and mounts:
 
 ```sh
-docker run ghcr.io/davidsteg/castorcloud@sha256:<digest>            # portal (port 3000)
-docker run ghcr.io/davidsteg/castorcloud@sha256:<digest> castord    # also: monitor, telegram,
+docker run registry.bridgemill.ch/davidsteg/castorcloud@sha256:<digest>            # portal (port 3000)
+docker run registry.bridgemill.ch/davidsteg/castorcloud@sha256:<digest> castord    # also: monitor, telegram,
                                                                     # admin, migrate
 ```
 
@@ -72,44 +72,33 @@ cosign generate-key-pair           # writes cosign.key and cosign.pub
 #   COSIGN_PRIVATE_KEY = contents of cosign.key
 #   COSIGN_PASSWORD    = the password you chose
 cosign verify --key cosign.pub --insecure-ignore-tlog \
-  ghcr.io/davidsteg/castorcloud@sha256:<digest>
+  registry.bridgemill.ch/davidsteg/castorcloud@sha256:<digest>
 ```
 
 Keep `cosign.key` offline; commit only `cosign.pub` if nodes should verify.
 
-### Mirror
+### Registry
 
-After signing, each image is copied to `registry.bridgemill.ch` under the
-same path (`registry.bridgemill.ch/davidsteg/castorcloud*`), with the same
-digest and tags and with its signature, SBOM and attestations
-(`cosign copy`). GHCR stays the source: only signed images are mirrored,
-and a failed mirror shows as a warning without holding back the release.
-
-It runs when the repository secrets `REGISTRY_USER` and `REGISTRY_PASSWORD`
-are set (plus `COSIGN_PRIVATE_KEY`). The registry must:
+`registry.bridgemill.ch` is the only registry the images are published to
+(no GHCR, no Docker Hub). The publish job logs in with the repository
+secrets `REGISTRY_USER` and `REGISTRY_PASSWORD`; without them it fails, so
+nothing is released (the `Version` job already warns on pull requests when
+they are missing). The registry must:
 
 - be reachable from GitHub-hosted runners over HTTPS with a valid
   certificate; there is no insecure fallback;
 - allow no anonymous access, reading included. CI gets a push-only account;
-  anything that pulls gets its own read-only account;
+  anything that pulls (the control plane's Docker host, castord) gets its
+  own read-only account;
 - keep its admin interface off the internet.
 
 Pull by digest and verify against `cosign.pub`:
 
 ```sh
+docker login registry.bridgemill.ch            # read-only account
 cosign verify --key cosign.pub --insecure-ignore-tlog \
   registry.bridgemill.ch/davidsteg/castorcloud@sha256:<digest>
 ```
-
-castord still resolves and pulls from GHCR; nodes don't use the mirror yet.
-
-### Private packages
-
-The packages inherit this private repository's access, so only accounts
-with access to the repo can pull. Check once after the first publish:
-GitHub > Your profile > Packages > each `castorcloud*` package > Package
-settings: visibility **Private**, and under "Manage Actions access" only
-`davidsteg/castorcloud`, with the Write role.
 
 ### Versions and releases
 
@@ -148,16 +137,14 @@ stored credentials: the docker CLI passes the pull token to the node's
 engine for that one pull, from a temporary docker config (mode 0600) that
 is removed right after.
 
-Pull token: GitHub > Settings > Developer settings > Personal access tokens
-> **Tokens (classic)** > Generate, with only the `read:packages` scope and an
-expiry date (fine-grained tokens can't read GHCR yet). Put it in the
-control plane's `.env`:
+Pull credential: a read-only account on `registry.bridgemill.ch` (not the
+push account CI uses). Put it in the control plane's `.env`:
 
 ```sh
 CASTOR_IMAGE_TAG=<commit SHA of a green main build>
 CASTOR_COSIGN_PUBKEY=/run/secrets/cosign.pub   # cosign.pub from "Signing"
-GHCR_PULL_USER=davidsteg
-GHCR_PULL_TOKEN=ghp_...                        # read:packages only
+REGISTRY_PULL_USER=castor-pull                 # read-only account
+REGISTRY_PULL_TOKEN=...
 ```
 
 With `CASTOR_IMAGE_TAG` unset, nodes build the images from the checkout, as

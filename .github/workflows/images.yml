@@ -1,11 +1,10 @@
 name: Images
 
 # Builds every image this repo ships and scans it with Trivy. Pull requests
-# build and scan only; main also pushes the images to GHCR (amd64) with an
+# build and scan only; main also pushes the images to registry.bridgemill.ch
+# (amd64, the only registry: REGISTRY_USER and REGISTRY_PASSWORD) with an
 # SBOM and build provenance, and signs them with cosign when the
-# COSIGN_PRIVATE_KEY secret is set. Signed images are then mirrored to
-# registry.bridgemill.ch when REGISTRY_USER and REGISTRY_PASSWORD are set;
-# GHCR stays the source. The version lives in VERSION: every pull
+# COSIGN_PRIVATE_KEY secret is set. The version lives in VERSION: every pull
 # request must raise it, and every push to main publishes the images as
 # v<VERSION> and then creates the GitHub release v<VERSION>
 # (docs/ci.md, "Versions and releases"). A release published by hand also
@@ -45,6 +44,18 @@ jobs:
           EVENT: ${{ github.event_name }}
           BASE_REF: ${{ github.base_ref }}
         run: .github/scripts/version.sh
+
+      # Shows on pull requests already whether a merge could publish; only
+      # whether the secrets exist is read here, never their values.
+      - name: Registry account
+        env:
+          REGISTRY_SET: ${{ secrets.REGISTRY_USER != '' && secrets.REGISTRY_PASSWORD != '' }}
+        run: |
+          if [ "$REGISTRY_SET" = true ]; then
+            echo "REGISTRY_USER and REGISTRY_PASSWORD are set."
+          else
+            echo "::warning::REGISTRY_USER or REGISTRY_PASSWORD is not set: main cannot publish to registry.bridgemill.ch."
+          fi
 
   scan:
     name: Build and scan (${{ matrix.name }})
@@ -125,16 +136,13 @@ jobs:
     timeout-minutes: 90
     permissions:
       contents: read
-      packages: write # push images to GHCR
     strategy:
       fail-fast: false
       matrix: *images
     env:
-      IMAGE: ghcr.io/${{ github.repository_owner }}/${{ matrix.image }}
+      IMAGE: registry.bridgemill.ch/${{ github.repository_owner }}/${{ matrix.image }}
       COSIGN_KEY_SET: ${{ secrets.COSIGN_PRIVATE_KEY != '' }}
-      # Mirror of GHCR (docs/ci.md, "Mirror"): same path, same digests.
-      MIRROR: registry.bridgemill.ch/${{ github.repository_owner }}/${{ matrix.image }}
-      MIRROR_SET: ${{ secrets.REGISTRY_USER != '' && secrets.REGISTRY_PASSWORD != '' }}
+      REGISTRY_SET: ${{ secrets.REGISTRY_USER != '' && secrets.REGISTRY_PASSWORD != '' }}
       TAG: ${{ needs.version.outputs.tag }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -146,11 +154,20 @@ jobs:
 
       - uses: docker/setup-buildx-action@f87e5991a6d7451dcb8d9637bfbc97413f497069 # v4.4.1
 
+      # No other registry to fall back to: without the account nothing is
+      # published and the release is not created.
+      - name: Registry account
+        if: env.REGISTRY_SET != 'true'
+        run: |
+          echo "::error::REGISTRY_USER and REGISTRY_PASSWORD must be set to publish to registry.bridgemill.ch."
+          exit 1
+
+      # Over TLS only: there is no insecure-registry fallback.
       - uses: docker/login-action@81c6f93d4bc991e510b342a00b419b3bb4efc5c6 # v4.7.0
         with:
-          registry: ghcr.io
-          username: ${{ github.actor }}
-          password: ${{ secrets.GITHUB_TOKEN }}
+          registry: registry.bridgemill.ch
+          username: ${{ secrets.REGISTRY_USER }}
+          password: ${{ secrets.REGISTRY_PASSWORD }}
 
       # Tags: the full commit SHA (immutable, what deployments pin), the
       # version and, for pushes to main, main.
@@ -199,38 +216,6 @@ jobs:
       - name: Unsigned
         if: env.COSIGN_KEY_SET != 'true'
         run: echo "::notice::COSIGN_PRIVATE_KEY is not set, so ${IMAGE} is not signed."
-
-      # Only signed images are mirrored, so a node pulling from the mirror
-      # gets nothing GHCR's signature check wouldn't accept. cosign copy
-      # keeps the digest and copies the signature, SBOM and attestations
-      # with it. Over TLS only: there is no insecure-registry fallback.
-      # An unreachable mirror warns but doesn't hold back the release.
-      - uses: docker/login-action@81c6f93d4bc991e510b342a00b419b3bb4efc5c6 # v4.7.0
-        id: mirror-login
-        if: env.COSIGN_KEY_SET == 'true' && env.MIRROR_SET == 'true'
-        continue-on-error: true
-        with:
-          registry: registry.bridgemill.ch
-          username: ${{ secrets.REGISTRY_USER }}
-          password: ${{ secrets.REGISTRY_PASSWORD }}
-
-      - name: Mirror
-        if: steps.mirror-login.outcome == 'success'
-        continue-on-error: true
-        env:
-          DIGEST: ${{ steps.build.outputs.digest }}
-          EVENT: ${{ github.event_name }}
-        run: |
-          tags=("$GITHUB_SHA" "$TAG")
-          if [ "$EVENT" = push ]; then tags+=(main); fi
-          for t in "${tags[@]}"; do
-            cosign copy --force "${IMAGE}@${DIGEST}" "${MIRROR}:${t}"
-          done
-          echo "Mirrored to \`${MIRROR}@${DIGEST}\`" >> "$GITHUB_STEP_SUMMARY"
-
-      - name: Not mirrored
-        if: env.COSIGN_KEY_SET != 'true' || env.MIRROR_SET != 'true'
-        run: echo "::notice::${IMAGE} is not mirrored (needs COSIGN_PRIVATE_KEY, REGISTRY_USER and REGISTRY_PASSWORD)."
 
       - name: Summary
         env:

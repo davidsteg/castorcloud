@@ -1,12 +1,12 @@
 //! Castor's own node images: cryptd (local LUKS helper), assistant-tools
 //! (every tenant node) and egress (every stacks node).
 //!
-//! Production (CASTOR_IMAGE_TAG set): the images come from GHCR, published
+//! Production (CASTOR_IMAGE_TAG set): the images come from registry.bridgemill.ch, published
 //! and signed by the Images workflow (docs/ci.md). castord resolves each tag
 //! to a digest and accepts it only when a cosign signature from
 //! CASTOR_COSIGN_PUBKEY covers that repository and digest; the node then
 //! pulls exactly that digest and tags it with the local name the stacks use.
-//! The pull credential (GHCR_PULL_TOKEN) stays on the control plane: the
+//! The pull credential (REGISTRY_PULL_TOKEN) stays on the control plane: the
 //! docker CLI hands it to the node's engine for that one pull.
 //!
 //! Development (CASTOR_IMAGE_TAG unset): the node builds them from this
@@ -44,7 +44,7 @@ impl NodeImage {
     }
 }
 
-const DEFAULT_REPO: &str = "ghcr.io/davidsteg/castorcloud";
+const DEFAULT_REPO: &str = "registry.bridgemill.ch/davidsteg/castorcloud";
 const MAX_BYTES: usize = 4 * 1024 * 1024;
 const SIG_ANNOTATION: &str = "dev.cosignproject.cosign/signature";
 const MANIFESTS: &str = "application/vnd.oci.image.index.v1+json, application/vnd.oci.image.manifest.v1+json, \
@@ -57,7 +57,7 @@ pub enum Source {
 }
 
 pub struct Registry {
-    /// ghcr.io/davidsteg/castorcloud; each image is `<repo>-<name>`.
+    /// registry.bridgemill.ch/davidsteg/castorcloud; each image is `<repo>-<name>`.
     pub repo: String,
     pub tag: String,
     /// The uncompressed P-256 point of the cosign public key.
@@ -68,7 +68,7 @@ pub struct Registry {
 
 impl Source {
     /// CASTOR_IMAGE_TAG, CASTOR_IMAGE_REPO, CASTOR_COSIGN_PUBKEY (a file),
-    /// GHCR_PULL_USER, GHCR_PULL_TOKEN.
+    /// REGISTRY_PULL_USER, REGISTRY_PULL_TOKEN.
     pub fn from_env(var: impl Fn(&str) -> Option<String>) -> Result<Self, String> {
         let Some(tag) = var("CASTOR_IMAGE_TAG")
             .map(|t| t.trim().to_owned())
@@ -87,15 +87,15 @@ impl Source {
         let path = var("CASTOR_COSIGN_PUBKEY").ok_or("CASTOR_IMAGE_TAG is set but CASTOR_COSIGN_PUBKEY is not")?;
         let pem = std::fs::read(path.trim()).map_err(|e| format!("CASTOR_COSIGN_PUBKEY {}: {e}", path.trim()))?;
         let key = public_key(&pem).map_err(|e| format!("CASTOR_COSIGN_PUBKEY: {e}"))?;
-        let token = var("GHCR_PULL_TOKEN")
+        let token = var("REGISTRY_PULL_TOKEN")
             .map(|t| t.trim().to_owned())
             .filter(|t| !t.is_empty());
-        let user = var("GHCR_PULL_USER")
+        let user = var("REGISTRY_PULL_USER")
             .map(|u| u.trim().to_owned())
             .filter(|u| !u.is_empty())
             .unwrap_or_else(|| "castor".into());
         if user.contains(':') || user.chars().any(char::is_control) {
-            return Err("GHCR_PULL_USER is not a valid user name".into());
+            return Err("REGISTRY_PULL_USER is not a valid user name".into());
         }
         Ok(Source::Registry(Registry {
             repo,
@@ -201,7 +201,7 @@ pub trait Fetch: Send + Sync {
     async fn get(&self, url: &str, headers: Headers) -> Result<Response, String>;
 }
 
-/// reqwest, following redirects (GHCR serves blobs from another host) only
+/// reqwest, following redirects (registries may serve blobs from another host) only
 /// to HTTPS; reqwest drops the Authorization header when one leaves the host.
 pub struct Http(reqwest::Client);
 

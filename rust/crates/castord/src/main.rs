@@ -24,9 +24,9 @@
 //!   LINK_CERT_FILE, LINK_KEY_FILE   castord's certificate and key for the
 //!                           link to TrueNAS node roles (link.rs, docs/gatekeeper.md)
 //!   LINK_PEERS_FILE         the node roles' certificates, the only ones trusted
-//!   CASTOR_IMAGE_TAG        set: nodes pull Castor's images signed from GHCR
+//!   CASTOR_IMAGE_TAG        set: nodes pull Castor's images signed from registry.bridgemill.ch
 //!                           (images.rs, docs/ci.md): CASTOR_COSIGN_PUBKEY,
-//!                           CASTOR_IMAGE_REPO, GHCR_PULL_USER, GHCR_PULL_TOKEN
+//!                           CASTOR_IMAGE_REPO, REGISTRY_PULL_USER, REGISTRY_PULL_TOKEN
 use std::process::ExitCode;
 use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, Ordering};
