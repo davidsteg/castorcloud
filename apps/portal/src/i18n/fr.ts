@@ -15,6 +15,7 @@ const fr: Dictionary = {
     login: "Se connecter",
     start: "Commencer",
     myCloud: "Mon cloud",
+    menu: "Menu",
   },
   hero: {
     badge: "Hébergé en Suisse",

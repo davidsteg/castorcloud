@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { BETA, BRAND_NAME } from "@/lib/config";
 import { LOCALES, type Dictionary, type Locale } from "@/i18n";
+import { MobileMenu } from "./MobileMenu";
 
 /** castorcloud.ch: beaver mark + wordmark (text, so it stays crisp at any size). */
 export function Logo({ size = 34 }: { size?: number }) {
@@ -17,6 +18,13 @@ export function Logo({ size = 34 }: { size?: number }) {
 
 export function SiteHeader({ locale, t, path = "" }: { locale: Locale; t: Dictionary; path?: string }) {
   const home = `/${locale}`;
+  const navLinks = [
+    { href: `${home}/features`, label: t.nav.features },
+    { href: `${home}/assistant`, label: t.nav.assistant },
+    { href: `${home}/security`, label: t.nav.security },
+    { href: `${home}/pricing`, label: t.nav.pricing },
+    { href: `${home}/faq`, label: t.nav.faq },
+  ];
   return (
     <>
     {BETA && (
@@ -33,11 +41,11 @@ export function SiteHeader({ locale, t, path = "" }: { locale: Locale; t: Dictio
           <Logo />
         </Link>
         <nav className="site-nav">
-          <Link href={`${home}/features`}>{t.nav.features}</Link>
-          <Link href={`${home}/assistant`}>{t.nav.assistant}</Link>
-          <Link href={`${home}/security`}>{t.nav.security}</Link>
-          <Link href={`${home}/pricing`}>{t.nav.pricing}</Link>
-          <Link href={`${home}/faq`}>{t.nav.faq}</Link>
+          {navLinks.map((l) => (
+            <Link key={l.href} href={l.href}>
+              {l.label}
+            </Link>
+          ))}
         </nav>
         <div className="header-actions">
           <div className="lang-switch">
@@ -53,6 +61,13 @@ export function SiteHeader({ locale, t, path = "" }: { locale: Locale; t: Dictio
           <Link className="button small" href={`${home}/pricing`}>
             {t.nav.start}
           </Link>
+          <MobileMenu
+            label={t.nav.menu}
+            links={navLinks}
+            login={{ href: `${home}/account`, label: t.nav.login }}
+            start={{ href: `${home}/pricing`, label: t.nav.start }}
+            locales={LOCALES.map((l) => ({ href: `/${l}${path}`, label: l.toUpperCase(), current: l === locale }))}
+          />
         </div>
       </div>
     </header>

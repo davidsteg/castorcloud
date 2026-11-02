@@ -15,6 +15,7 @@ const en = {
     login: "Log in",
     start: "Get started",
     myCloud: "My cloud",
+    menu: "Menu",
   },
   hero: {
     badge: "Hosted in Switzerland",
