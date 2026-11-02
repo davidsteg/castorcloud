@@ -30,6 +30,8 @@ services:
     image: ${NGINX_IMAGE}
     environment:
       PORTAL_ORIGIN: ${PORTAL_ORIGIN}
+      # Lets castord (and nobody else) through to first-run setup.
+      SKIN_SETUP_TOKEN: ${SKIN_SETUP_TOKEN}
     volumes:
       - ./skin/default.conf.template:/etc/nginx/templates/default.conf.template:ro
       - ${BRAND_DIR}:/usr/share/nginx/brand:ro
