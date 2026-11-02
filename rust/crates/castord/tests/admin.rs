@@ -314,3 +314,111 @@ async fn restore_requests() {
     assert!(castord::backup::db_get_cmd(&s, "cp-20260101T0230Z.sql.gz.enc").is_ok());
     cleanup(&db, &w).await;
 }
+
+#[tokio::test]
+async fn retries_failed_jobs() {
+    let Some(db) = db().await else { return };
+    let w = world(&db, "MAC").await;
+    let set = |status: &'static str| {
+        let db = db.clone();
+        let id = w.tenant.clone();
+        async move {
+            sqlx::query(r#"UPDATE "Tenant" SET status = $2::"TenantStatus" WHERE id = $1"#)
+                .bind(id)
+                .bind(status)
+                .execute(&db)
+                .await
+                .unwrap();
+        }
+    };
+    let insert = |kind: &'static str, status: &'static str, secs: i32| {
+        let db = db.clone();
+        let id = w.tenant.clone();
+        async move {
+            sqlx::query(
+                r#"INSERT INTO "Job" (id, "tenantId", kind, status, params, error, "createdAt")
+                   VALUES ($1, $2, $3::"JobKind", $4::"JobStatus", '{"why": 1}', 'boom', now() + make_interval(secs => $5))"#,
+            )
+            .bind(format!("j{}", hex8()))
+            .bind(id)
+            .bind(kind)
+            .bind(status)
+            .bind(f64::from(secs))
+            .execute(&db)
+            .await
+            .unwrap();
+        }
+    };
+    let jobs = || {
+        rows(
+            &db,
+            r#"SELECT kind::text || ' ' || status::text FROM "Job" WHERE "tenantId" = $1 ORDER BY "createdAt", status"#,
+            &w.tenant,
+        )
+    };
+
+    assert!(admin::retry(&db, &w.slug).await.unwrap_err().contains("no jobs"));
+    assert!(admin::retry(&db, "no-such-tenant").await.is_err());
+
+    // A failed PROVISION: the tenant goes back to PROVISIONING, the job is queued again.
+    set("FAILED").await;
+    insert("PROVISION", "FAILED", -40).await;
+    let out = admin::retry(&db, &w.slug).await.unwrap();
+    assert!(
+        out.starts_with(&format!("queued PROVISION for {} again (job c", w.slug)),
+        "{out}"
+    );
+    assert!(out.ends_with("last error: boom"), "{out}");
+    assert_eq!(
+        rows(&db, r#"SELECT status::text FROM "Tenant" WHERE id = $1"#, &w.tenant).await,
+        ["PROVISIONING"]
+    );
+    assert!(jobs().await.contains(&"PROVISION QUEUED".to_owned()));
+    assert_eq!(
+        rows(
+            &db,
+            r#"SELECT params::text FROM "Job" WHERE "tenantId" = $1 AND status = 'QUEUED'"#,
+            &w.tenant
+        )
+        .await,
+        [r#"{"why": 1}"#]
+    );
+    assert_eq!(
+        rows(&db, r#"SELECT action FROM "AuditLog" WHERE "tenantId" = $1"#, &w.tenant).await,
+        ["tenant.retry"]
+    );
+    // Not twice: the retry is queued.
+    assert!(
+        admin::retry(&db, &w.slug)
+            .await
+            .unwrap_err()
+            .contains("queued or running")
+    );
+
+    // A failed DELETE is not re-run, nor anything that isn't the newest job.
+    sqlx::query(r#"DELETE FROM "Job" WHERE "tenantId" = $1"#)
+        .bind(&w.tenant)
+        .execute(&db)
+        .await
+        .unwrap();
+    set("ACTIVE").await;
+    insert("DELETE", "FAILED", -30).await;
+    assert!(
+        admin::retry(&db, &w.slug)
+            .await
+            .unwrap_err()
+            .contains("retry only re-runs")
+    );
+    insert("UPDATE", "SUCCEEDED", -20).await;
+    assert!(admin::retry(&db, &w.slug).await.unwrap_err().contains("not FAILED"));
+
+    // A failed UPDATE leaves the tenant's status alone.
+    insert("UPDATE", "FAILED", -10).await;
+    admin::retry(&db, &w.slug).await.unwrap();
+    assert_eq!(
+        rows(&db, r#"SELECT status::text FROM "Tenant" WHERE id = $1"#, &w.tenant).await,
+        ["ACTIVE"]
+    );
+    assert_eq!(jobs().await.last().unwrap(), "UPDATE QUEUED");
+    cleanup(&db, &w).await;
+}

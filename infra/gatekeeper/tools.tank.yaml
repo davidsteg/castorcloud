@@ -258,6 +258,62 @@ tools:
     required_scopes: []
     timeout_seconds: 300
     max_output_bytes: 1048576
+  - id: "docker.tenant_ps"
+    toolkit: "docker"
+    version: 1
+    title: "List a tenant's containers"
+    description: "docker compose ps -a for pc-t-<slug>: each container's state and exit code, read while castord waits for a service."
+    category: "read"
+    idempotent: true
+    enabled: true
+    binary: "/usr/bin/docker"
+    argv:
+      - "compose"
+      - "-p"
+      - "pc-t-{slug}"
+      - "-f"
+      - "/mnt/tank/castor/node/files/templates/tenant/compose.yml"
+      - "--project-directory"
+      - "/mnt/tank/castor/node/files/templates/tenant"
+      - "-f"
+      - "{volumes_file}"
+      - "--env-file"
+      - "{env_file}"
+      - "--profile"
+      - "photos"
+      - "--profile"
+      - "docs"
+      - "--profile"
+      - "places"
+      - "--profile"
+      - "flights"
+      - "--profile"
+      - "files"
+      - "--profile"
+      - "assistant"
+      - "ps"
+      - "-a"
+      - "--format"
+      - "json"
+    parameters:
+      slug:
+        type: "string"
+        pattern: "^[a-z0-9](?:[a-z0-9]|-(?!-)){1,28}[a-z0-9]$"
+        required: true
+        description: "The tenant's slug."
+      volumes_file:
+        type: "path"
+        derived: "/mnt/tank/castor/node/tenants/{slug}/compose.volumes.yml"
+        must_resolve_under: "/mnt/tank/castor/node/tenants"
+        description: "Built by gatekeeper from the slug."
+      env_file:
+        type: "path"
+        derived: "/mnt/tank/castor/node/tenants/{slug}/tenant.env"
+        must_resolve_under: "/mnt/tank/castor/node/tenants"
+        description: "Built by gatekeeper from the slug."
+    required_scopes: []
+    timeout_seconds: 60
+    max_output_bytes: 1048576
   - id: "docker.revoke_photos"
     toolkit: "docker"
     version: 1
