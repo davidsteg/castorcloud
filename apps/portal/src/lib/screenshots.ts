@@ -6,8 +6,10 @@ export type Screenshot = { src: string; width: number; height: number; license: 
 
 export const SCREENSHOTS: Partial<Record<OssProject, Screenshot>> = {
   immich: {
-    src: "/screenshots/immich.png", width: 1802, height: 1118, license: "AGPL-3.0",
-    source: "https://github.com/immich-app/immich/blob/v3.2.2/design/immich-screenshots.png",
+    // Our own Immich v3.2.2 with the CastorCloud theme (official Custom CSS);
+    // demo photos from Unsplash (Unsplash License), no people.
+    src: "/screenshots/immich.webp", width: 2880, height: 1800, license: "AGPL-3.0",
+    source: "https://github.com/immich-app/immich/tree/v3.2.2",
   },
   paperless: {
     src: "/screenshots/paperless.png", width: 3824, height: 2786, license: "GPL-3.0",
