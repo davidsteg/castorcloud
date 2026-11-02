@@ -1,7 +1,7 @@
 import Image from "next/image";
 import { OSS_PROJECTS, SERVICES, SERVICE_KEYS, type OssProject } from "@pc/pricing";
 import { fill, type Dictionary } from "@/i18n";
-import { SCREENSHOTS } from "@/lib/screenshots";
+import { LOGIN_SCREENSHOT, SCREENSHOTS } from "@/lib/screenshots";
 
 /** The open-source projects with their real screenshots, source and licence. */
 export function OssGallery({ t, compact = false }: { t: Dictionary; compact?: boolean }) {
@@ -54,6 +54,25 @@ export function OssGallery({ t, compact = false }: { t: Dictionary; compact?: bo
           </figure>
         );
       })}
+      {/* The shared sign-in page, on the full open-source page only. */}
+      {!compact && (
+        <figure className="oss-card">
+          <a className="oss-shot" href={LOGIN_SCREENSHOT.url} target="_blank" rel="noreferrer">
+            <Image src={LOGIN_SCREENSHOT.src} alt={`${LOGIN_SCREENSHOT.name} – ${o.login}`}
+              width={LOGIN_SCREENSHOT.width} height={LOGIN_SCREENSHOT.height}
+              sizes="(max-width: 960px) 100vw, 560px" />
+          </a>
+          <figcaption>
+            <b>{LOGIN_SCREENSHOT.name}</b>
+            <span className="muted">{o.login}</span>
+            <small>
+              <a href={LOGIN_SCREENSHOT.source} target="_blank" rel="noreferrer">
+                {fill(o.credit, { name: LOGIN_SCREENSHOT.name, license: LOGIN_SCREENSHOT.license })}
+              </a>
+            </small>
+          </figcaption>
+        </figure>
+      )}
     </div>
   );
 }

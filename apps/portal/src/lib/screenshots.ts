@@ -31,3 +31,13 @@ export const SCREENSHOTS: Partial<Record<OssProject, Screenshot>> = {
     source: "https://github.com/johanohly/AirTrail/blob/v3.13.0/docs/public/screenshots/map-overview.light.webp",
   },
 };
+
+// The sign-in page all services share (Authentik 2025.10.4 with our brand
+// settings, docs/branding.md), cropped to the sign-in card. Authentik isn't a
+// booked service, so it isn't in OSS_PROJECTS and gets no donation share; the
+// open-source page shows and credits it separately.
+export const LOGIN_SCREENSHOT: Screenshot & { name: string; url: string } = {
+  name: "authentik", url: "https://goauthentik.io",
+  src: "/screenshots/login.webp", width: 1920, height: 1200, license: "MIT",
+  source: "https://github.com/goauthentik/authentik/tree/version/2025.10.4",
+};
