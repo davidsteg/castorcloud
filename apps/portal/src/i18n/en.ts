@@ -4,7 +4,7 @@ const en = {
   meta: {
     title: "Your private cloud, hosted in Switzerland",
     description:
-      "Photos, documents, timeline and flights in one private cloud. Open source, encrypted, hosted in Switzerland.",
+      "Photos, documents, files, timeline and flights in one private cloud. Open source, encrypted, hosted in Switzerland.",
   },
   nav: {
     features: "Features",
@@ -20,7 +20,7 @@ const en = {
     badge: "Hosted in Switzerland",
     title: "Your digital life.\nStored in Switzerland.",
     lead:
-      "Photos, documents, places and flights – in one private cloud that belongs to you. No ads, no tracking, no training AI on your data.",
+      "Photos, documents, files, places and flights – in one private cloud that belongs to you. No ads, no tracking, no training AI on your data.",
     cta: "Build your plan",
     secondary: "How we protect your data",
     trust: ["Servers in Switzerland", "Swiss data protection law (nFADP)", "100% open source", "Encrypted at rest"],
@@ -285,7 +285,7 @@ const en = {
       "In the app, tap “Scan QR code” and scan the code shown there – address and key are filled in automatically.",
     ],
     placesOpen: "Open the timeline account page",
-    webTitle: "Flights and assistant as an app",
+    webTitle: "Files, flights and assistant as an app",
     webText: "Open your cloud address in your phone's browser and add it to the home screen – it then starts like an app.",
     webIos: "iPhone (Safari): Share icon → “Add to Home Screen”.",
     webAndroid: "Android (Chrome): menu ⋮ → “Install app”.",
@@ -300,6 +300,7 @@ const en = {
       docs: "Every letter and invoice searchable by its full text, tagged and filed automatically.",
       places: "Where you have been: trips, visits and routes on a map, imported from Google in minutes.",
       flights: "Every flight on the world map, with distances, airlines and statistics.",
+      files: "Your household drive: folders for everyone, shared spaces and links protected by a password.",
       assistant: "Ask in plain language – the assistant searches your photos, documents, places and flights.",
     },
     sample: {
@@ -310,6 +311,7 @@ const en = {
       placesTitle: "May 2026",
       placesStat: "1'284 km · 6 cities",
       flightsStat: "12 flights · 18'420 km",
+      filesTitle: "Family",
       question: "When was I in Lisbon, and where is the hotel invoice?",
       answer: "You were in Lisbon from 12 to 16 May 2026 (flight LX 2084 from Zurich). The invoice from Hotel Lisboa is in Documents, tagged “Travel”. You also took 48 photos there.",
     },
@@ -388,7 +390,7 @@ const en = {
       },
       {
         q: "Which apps can I use on my phone?",
-        a: "The official Immich app for photos and the official Dawarich app for your location history – both for iPhone and Android. For documents, the community apps Swift Paperless (iPhone) and Paperless Mobile (Android). Flights and the assistant run in the browser, optionally as an app on your home screen.",
+        a: "The official Immich app for photos and the official Dawarich app for your location history – both for iPhone and Android. For documents, the community apps Swift Paperless (iPhone) and Paperless Mobile (Android). Files, flights and the assistant run in the browser, optionally as an app on your home screen.",
       },
     ],
   },

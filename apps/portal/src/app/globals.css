@@ -224,6 +224,7 @@ p { margin: 0; }
 .mock-docs li.active { border-color: var(--pc-blue); background: color-mix(in srgb, var(--pc-blue) 7%, var(--pc-surface)); }
 .mock-docs li b { display: block; font-weight: 600; }
 .mock-docs li small { color: var(--pc-muted); font-size: 11px; }
+.mock-files { grid-template-columns: 1fr; }
 .doc-icon { width: 28px; height: 34px; border-radius: 4px; background: var(--pc-surface-2); display: grid; place-items: center; color: var(--pc-muted); flex: none; }
 .mock-invoice { border: 1px solid var(--pc-border); border-radius: 8px; padding: 16px; display: grid; gap: 8px; align-content: start; background: #fff; color: #16171a; font-size: 12px; }
 .mock-invoice i { height: 6px; border-radius: 3px; background: #e7e4de; display: block; }

@@ -5,7 +5,7 @@ const de: Dictionary = {
   meta: {
     title: "Ihre private Cloud, gehostet in der Schweiz",
     description:
-      "Fotos, Dokumente, Zeitachse und Flüge in einer privaten Cloud. Open Source, verschlüsselt, gehostet in der Schweiz.",
+      "Fotos, Dokumente, Dateien, Zeitachse und Flüge in einer privaten Cloud. Open Source, verschlüsselt, gehostet in der Schweiz.",
   },
   nav: {
     features: "Funktionen",
@@ -21,7 +21,7 @@ const de: Dictionary = {
     badge: "Gehostet in der Schweiz",
     title: "Ihr digitales Leben.\nGespeichert in der Schweiz.",
     lead:
-      "Fotos, Dokumente, Orte und Flüge – in einer privaten Cloud, die Ihnen gehört. Keine Werbung, kein Tracking, kein KI-Training mit Ihren Daten.",
+      "Fotos, Dokumente, Dateien, Orte und Flüge – in einer privaten Cloud, die Ihnen gehört. Keine Werbung, kein Tracking, kein KI-Training mit Ihren Daten.",
     cta: "Angebot zusammenstellen",
     secondary: "So schützen wir Ihre Daten",
     trust: ["Server in der Schweiz", "Schweizer Datenschutzgesetz (revDSG)", "100 % Open Source", "Verschlüsselt gespeichert"],
@@ -286,7 +286,7 @@ const de: Dictionary = {
       "Tippen Sie in der App auf «QR-Code scannen» und scannen Sie den dort angezeigten Code – Adresse und Schlüssel werden automatisch übernommen.",
     ],
     placesOpen: "Konto-Seite der Zeitachse öffnen",
-    webTitle: "Flüge und Assistent als App",
+    webTitle: "Dateien, Flüge und Assistent als App",
     webText: "Öffnen Sie Ihre Cloud-Adresse im Handy-Browser und fügen Sie sie zum Startbildschirm hinzu – danach startet sie wie eine App.",
     webIos: "iPhone (Safari): Teilen-Symbol → «Zum Home-Bildschirm».",
     webAndroid: "Android (Chrome): Menü ⋮ → «App installieren».",
@@ -301,6 +301,7 @@ const de: Dictionary = {
       docs: "Jeder Brief und jede Rechnung im Volltext durchsuchbar, automatisch verschlagwortet und abgelegt.",
       places: "Wo Sie überall waren: Reisen, Besuche und Routen auf der Karte, in Minuten aus Google importiert.",
       flights: "Jeder Flug auf der Weltkarte, mit Distanzen, Airlines und Statistiken.",
+      files: "Das Laufwerk des Haushalts: Ordner für alle, gemeinsame Bereiche und Links mit Passwortschutz.",
       assistant: "Fragen Sie in normaler Sprache – der Assistent durchsucht Ihre Fotos, Dokumente, Orte und Flüge.",
     },
     sample: {
@@ -311,6 +312,7 @@ const de: Dictionary = {
       placesTitle: "Mai 2026",
       placesStat: "1'284 km · 6 Städte",
       flightsStat: "12 Flüge · 18'420 km",
+      filesTitle: "Familie",
       question: "Wann war ich in Lissabon, und wo ist die Hotelrechnung?",
       answer: "Sie waren vom 12. bis 16. Mai 2026 in Lissabon (Flug LX 2084 ab Zürich). Die Rechnung des Hotel Lisboa liegt in «Dokumente» mit dem Schlagwort «Reisen». Dort haben Sie auch 48 Fotos gemacht.",
     },
@@ -389,7 +391,7 @@ const de: Dictionary = {
       },
       {
         q: "Welche Apps nutze ich auf dem Handy?",
-        a: "Für Fotos die offizielle Immich-App und für den Standortverlauf die offizielle Dawarich-App – beide für iPhone und Android. Für Dokumente die Community-Apps Swift Paperless (iPhone) und Paperless Mobile (Android). Flüge und Assistent nutzen Sie im Browser, auf Wunsch als App auf dem Startbildschirm.",
+        a: "Für Fotos die offizielle Immich-App und für den Standortverlauf die offizielle Dawarich-App – beide für iPhone und Android. Für Dokumente die Community-Apps Swift Paperless (iPhone) und Paperless Mobile (Android). Dateien, Flüge und Assistent nutzen Sie im Browser, auf Wunsch als App auf dem Startbildschirm.",
       },
     ],
   },
