@@ -1,0 +1,129 @@
+{
+  "common": {
+    "name": "Files",
+    "slogan": "",
+    "logo": "/_brand/logo.svg",
+    "urls": {
+      "accessDeniedHelp": "",
+      "accessibility": "",
+      "imprint": "",
+      "privacy": ""
+    }
+  },
+  "clients": {
+    "web": {
+      "defaults": {
+        "favicon": "/_brand/icon.svg",
+        "logo": "/_brand/logo.svg",
+        "logoMobile": "/_brand/icon.svg"
+      },
+      "themes": [
+        {
+          "label": "Light Theme",
+          "isDark": false,
+          "designTokens": {
+            "roles": {
+              "background": "#ffffff",
+              "chrome": "#ffffff",
+              "error": "#ba1a1a",
+              "errorContainer": "#ffdad6",
+              "inverseOnSurface": "#eff1f2",
+              "inversePrimary": "#ffb4a8",
+              "inverseSurface": "#2e3132",
+              "onBackground": "#191c1d",
+              "onChrome": "#243447",
+              "onError": "#ffffff",
+              "onErrorContainer": "#410002",
+              "onPrimary": "#ffffff",
+              "onPrimaryContainer": "#410001",
+              "onPrimaryFixed": "#410001",
+              "onSecondary": "#ffffff",
+              "onSecondaryContainer": "#071e26",
+              "onSecondaryFixed": "#071e26",
+              "onSurface": "#191c1d",
+              "onSurfaceVariant": "#40484c",
+              "onTertiary": "#ffffff",
+              "onTertiaryContainer": "#171937",
+              "onTertiaryFixed": "#171937",
+              "outline": "#70787c",
+              "outlineVariant": "#bfc8cc",
+              "primary": "#d52b1e",
+              "primaryContainer": "#ffdad5",
+              "primaryFixed": "#ffdad5",
+              "scrim": "#000000",
+              "secondary": "#243447",
+              "secondaryContainer": "#d6e3f2",
+              "secondaryFixed": "#d6e3f2",
+              "shadow": "#000000",
+              "surface": "#ffffff",
+              "surfaceBright": "#f8f9fb",
+              "surfaceContainer": "#f6f8fa",
+              "surfaceContainerHigh": "#f2f4f5",
+              "surfaceContainerHighest": "#eceef0",
+              "surfaceContainerLow": "#fbfcfe",
+              "surfaceContainerLowest": "#ffffff",
+              "surfaceDim": "#d8dadc",
+              "surfaceVariant": "#dbe4e8",
+              "tertiary": "#5a5c7e",
+              "tertiaryContainer": "#e0e0ff",
+              "tertiaryFixed": "#e0e0ff"
+            }
+          }
+        },
+        {
+          "label": "Dark Theme",
+          "isDark": true,
+          "logo": "/_brand/icon.svg",
+          "designTokens": {
+            "roles": {
+              "background": "#191c1d",
+              "chrome": "#1d2021",
+              "error": "#ffb4ab",
+              "errorContainer": "#93000a",
+              "inverseOnSurface": "#2e3132",
+              "inversePrimary": "#d52b1e",
+              "inverseSurface": "#e1e3e4",
+              "onBackground": "#e1e3e4",
+              "onChrome": "#e1e3e4",
+              "onError": "#690005",
+              "onErrorContainer": "#ffb4ab",
+              "onPrimary": "#690002",
+              "onPrimaryContainer": "#ffdad5",
+              "onPrimaryFixed": "#410001",
+              "onSecondary": "#1e333b",
+              "onSecondaryContainer": "#cfe6f1",
+              "onSecondaryFixed": "#071e26",
+              "onSurface": "#e1e3e4",
+              "onSurfaceVariant": "#bfc8cc",
+              "onTertiary": "#2c2e4d",
+              "onTertiaryContainer": "#e0e0ff",
+              "onTertiaryFixed": "#171937",
+              "outline": "#8a9296",
+              "outlineVariant": "#40484c",
+              "primary": "#ffb4a8",
+              "primaryContainer": "#930005",
+              "primaryFixed": "#ffdad5",
+              "scrim": "#000000",
+              "secondary": "#b3cad4",
+              "secondaryContainer": "#344a52",
+              "secondaryFixed": "#cfe6f1",
+              "shadow": "#000000",
+              "surface": "#191c1d",
+              "surfaceBright": "#373a3b",
+              "surfaceContainer": "#1d2021",
+              "surfaceContainerHigh": "#272a2c",
+              "surfaceContainerHighest": "#323537",
+              "surfaceContainerLow": "#191c1d",
+              "surfaceContainerLowest": "#0c0f10",
+              "surfaceDim": "#111415",
+              "surfaceVariant": "#40484c",
+              "tertiary": "#c3c3eb",
+              "tertiaryContainer": "#424465",
+              "tertiaryFixed": "#e0e0ff"
+            }
+          }
+        }
+      ]
+    }
+  }
+}

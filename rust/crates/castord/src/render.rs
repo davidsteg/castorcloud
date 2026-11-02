@@ -296,8 +296,20 @@ pub fn immich_config(slug: &str, p: &Platform, secrets: &Vars) -> Value {
         "machineLearning": { "urls": ["http://pc-node-immich-ml:3003"] },
         "server": { "externalDomain": n.service_origin(Service::Photos) },
         "newVersionCheck": { "enabled": false },
+        "theme": { "customCss": IMMICH_CSS },
     })
 }
+
+/// Our colours in Immich (docs/branding.md), through its own "custom CSS"
+/// setting and only its colour variables: no selectors into the page, so an
+/// upgrade can at worst bring back Immich's default colour. Light: Swiss red
+/// #d52b1e; dark: #ef4a3c (packages/brand/tokens.css). `html:root` and
+/// `html.dark:root` outrank Immich's own `:root, .light` and `.dark`, wherever
+/// Immich inserts the custom CSS. Checked against Immich v3.2.2.
+const IMMICH_CSS: &str = concat!(
+    "html:root{--immich-ui-primary-50:#fcf2f2;--immich-ui-primary-100:#f9e1e0;--immich-ui-primary-200:#f2bfbc;--immich-ui-primary-300:#ea958e;--immich-ui-primary-400:#e06056;--immich-ui-primary-500:#d52b1e;--immich-ui-primary-600:#b82317;--immich-ui-primary-700:#8c1d14;--immich-ui-primary-800:#6b1710;--immich-ui-primary-900:#4a100c;--immich-ui-primary-950:#310c09;--immich-primary:213 43 30}\n",
+    "html.dark:root{--immich-ui-primary-50:#0f1620;--immich-ui-primary-100:#371f25;--immich-ui-primary-200:#5b282a;--immich-ui-primary-300:#7b2f2d;--immich-ui-primary-400:#9a3631;--immich-ui-primary-500:#ef4a3c;--immich-ui-primary-600:#f48076;--immich-ui-primary-700:#f9b7b1;--immich-ui-primary-800:#fbd7d4;--immich-ui-primary-900:#fdedec;--immich-ui-primary-950:#fef8f7;--immich-dark-primary:239 74 60}",
+);
 
 pub fn paperless_providers(slug: &str, p: &Platform, secrets: &Vars) -> Value {
     let n = Names::new(slug, p);

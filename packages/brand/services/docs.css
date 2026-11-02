@@ -1,6 +1,10 @@
-/* Paperless-ngx overrides (Angular + Bootstrap). */
-html.pc-embedded {
-  --bs-primary: var(--pc-accent);
-  --pngx-primary: var(--pc-accent);
+/* Paperless-ngx (Documents). Name and logo come from its own settings
+   (PAPERLESS_APP_TITLE / PAPERLESS_APP_LOGO, docs/branding.md). Paperless has
+   no global colour setting, only a per-user "theme colour", which sets these
+   two variables; we set the same ones as the default (Swiss red #d52b1e).
+   A member's own theme colour still wins (it is an inline style). Colour
+   variables only: if an upgrade renames them, Paperless shows its own green. */
+:root {
+  --pngx-primary: 4.3, 75.3%;
+  --pngx-primary-lightness: 47.6%;
 }
-/* TODO(phase 2): hide the Paperless navbar brand and user dropdown. */
