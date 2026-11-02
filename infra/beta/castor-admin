@@ -1,0 +1,11 @@
+#!/bin/sh
+# castor-admin on the beta NAS, with the account that runs it in the audit log
+# (AuditLog.actor "ops-cli:<account>"). Run from anywhere:
+#
+#   /path/to/castorcloud/infra/beta/castor-admin staff list
+#
+# sudo keeps the account that asked for it (SUDO_USER).
+set -eu
+cd "$(dirname "$0")"
+operator=${SUDO_USER:-$(id -un)}
+exec docker compose exec -e CASTOR_OPERATOR="$operator" castord castor-admin "$@"

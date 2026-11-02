@@ -115,9 +115,31 @@ Deleting a tenant destroys the data and keys, so it needs no revocation.
 3. `AuditLog` is append-only: database triggers refuse UPDATE, DELETE and
    TRUNCATE on it (migration `20261102220000_audit_log_append_only`). The
    nightly sealed database dump keeps an off-host copy for 30 days
-   ([backups.md](backups.md)). A database superuser can still drop the
-   triggers; the application, Authentik and castord share that role today,
-   so a separate, non-owner role for the applications is the next step.
+   ([backups.md](backups.md)). The applications connect as `castor_app`,
+   which can only add rows to it (see Database roles); only the owner role
+   could drop the triggers.
+
+## Database roles
+
+Three roles in the control plane's Postgres, so that no application can
+change the schema or the audit log:
+
+| Role | Used by | May |
+|---|---|---|
+| owner (`POSTGRES_USER`, a superuser) | Postgres, Authentik, `migrate` | everything; migrations |
+| `castor_app` | portal, castord, monitor, castor-admin | read and write rows; `AuditLog` only SELECT and INSERT; no DDL, can't drop triggers or set `session_replication_role` |
+| `castor_backup` | castord's nightly `pg_dumpall` | read everything (`pg_read_all_data`), write nothing |
+
+The roles and their grants come with the migration
+`20261102230000_least_privilege_roles` (tables later migrations add are
+granted by default privileges); their passwords are set once by the
+operator ([beta.md](beta.md#database-roles)). The beta's compose file blanks
+the owner's password for castord and the monitor. The monitor warns when the
+control plane connects as a superuser or the tables' owner
+(`platform:db-role`).
+
+Authentik still uses the owner role; giving it its own non-superuser role is
+the remaining step.
 
 ## Open items before launch
 

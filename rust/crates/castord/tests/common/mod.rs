@@ -324,6 +324,7 @@ pub fn control(exec: Arc<Fake>, traefik: &Path, llm: Option<&str>, authentik: &s
             db_dir: None,
             db_keep_days: 30,
             pg_user: "pc".into(),
+            pg_read_only: false,
         }),
         platform: platform(),
         versions: castord::render::parse_env_file(include_str!("../../../../../packages/stack-templates/versions.env")),

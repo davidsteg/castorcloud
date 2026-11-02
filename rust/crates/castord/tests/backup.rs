@@ -23,6 +23,7 @@ fn settings() -> backup::Settings {
         db_dir: None,
         db_keep_days: 30,
         pg_user: "pc".into(),
+        pg_read_only: false,
     }
 }
 

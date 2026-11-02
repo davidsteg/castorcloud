@@ -490,6 +490,19 @@ pub struct Platform {
 }
 
 impl Platform {
+    /// The role this process connects as, when it can change AuditLog.
+    async fn privileged(&self) -> Result<Option<String>, String> {
+        sqlx::query_scalar(
+            r#"SELECT current_user::text FROM pg_roles r
+               WHERE r.rolname = current_user
+                 AND (r.rolsuper OR pg_has_role(current_user,
+                        (SELECT c.relowner FROM pg_class c WHERE c.oid = to_regclass('"AuditLog"')), 'USAGE'))"#,
+        )
+        .fetch_optional(&self.db)
+        .await
+        .map_err(db_err)
+    }
+
     /// Job kinds no live worker takes (none: no worker at all).
     async fn uncovered(&self) -> Result<Option<(Vec<String>, Vec<String>)>, String> {
         // As liveWorkers(): a heartbeat within 2 min, or a job lease held.
@@ -553,6 +566,19 @@ impl Check for Platform {
                     .details(json!({ "error": "database timed out after 10s" }))
                     .after(2),
             ),
+        }
+        // The control plane must connect as castor_app, never as a superuser
+        // or the tables' owner, which could drop AuditLog's triggers
+        // (docs/security.md, "Database roles").
+        if let Ok(Ok(Some(user))) = tokio::time::timeout(Duration::from_secs(10), self.privileged()).await {
+            out.push(
+                Finding::new(
+                    "platform:db-role",
+                    Severity::Warning,
+                    "The control plane connects to its database as a superuser or the tables' owner",
+                )
+                .details(json!({ "role": user, "fix": "APP_DATABASE_URL with castor_app (docs/beta.md)" })),
+            );
         }
         let live = self
             .http

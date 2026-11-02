@@ -238,6 +238,8 @@ async fn checks_read_the_schema() {
     .await
     .unwrap();
     assert!(platform.iter().any(|f| f.key == "platform:authentik"));
+    // The tests connect as a superuser: the check says so.
+    assert!(platform.iter().any(|f| f.key == "platform:db-role"));
     // Without a monitor token, the sign-in checks say they're off.
     let auth = checks::Auth {
         http: castord::http::client(None).unwrap(),

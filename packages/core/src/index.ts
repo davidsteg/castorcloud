@@ -4,3 +4,4 @@ export * from "./schedule.ts";
 export * from "./assistant.ts";
 export * from "./newsletter.ts";
 export * from "./github.ts";
+export * from "./audit-view.ts";

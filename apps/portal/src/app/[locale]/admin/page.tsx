@@ -144,6 +144,14 @@ export default async function AdminPage({ params }: { params: Promise<{ locale: 
           )}
         </section>
 
+        <section className="panel" style={{ margin: "24px 0" }}>
+          <h3 style={{ fontSize: 18 }}>Audit log</h3>
+          <p className="small-print" style={{ marginBottom: 12 }}>
+            Every security-relevant action: staff, castor-admin, deletions, keys, backups. Read-only.
+          </p>
+          <a className="button secondary small" href={`/${locale}/admin/audit`}>Open the audit log</a>
+        </section>
+
         <section className="panel">
           <h3 style={{ fontSize: 18 }}>Newsletter</h3>
           <p style={{ marginBottom: 16 }}>
