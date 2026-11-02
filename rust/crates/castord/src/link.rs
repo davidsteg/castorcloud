@@ -396,15 +396,36 @@ pub async fn serve(
         };
         let (tls, tools, upstream) = (tls.clone(), tools.clone(), upstream.clone());
         tokio::spawn(async move {
-            if let Err(e) = handle(tcp, tls, &tools, upstream.as_ref()).await {
-                eprintln!("castor-node-role: {peer}: {e}");
+            if let Err(e) = handle(tcp, peer, tls, &tools, upstream.as_ref()).await {
+                eprintln!("castor-node-role: {peer}: {}", e.escape_debug());
             }
             drop(slot);
         });
     }
 }
 
-async fn handle(tcp: TcpStream, tls: TlsAcceptor, tools: &[Tool], upstream: &dyn Upstream) -> Result<(), String> {
+/// What the node role logs of a call: the tool and the parameters that say
+/// which tenant it touches, already checked against the catalog (plain
+/// names). Never file content, e-mail addresses or the secret; gatekeeper's
+/// audit log on the node has the rest.
+pub fn subject(call: &ToolCall) -> String {
+    const SHOWN: [&str; 4] = ["slug", "dataset", "snapshot", "path"];
+    let mut out = call.name.clone();
+    for k in SHOWN {
+        if let Some(Value::String(v)) = call.args.get(k) {
+            out.push_str(&format!(" {k}={}", v.escape_debug()));
+        }
+    }
+    out
+}
+
+async fn handle(
+    tcp: TcpStream,
+    peer: std::net::SocketAddr,
+    tls: TlsAcceptor,
+    tools: &[Tool],
+    upstream: &dyn Upstream,
+) -> Result<(), String> {
     let (mut stream, request) = tokio::time::timeout(REQUEST_TIMEOUT, async {
         let mut stream = tls.accept(tcp).await.map_err(|e| format!("TLS: {e}"))?;
         let request = read_frame(&mut stream, MAX_REQUEST).await?;
@@ -414,18 +435,20 @@ async fn handle(tcp: TcpStream, tls: TlsAcceptor, tools: &[Tool], upstream: &dyn
     .map_err(|_| "request timed out".to_owned())??;
     let answer = match checked_call(tools, &request) {
         Err(e) => {
-            eprintln!("castor-node-role: refused: {e}");
+            // The tool id in `e` is castord's, unchecked: escaped, one line.
+            eprintln!("castor-node-role: {peer} refused: {}", e.escape_debug());
             Answer::Err(e)
         }
         Ok(call) => {
-            let name = call.name.clone();
+            let subject = subject(&call);
             match upstream.call(call).await {
                 Ok(out) => {
-                    eprintln!("castor-node-role: {name}: ok");
+                    eprintln!("castor-node-role: {peer} {subject}: ok");
                     Answer::Ok(out)
                 }
                 Err(e) => {
-                    eprintln!("castor-node-role: {name}: failed");
+                    // gatekeeper's answer may quote the call's output: not logged.
+                    eprintln!("castor-node-role: {peer} {subject}: failed");
                     Answer::Err(e)
                 }
             }
@@ -477,6 +500,9 @@ mod tests {
             write.secret.as_ref().map(|(n, s)| (*n, s.as_str())),
             Some(("content", "A=1\n"))
         );
+        // The log line names the tool and tenant, never the secret.
+        assert_eq!(subject(&call), "docker.tenant_up slug=acme");
+        assert_eq!(subject(&write), format!("file.tenant_write path={path}"));
         assert!(ok(serde_json::json!({"tool": "file.tenant_write", "args": {"path": path}})).is_err());
         assert!(
             ok(serde_json::json!({"tool": "file.tenant_write", "args": {"path": "/etc/passwd"}, "secret": "x"}))
