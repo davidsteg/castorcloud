@@ -24,11 +24,8 @@ export const SCREENSHOTS: Partial<Record<OssProject, Screenshot>> = {
     src: "/screenshots/files.webp", width: 2880, height: 1680, license: "AGPL-3.0",
     source: "https://github.com/opencloud-eu/opencloud/tree/v7.2.4",
   },
-  dawarich: {
-    // From the project website; usage to be confirmed with the author.
-    src: "/screenshots/dawarich.webp", width: 1600, height: 900, license: "dawarich.app",
-    source: "https://dawarich.app",
-  },
+  // dawarich: none until we take our own (the website's image had no clear
+  // licence for our use); the pages show a text placeholder.
   airtrail: {
     src: "/screenshots/airtrail.webp", width: 2880, height: 1800, license: "GPL-3.0",
     source: "https://github.com/johanohly/AirTrail/blob/v3.13.0/docs/public/screenshots/map-overview.light.webp",
