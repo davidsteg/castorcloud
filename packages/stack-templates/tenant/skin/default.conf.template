@@ -24,18 +24,20 @@ map $pc_service $pc_upstream {
 # First-run setup makes whoever calls it first the app's admin (Immich) or
 # owner (AirTrail), with a password login. castord does it while
 # provisioning, with the tenant's setup token; from anyone else it's a 404,
-# also before castord got there. (An empty token would make this map
-# invalid and the skin would not start: closed, not open.)
+# also before castord got there.
 map "$pc_service:$uri" $pc_setup_path {
     ~^photos:/api/auth/admin-sign-up/?$               1;
     ~^flights:/(setup|api/users/setup)(/.*)?$        1;
     default                                          0;
 }
 
+# A regex, not a string: a 48-character key doesn't fit nginx's map hash.
+# Exact "" is checked before regexes, so an empty header never passes, and
+# an empty token (~^$) matches nothing else: closed, not open.
 map $http_x_castor_setup $pc_setup_token_ok {
-    ""                    0;
-    "${SKIN_SETUP_TOKEN}" 1;
-    default               0;
+    ""                       0;
+    ~^${SKIN_SETUP_TOKEN}$   1;
+    default                  0;
 }
 
 map "$pc_setup_path:$pc_setup_token_ok" $pc_setup_denied {
