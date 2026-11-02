@@ -314,7 +314,13 @@ services:
       # Rendered by castord: role mapping (proxy.yaml) and CSP.
       - ${TENANT_DIR}/opencloud-proxy.yaml:/etc/opencloud/proxy.yaml:ro
       - ${TENANT_DIR}/opencloud-csp.yaml:/etc/castor/csp.yaml:ro
-    extra_hosts: *auth-host
+    # OpenCloud also calls its own public address: an upload that carries its
+    # data in the first request is passed on to OC_URL/data. It goes the
+    # same way in as the issuer, through Traefik, which routes files-<slug>
+    # back to this stack's skin proxy.
+    extra_hosts:
+      - "${AUTH_HOST}:${AUTH_HOST_IP}"
+      - "files-${SLUG}.${BASE_DOMAIN}:${AUTH_HOST_IP}"
     depends_on:
       files-init: { condition: service_completed_successfully }
     networks: [internal]
