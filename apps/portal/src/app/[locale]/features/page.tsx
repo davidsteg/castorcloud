@@ -61,8 +61,15 @@ function ToolSection({ service, t, locale, flip }: { service: ServiceKey; t: Dic
           </figure>
         ) : (
           <div className="tool-chat" aria-hidden>
-            <span className="bubble user">{t.showcase.sample.question}</span>
-            <span className="bubble bot">{t.showcase.sample.answer}</span>
+            {!project || project === "platform" || project === "hermes" ? (
+              <>
+                <span className="bubble user">{t.showcase.sample.question}</span>
+                <span className="bubble bot">{t.showcase.sample.answer}</span>
+              </>
+            ) : (
+              // No screenshot of this app yet: its short description instead.
+              <span className="bubble bot">{t.services.items[service].text}</span>
+            )}
           </div>
         )}
       </div>

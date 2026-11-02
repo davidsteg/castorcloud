@@ -44,3 +44,8 @@ only.
 branding, listed in `apps/portal/src/lib/screenshots.ts`. Third-party logos
 that the apps still show (Immich's top bar) are cropped out of the website
 images; the apps credit their projects in text on the open-source page.
+
+Still to take: Timeline (Dawarich, no screenshot shown until then: the
+website's image had no clear licence for our use) and Flights (AirTrail,
+still upstream's GPL screenshot). Both need map tiles reachable from the
+environment that takes them.
