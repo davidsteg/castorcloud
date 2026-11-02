@@ -397,6 +397,9 @@ pub async fn apply(c: &Control, cx: &JobCx, job: &Job) -> Result<(), String> {
     if enabled.contains(&Service::Photos) {
         immich_service_account(c, &n, &t.slug, &secrets).await?;
     }
+    if enabled.contains(&Service::Flights) {
+        airtrail_owner(c, &n, &secrets).await?;
+    }
     if with_assistant {
         let url = format!("{}/health", n.assistant_origin());
         let watch = Watch {
@@ -763,6 +766,8 @@ pub fn failing(ps: &str, containers: &[&str]) -> Vec<String> {
 }
 
 /// The Immich admin the dashboard and assistant use; customers sign in via SSO.
+/// The skin proxy only lets admin sign-up through with the tenant's setup
+/// token, so nobody else can claim the admin before this runs.
 async fn immich_service_account(c: &Control, n: &Names<'_>, slug: &str, secrets: &Vars) -> Result<(), String> {
     let url = format!("{}/api/auth/admin-sign-up", n.service_origin(Service::Photos));
     let body = json!({
@@ -773,6 +778,7 @@ async fn immich_service_account(c: &Control, n: &Names<'_>, slug: &str, secrets:
     let res = c
         .http
         .post(&url)
+        .header(render::SETUP_HEADER, render::get(secrets, "SKIN_SETUP_TOKEN"))
         .json(&body)
         .timeout(Duration::from_secs(30))
         .send()
@@ -784,6 +790,41 @@ async fn immich_service_account(c: &Control, n: &Names<'_>, slug: &str, secrets:
         return Err(format!("immich admin sign-up failed: {status}"));
     }
     Ok(())
+}
+
+/// AirTrail's owner: a service account, so that its first-run setup (which
+/// would make whoever opens flights-<slug> first the owner, with a password
+/// login) is closed. Customers sign in via SSO as ordinary users. Like
+/// Immich's admin sign-up, the skin proxy only passes setup with the token.
+async fn airtrail_owner(c: &Control, n: &Names<'_>, secrets: &Vars) -> Result<(), String> {
+    let origin = n.service_origin(Service::Flights);
+    let body = render::form_body(&[
+        ("username", "pc-service"),
+        ("password", render::get(secrets, "FLIGHTS_SERVICE_PASSWORD")),
+        ("displayName", "Service"),
+    ]);
+    let res = c
+        .http
+        .post(format!("{origin}/api/users/setup"))
+        .header(render::SETUP_HEADER, render::get(secrets, "SKIN_SETUP_TOKEN"))
+        // SvelteKit refuses form posts from another origin.
+        .header("origin", &origin)
+        .header("content-type", "application/x-www-form-urlencoded")
+        .body(body)
+        .timeout(Duration::from_secs(30))
+        .send()
+        .await
+        .map_err(|e| format!("airtrail owner setup: {}", e.without_url()))?;
+    let status = res.status().as_u16();
+    // 303 to "/": created. 400 "Owner already exists": a re-run.
+    if status == 303 || res.status().is_success() {
+        return Ok(());
+    }
+    let text = res.text().await.unwrap_or_default();
+    if status == 400 && text.contains("Owner already exists") {
+        return Ok(());
+    }
+    Err(format!("airtrail owner setup failed: {status}"))
 }
 
 /// The assistant: the tenant's LLM key with this month's budget, one Hermes

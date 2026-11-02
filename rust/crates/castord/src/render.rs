@@ -192,7 +192,7 @@ pub fn redirect_uris(slug: &str, p: &Platform, s: Service) -> Vec<Value> {
         .collect()
 }
 
-pub const SECRET_KEYS: [&str; 16] = [
+pub const SECRET_KEYS: [&str; 18] = [
     "IMMICH_DB_PASSWORD",
     "DB_ROOT_PASSWORD",
     "PAPERLESS_DB_PASSWORD",
@@ -209,7 +209,30 @@ pub const SECRET_KEYS: [&str; 16] = [
     "ASSISTANT_ADMIN_KEY",
     "LLM_VIRTUAL_KEY",
     "FILES_ADMIN_PASSWORD",
+    // The skin proxy passes first-run setup (Immich admin, AirTrail owner) only with it.
+    "SKIN_SETUP_TOKEN",
+    "FLIGHTS_SERVICE_PASSWORD",
 ];
+
+/// Header carrying SKIN_SETUP_TOKEN (skin/default.conf.template).
+pub const SETUP_HEADER: &str = "x-castor-setup";
+
+/// application/x-www-form-urlencoded, for upstreams that take only forms.
+pub fn form_body(fields: &[(&str, &str)]) -> String {
+    let enc = |v: &str| {
+        v.bytes()
+            .map(|b| match b {
+                b'A'..=b'Z' | b'a'..=b'z' | b'0'..=b'9' | b'-' | b'.' | b'_' | b'~' => (b as char).to_string(),
+                _ => format!("%{b:02X}"),
+            })
+            .collect::<String>()
+    };
+    fields
+        .iter()
+        .map(|(k, v)| format!("{}={}", enc(k), enc(v)))
+        .collect::<Vec<_>>()
+        .join("&")
+}
 
 /// Ordered name -> value, as JavaScript objects keep insertion order.
 pub type Vars = Vec<(String, String)>;
@@ -559,10 +582,25 @@ mod tests {
     use super::*;
 
     #[test]
+    fn form_bodies_are_encoded() {
+        assert_eq!(
+            form_body(&[("username", "pc-service"), ("displayName", "A b&c=d")]),
+            "username=pc-service&displayName=A%20b%26c%3Dd"
+        );
+    }
+
+    #[test]
+    fn every_tenant_gets_a_setup_token() {
+        let (s, created) = ensure_secrets(&Vec::new()).unwrap();
+        assert!(created.contains(&"SKIN_SETUP_TOKEN"));
+        assert_eq!(get(&s, "SKIN_SETUP_TOKEN").len(), 48);
+    }
+
+    #[test]
     fn secrets_are_kept_and_filled() {
         let (s, created) = ensure_secrets(&vec![("IMMICH_DB_PASSWORD".into(), "keep".into())]).unwrap();
         assert_eq!(get(&s, "IMMICH_DB_PASSWORD"), "keep");
-        assert_eq!(created.len(), 15);
+        assert_eq!(created.len(), 17);
         assert_eq!(get(&s, "DB_ROOT_PASSWORD").len(), 48);
         assert_eq!(get(&s, "DAWARICH_SECRET_KEY_BASE").len(), 128);
         assert!(get(&s, "LLM_VIRTUAL_KEY").starts_with("sk-castor-") && get(&s, "LLM_VIRTUAL_KEY").len() == 74);
