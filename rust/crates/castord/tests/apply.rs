@@ -191,7 +191,7 @@ async fn provisions_like_the_typescript_worker() {
     let calls = fake.calls();
     let expect = [
         format!(
-            "{gate} castor-zfs create {s} 102400 db redis immich-db photos docs-data docs-media docs-consume places-public places-watched places-storage flights-uploads assistant"
+            "{gate} castor-zfs create {s} 102400 db redis immich-db photos docs-data docs-media docs-consume places-public places-watched places-storage flights-uploads files-config files-data assistant"
         ),
         format!("{gate} castor-zfs status {s}"),
         format!("{gate} castor-zfs quota {s} 102400"),
@@ -231,6 +231,12 @@ async fn provisions_like_the_typescript_worker() {
             ),
             format!(
                 "{ssh} ps -aq --filter label=com.docker.compose.project=pc-t-{s} --filter label=com.docker.compose.service=airtrail"
+            ),
+            format!(
+                "{ssh} ps -aq --filter label=com.docker.compose.project=pc-t-{s} --filter label=com.docker.compose.service=opencloud"
+            ),
+            format!(
+                "{ssh} ps -aq --filter label=com.docker.compose.project=pc-t-{s} --filter label=com.docker.compose.service=files-init"
             ),
             // The removed member, in the booked app; the assistant's key goes too.
             format!(
@@ -318,7 +324,7 @@ async fn provisions_like_the_typescript_worker() {
             t
         )
         .await,
-        vec![r#"10 {"docs": 0, "photos": 7, "places": 0, "system": 1, "flights": 0}"#]
+        vec![r#"10 {"docs": 0, "files": 0, "photos": 7, "places": 0, "system": 1, "flights": 0}"#]
     );
     assert!(
         rows(&db, r#"SELECT id FROM "AccessRevocation" WHERE "tenantId" = $1"#, t)
@@ -401,12 +407,13 @@ async fn update_on_the_local_node_shrinks_offline_and_follows_with_stacks() {
     assert_eq!(
         calls[0],
         format!(
-            "{cryptd} create {s} 102400 data/db data/redis data/immich-db data/photos data/docs-data data/docs-media data/docs-consume data/places-public data/places-watched data/places-storage data/flights-uploads data/assistant"
+            "{cryptd} create {s} 102400 data/db data/redis data/immich-db data/photos data/docs-data data/docs-media data/docs-consume data/places-public data/places-watched data/places-storage data/flights-uploads data/files-config data/files-data data/assistant"
         )
     );
     let stop = at(" stop");
     assert!(
-        calls[stop].ends_with("--profile photos --profile docs --profile places --profile flights stop"),
+        calls[stop]
+            .ends_with("--profile photos --profile docs --profile places --profile flights --profile files stop"),
         "{}",
         calls[stop]
     );

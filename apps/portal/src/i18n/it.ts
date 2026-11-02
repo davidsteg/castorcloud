@@ -4,7 +4,7 @@ const it: Dictionary = {
   meta: {
     title: "Il tuo cloud privato, ospitato in Svizzera",
     description:
-      "Foto, documenti, cronologia e voli in un cloud privato. Open source, cifrato, ospitato in Svizzera.",
+      "Foto, documenti, file, cronologia e voli in un cloud privato. Open source, cifrato, ospitato in Svizzera.",
   },
   nav: {
     features: "Funzioni",
@@ -20,7 +20,7 @@ const it: Dictionary = {
     badge: "Ospitato in Svizzera",
     title: "La tua vita digitale.\nConservata in Svizzera.",
     lead:
-      "Foto, documenti, luoghi e voli – in un cloud privato che appartiene a te. Niente pubblicità, niente tracciamento, nessun addestramento di IA con i tuoi dati.",
+      "Foto, documenti, file, luoghi e voli – in un cloud privato che appartiene a te. Niente pubblicità, niente tracciamento, nessun addestramento di IA con i tuoi dati.",
     cta: "Componi la tua offerta",
     secondary: "Come proteggiamo i tuoi dati",
     trust: ["Server in Svizzera", "Legge svizzera sulla protezione dei dati (nLPD)", "100% open source", "Cifrato a riposo"],
@@ -49,6 +49,11 @@ const it: Dictionary = {
         name: "Voli",
         text: "Ogni volo sulla mappa del mondo, con statistiche, compagnie aeree e aeroporti.",
         replaces: "TripIt, app di voli",
+      },
+      files: {
+        name: "File",
+        text: "Salva, sincronizza e condividi file e cartelle – con link protetti da password per chi è fuori dall'economia domestica.",
+        replaces: "Google Drive, Dropbox, iCloud Drive",
       },
       assistant: {
         name: "Assistente",
@@ -205,6 +210,19 @@ const it: Dictionary = {
         import: "Importa i tuoi voli da myFlightradar24, App in the Air o JetLog.",
         apps: "Nel browser su computer e telefono.",
       },
+      files: {
+        headline: "I tuoi file, nel tuo cloud.",
+        lead: "Uno spazio per tutta l'economia domestica: carica, organizza e condividi file e cartelle, con anteprima di documenti, foto e video.",
+        bullets: [
+          "Cartelle personali per ognuno, spazi condivisi per l'economia domestica",
+          "Condividi file e cartelle tramite link, sempre protetti da password",
+          "Anteprima di PDF, immagini, video e file di testo",
+          "Cronologia delle versioni e cestino",
+          "Ricerca per nome e contenuto del file",
+        ],
+        import: "Scarica la tua cartella di Google Drive o Dropbox e trascinala nel browser – le cartelle restano come sono.",
+        apps: "Nel browser, su computer e telefono. Le app di sincronizzazione seguiranno più avanti.",
+      },
       assistant: {
         headline: "Fai domande ai tuoi dati.",
         lead: "L’assistente conosce foto, documenti, luoghi e voli – e risponde a domande in linguaggio naturale. Funziona nel tuo cloud e ricorda ciò che conta per te.",
@@ -267,7 +285,7 @@ const it: Dictionary = {
       "Nell’app tocca «Scansiona codice QR» e scansiona il codice mostrato – indirizzo e chiave vengono inseriti automaticamente.",
     ],
     placesOpen: "Apri la pagina account della cronologia",
-    webTitle: "Voli e assistente come app",
+    webTitle: "File, voli e assistente come app",
     webText: "Apri l’indirizzo del tuo cloud nel browser del telefono e aggiungilo alla schermata iniziale – poi si avvia come un’app.",
     webIos: "iPhone (Safari): icona Condividi → «Aggiungi alla schermata Home».",
     webAndroid: "Android (Chrome): menu ⋮ → «Installa app».",
@@ -282,6 +300,7 @@ const it: Dictionary = {
       docs: "Ogni lettera e fattura ricercabile nel testo completo, etichettata e archiviata automaticamente.",
       places: "Dove sei stato: viaggi, visite e percorsi sulla mappa, importati da Google in pochi minuti.",
       flights: "Ogni volo sulla mappa del mondo, con distanze, compagnie e statistiche.",
+      files: "Lo spazio dell'economia domestica: cartelle per ognuno, spazi condivisi e link protetti da password.",
       assistant: "Chiedi in linguaggio naturale – l’assistente cerca tra foto, documenti, luoghi e voli.",
     },
     sample: {
@@ -292,6 +311,7 @@ const it: Dictionary = {
       placesTitle: "Maggio 2026",
       placesStat: "1'284 km · 6 città",
       flightsStat: "12 voli · 18'420 km",
+      filesTitle: "Famiglia",
       question: "Quando sono stato a Lisbona e dov’è la fattura dell’hotel?",
       answer: "Sei stato a Lisbona dal 12 al 16 maggio 2026 (volo LX 2084 da Zurigo). La fattura dell’Hotel Lisboa si trova in «Documenti» con l’etichetta «Viaggi». Lì hai anche scattato 48 foto.",
     },
@@ -370,7 +390,7 @@ const it: Dictionary = {
       },
       {
         q: "Quali app uso sul telefono?",
-        a: "L’app ufficiale Immich per le foto e l’app ufficiale Dawarich per la cronologia delle posizioni – entrambe per iPhone e Android. Per i documenti le app della community Swift Paperless (iPhone) e Paperless Mobile (Android). Voli e assistente si usano nel browser, se vuoi come app sulla schermata iniziale.",
+        a: "L’app ufficiale Immich per le foto e l’app ufficiale Dawarich per la cronologia delle posizioni – entrambe per iPhone e Android. Per i documenti le app della community Swift Paperless (iPhone) e Paperless Mobile (Android). File, voli e assistente si usano nel browser, se vuoi come app sulla schermata iniziale.",
       },
     ],
   },
@@ -433,7 +453,7 @@ const it: Dictionary = {
     title: "Spazio",
     used: "{used} di {quota} occupati",
     notMeasured: "L’utilizzo viene misurato ogni ora.",
-    parts: { photos: "Foto", docs: "Documenti", places: "Cronologia", flights: "Voli", system: "Database e sistema" },
+    parts: { photos: "Foto", docs: "Documenti", places: "Cronologia", flights: "Voli", files: "File", system: "Database e sistema" },
     warn: "Il tuo spazio è pieno al {percent}%. Prenota più spazio prima che si esaurisca.",
     full: "Il tuo spazio è quasi pieno. Quando è pieno, i nuovi caricamenti non riescono: elimina dei file o prenota più spazio.",
     held: "Il tuo spazio resta a {volume} finché i tuoi dati ({used}) non stanno, con il 10% di margine, nei {quota} prenotati. Elimina dei file o prenota più spazio.",

@@ -86,7 +86,7 @@ const HOST_RE = /^(?:\*\.)?(?:[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\.)+[a-z]{2,63
  * refused because they would read like our own service hosts.
  */
 export const RESERVED_STACK_NAMES = new Set([
-  "photos", "docs", "places", "flights", "assistant", "auth", "app", "www", "api", "mail", "admin", "castor", "portal", "status",
+  "photos", "docs", "places", "flights", "files", "assistant", "auth", "app", "www", "api", "mail", "admin", "castor", "portal", "status",
 ]);
 
 /** Names we use inside every stack (the egress proxy). */

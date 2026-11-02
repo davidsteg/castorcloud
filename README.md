@@ -17,7 +17,7 @@
 </p>
 
 Castor Cloud bundles proven open-source apps (Immich, Paperless-ngx, Dawarich,
-AirTrail and a Hermes-based assistant) into **one product with one login**.
+AirTrail, OpenCloud and a Hermes-based assistant) into **one product with one login**.
 Every customer gets a **dedicated, encrypted stack**; the portal embeds all
 services, themed and signed in, so it feels like a single app.
 
@@ -39,6 +39,7 @@ services, themed and signed in, so it feels like a single app.
 | **Documents** | [Paperless-ngx](https://docs.paperless-ngx.com) | scanned docs in Drive |
 | **Timeline** | [Dawarich](https://dawarich.app) | Google Maps Timeline |
 | **Flights** | [AirTrail](https://github.com/johanohly/AirTrail) | flight-tracking apps |
+| **Files** | [OpenCloud](https://opencloud.eu) | Google Drive, Dropbox |
 | **Assistant** | [Hermes Agent](https://github.com/NousResearch/hermes-agent) + our read-only MCP tools | assistants trained on your data |
 | **Custom stacks** | reviewed catalog or own Docker images | self-hosting on your own server |
 

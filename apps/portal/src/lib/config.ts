@@ -16,12 +16,13 @@ export const SERVICES = {
   docs: { label: "Documents", icon: "▤" },
   places: { label: "Timeline", icon: "◉" },
   flights: { label: "Flights", icon: "✈" },
+  files: { label: "Files", icon: "▣" },
 } as const;
 
 export type ServiceKey = keyof typeof SERVICES;
 
 /** Service hosts: <service>-<slug>. Slugs may not start with these prefixes. */
-export const SERVICE_HOST_RE = /^(photos|docs|places|flights|assistant)-/;
+export const SERVICE_HOST_RE = /^(photos|docs|places|flights|files|assistant)-/;
 
 export function isServiceKey(value: string): value is ServiceKey {
   return value in SERVICES;

@@ -4,7 +4,7 @@ const fr: Dictionary = {
   meta: {
     title: "Votre cloud privé, hébergé en Suisse",
     description:
-      "Photos, documents, chronologie et vols dans un cloud privé. Open source, chiffré, hébergé en Suisse.",
+      "Photos, documents, fichiers, chronologie et vols dans un cloud privé. Open source, chiffré, hébergé en Suisse.",
   },
   nav: {
     features: "Fonctions",
@@ -20,7 +20,7 @@ const fr: Dictionary = {
     badge: "Hébergé en Suisse",
     title: "Votre vie numérique.\nStockée en Suisse.",
     lead:
-      "Photos, documents, lieux et vols – dans un cloud privé qui vous appartient. Sans publicité, sans pistage, sans entraîner d’IA avec vos données.",
+      "Photos, documents, fichiers, lieux et vols – dans un cloud privé qui vous appartient. Sans publicité, sans pistage, sans entraîner d’IA avec vos données.",
     cta: "Composer mon offre",
     secondary: "Comment nous protégeons vos données",
     trust: ["Serveurs en Suisse", "Loi suisse sur la protection des données (nLPD)", "100 % open source", "Chiffré au repos"],
@@ -49,6 +49,11 @@ const fr: Dictionary = {
         name: "Vols",
         text: "Chaque vol sur une carte du monde, avec statistiques, compagnies et aéroports.",
         replaces: "TripIt, applis de vols",
+      },
+      files: {
+        name: "Fichiers",
+        text: "Enregistrez, synchronisez et partagez vos fichiers et dossiers – avec des liens protégés par mot de passe pour les personnes hors du foyer.",
+        replaces: "Google Drive, Dropbox, iCloud Drive",
       },
       assistant: {
         name: "Assistant",
@@ -205,6 +210,19 @@ const fr: Dictionary = {
         import: "Reprenez vos vols depuis myFlightradar24, App in the Air ou JetLog par import.",
         apps: "Dans le navigateur sur ordinateur et téléphone.",
       },
+      files: {
+        headline: "Vos fichiers, dans votre propre cloud.",
+        lead: "Un espace de stockage pour tout le foyer : téléversez, organisez et partagez fichiers et dossiers, avec aperçu des documents, photos et vidéos.",
+        bullets: [
+          "Dossiers personnels pour chacun, espaces partagés pour le foyer",
+          "Partage de fichiers et dossiers par lien, toujours protégé par un mot de passe",
+          "Aperçu des PDF, images, vidéos et fichiers texte",
+          "Historique des versions et corbeille",
+          "Recherche par nom de fichier et par contenu",
+        ],
+        import: "Téléchargez votre dossier Google Drive ou Dropbox et glissez-le dans le navigateur – les dossiers restent tels quels.",
+        apps: "Dans le navigateur, sur ordinateur et téléphone. Les apps de synchronisation suivront plus tard.",
+      },
       assistant: {
         headline: "Interrogez vos propres données.",
         lead: "L’assistant connaît vos photos, documents, lieux et vols – et répond à vos questions en langage courant. Il fonctionne dans votre cloud et retient ce qui compte pour vous.",
@@ -267,7 +285,7 @@ const fr: Dictionary = {
       "Dans l’application, touchez « Scanner le code QR » et scannez le code affiché – adresse et clé sont reprises automatiquement.",
     ],
     placesOpen: "Ouvrir la page du compte de la chronologie",
-    webTitle: "Vols et assistant comme application",
+    webTitle: "Fichiers, vols et assistant comme application",
     webText: "Ouvrez l’adresse de votre cloud dans le navigateur du téléphone et ajoutez-la à l’écran d’accueil – elle démarre ensuite comme une application.",
     webIos: "iPhone (Safari) : icône Partager → « Sur l’écran d’accueil ».",
     webAndroid: "Android (Chrome) : menu ⋮ → « Installer l’application ».",
@@ -282,6 +300,7 @@ const fr: Dictionary = {
       docs: "Chaque lettre et facture consultable en texte intégral, étiquetée et classée automatiquement.",
       places: "Où vous êtes allé : voyages, visites et itinéraires sur une carte, importés de Google en quelques minutes.",
       flights: "Chaque vol sur la carte du monde, avec distances, compagnies et statistiques.",
+      files: "Le disque du foyer : des dossiers pour chacun, des espaces partagés et des liens protégés par mot de passe.",
       assistant: "Posez vos questions en langage courant – l’assistant cherche dans vos photos, documents, lieux et vols.",
     },
     sample: {
@@ -292,6 +311,7 @@ const fr: Dictionary = {
       placesTitle: "Mai 2026",
       placesStat: "1'284 km · 6 villes",
       flightsStat: "12 vols · 18'420 km",
+      filesTitle: "Famille",
       question: "Quand étais-je à Lisbonne, et où est la facture de l’hôtel ?",
       answer: "Vous étiez à Lisbonne du 12 au 16 mai 2026 (vol LX 2084 depuis Zurich). La facture de l’Hotel Lisboa se trouve dans « Documents » avec l’étiquette « Voyages ». Vous y avez aussi pris 48 photos.",
     },
@@ -370,7 +390,7 @@ const fr: Dictionary = {
       },
       {
         q: "Quelles applications utiliser sur mon téléphone ?",
-        a: "L’application officielle Immich pour les photos et l’application officielle Dawarich pour l’historique de positions – toutes deux pour iPhone et Android. Pour les documents, les applications communautaires Swift Paperless (iPhone) et Paperless Mobile (Android). Les vols et l’assistant s’utilisent dans le navigateur, si vous le souhaitez comme application sur l’écran d’accueil.",
+        a: "L’application officielle Immich pour les photos et l’application officielle Dawarich pour l’historique de positions – toutes deux pour iPhone et Android. Pour les documents, les applications communautaires Swift Paperless (iPhone) et Paperless Mobile (Android). Les fichiers, les vols et l’assistant s’utilisent dans le navigateur, si vous le souhaitez comme application sur l’écran d’accueil.",
       },
     ],
   },
@@ -433,7 +453,7 @@ const fr: Dictionary = {
     title: "Stockage",
     used: "{used} utilisés sur {quota}",
     notMeasured: "L’utilisation est mesurée toutes les heures.",
-    parts: { photos: "Photos", docs: "Documents", places: "Chronologie", flights: "Vols", system: "Bases de données et système" },
+    parts: { photos: "Photos", docs: "Documents", places: "Chronologie", flights: "Vols", files: "Fichiers", system: "Bases de données et système" },
     warn: "Votre stockage est plein à {percent} %. Réservez davantage de stockage avant qu’il soit plein.",
     full: "Votre stockage est presque plein. Une fois plein, les nouveaux envois échouent : supprimez des fichiers ou réservez davantage de stockage.",
     held: "Votre stockage reste à {volume} jusqu’à ce que vos données ({used}) tiennent, avec 10 % de marge, dans les {quota} réservés. Supprimez des fichiers ou réservez davantage.",

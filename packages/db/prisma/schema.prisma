@@ -27,6 +27,7 @@ enum ServiceKind {
   DOCS      // Paperless-ngx
   PLACES    // Dawarich
   FLIGHTS   // AirTrail
+  FILES     // OpenCloud
   ASSISTANT // Hermes agent
 }
 

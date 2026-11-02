@@ -227,6 +227,7 @@ pub async fn apply(c: &Control, cx: &JobCx, job: &Job) -> Result<(), String> {
                 redirect_uris: &render::redirect_uris(&t.slug, &c.platform, s),
                 launch_url: &format!("{}/{}", n.portal_origin(), s.key()),
                 allowed_group_pk: &members_pk,
+                public: s.def().public_client,
             },
             &defaults,
         )
@@ -260,6 +261,16 @@ pub async fn apply(c: &Control, cx: &JobCx, job: &Job) -> Result<(), String> {
     let immich = serde_json::to_string_pretty(&render::immich_config(&t.slug, &c.platform, &secrets))
         .map_err(|e| e.to_string())?;
     node.write_node_file(&t.slug, "immich.json", &immich, false).await?;
+    if enabled.contains(&Service::Files) {
+        // JSON is YAML. Readable: OpenCloud runs as uid 1000; no secrets inside.
+        for (file, value) in [
+            ("opencloud-proxy.yaml", render::opencloud_proxy(&t.slug, &c.platform)),
+            ("opencloud-csp.yaml", render::opencloud_csp(&t.slug, &c.platform)),
+        ] {
+            let text = serde_json::to_string_pretty(&value).map_err(|e| e.to_string())?;
+            node.write_node_file(&t.slug, file, &text, true).await?;
+        }
+    }
     node.write_config(
         &t.slug,
         "compose.volumes.yml",
@@ -389,6 +400,7 @@ pub async fn apply(c: &Control, cx: &JobCx, job: &Job) -> Result<(), String> {
             Service::Docs => "PAPERLESS_VERSION",
             Service::Places => "DAWARICH_VERSION",
             Service::Flights => "AIRTRAIL_VERSION",
+            Service::Files => "OPENCLOUD_VERSION",
         };
         healthy(cx, &t.id, &s.key().to_uppercase(), version_of(&c.versions, version)).await?;
     }

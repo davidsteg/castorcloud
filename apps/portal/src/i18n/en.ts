@@ -4,7 +4,7 @@ const en = {
   meta: {
     title: "Your private cloud, hosted in Switzerland",
     description:
-      "Photos, documents, timeline and flights in one private cloud. Open source, encrypted, hosted in Switzerland.",
+      "Photos, documents, files, timeline and flights in one private cloud. Open source, encrypted, hosted in Switzerland.",
   },
   nav: {
     features: "Features",
@@ -20,7 +20,7 @@ const en = {
     badge: "Hosted in Switzerland",
     title: "Your digital life.\nStored in Switzerland.",
     lead:
-      "Photos, documents, places and flights – in one private cloud that belongs to you. No ads, no tracking, no training AI on your data.",
+      "Photos, documents, files, places and flights – in one private cloud that belongs to you. No ads, no tracking, no training AI on your data.",
     cta: "Build your plan",
     secondary: "How we protect your data",
     trust: ["Servers in Switzerland", "Swiss data protection law (nFADP)", "100% open source", "Encrypted at rest"],
@@ -49,6 +49,11 @@ const en = {
         name: "Flights",
         text: "Every flight on a world map, with statistics, airlines and airports.",
         replaces: "TripIt, flight apps",
+      },
+      files: {
+        name: "Files",
+        text: "Store, sync and share your files and folders – with password-protected links for anyone outside the household.",
+        replaces: "Google Drive, Dropbox, iCloud Drive",
       },
       assistant: {
         name: "Assistant",
@@ -205,6 +210,19 @@ const en = {
         import: "Bring your flights from myFlightradar24, App in the Air or JetLog by import.",
         apps: "In the browser on computer and phone.",
       },
+      files: {
+        headline: "Your files, in your own cloud.",
+        lead: "A drive for the whole household: upload, organise and share files and folders, with previews for documents, photos and videos.",
+        bullets: [
+          "Personal folders for everyone, shared spaces for the household",
+          "Share files and folders by link, always protected by a password",
+          "Preview of PDFs, images, videos and text files",
+          "Version history and trash bin",
+          "Search by file name and content",
+        ],
+        import: "Download your Google Drive or Dropbox folder and drag it into the browser – folders stay as they are.",
+        apps: "In the browser on computer and phone. Desktop and phone sync apps follow later.",
+      },
       assistant: {
         headline: "Ask your own data.",
         lead: "The assistant knows your photos, documents, places and flights – and answers questions in plain language. It runs in your cloud and remembers what matters to you.",
@@ -267,7 +285,7 @@ const en = {
       "In the app, tap “Scan QR code” and scan the code shown there – address and key are filled in automatically.",
     ],
     placesOpen: "Open the timeline account page",
-    webTitle: "Flights and assistant as an app",
+    webTitle: "Files, flights and assistant as an app",
     webText: "Open your cloud address in your phone's browser and add it to the home screen – it then starts like an app.",
     webIos: "iPhone (Safari): Share icon → “Add to Home Screen”.",
     webAndroid: "Android (Chrome): menu ⋮ → “Install app”.",
@@ -282,6 +300,7 @@ const en = {
       docs: "Every letter and invoice searchable by its full text, tagged and filed automatically.",
       places: "Where you have been: trips, visits and routes on a map, imported from Google in minutes.",
       flights: "Every flight on the world map, with distances, airlines and statistics.",
+      files: "Your household drive: folders for everyone, shared spaces and links protected by a password.",
       assistant: "Ask in plain language – the assistant searches your photos, documents, places and flights.",
     },
     sample: {
@@ -292,6 +311,7 @@ const en = {
       placesTitle: "May 2026",
       placesStat: "1'284 km · 6 cities",
       flightsStat: "12 flights · 18'420 km",
+      filesTitle: "Family",
       question: "When was I in Lisbon, and where is the hotel invoice?",
       answer: "You were in Lisbon from 12 to 16 May 2026 (flight LX 2084 from Zurich). The invoice from Hotel Lisboa is in Documents, tagged “Travel”. You also took 48 photos there.",
     },
@@ -370,7 +390,7 @@ const en = {
       },
       {
         q: "Which apps can I use on my phone?",
-        a: "The official Immich app for photos and the official Dawarich app for your location history – both for iPhone and Android. For documents, the community apps Swift Paperless (iPhone) and Paperless Mobile (Android). Flights and the assistant run in the browser, optionally as an app on your home screen.",
+        a: "The official Immich app for photos and the official Dawarich app for your location history – both for iPhone and Android. For documents, the community apps Swift Paperless (iPhone) and Paperless Mobile (Android). Files, flights and the assistant run in the browser, optionally as an app on your home screen.",
       },
     ],
   },
@@ -433,7 +453,7 @@ const en = {
     title: "Storage",
     used: "{used} of {quota} used",
     notMeasured: "Usage is measured once an hour.",
-    parts: { photos: "Photos", docs: "Documents", places: "Timeline", flights: "Flights", system: "Databases & system" },
+    parts: { photos: "Photos", docs: "Documents", places: "Timeline", flights: "Flights", files: "Files", system: "Databases & system" },
     warn: "Your storage is {percent}% full. Book more storage before it runs out.",
     full: "Your storage is almost full. New uploads fail once it is full: delete files or book more storage.",
     held: "Your storage stays at {volume} until what you store ({used}) fits into the {quota} you booked, with 10% to spare. Delete files or book more.",

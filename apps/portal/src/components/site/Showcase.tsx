@@ -6,7 +6,7 @@ import { SERVICE_ICONS } from "@/lib/plan";
 
 // Product preview: the tenant shell with each service, drawn with sample
 // data. Real screenshots from a demo tenant can replace the panes later.
-const TABS = ["photos", "docs", "places", "flights", "assistant"] as const;
+const TABS = ["photos", "docs", "files", "places", "flights", "assistant"] as const;
 type Tab = (typeof TABS)[number];
 
 export function Showcase({ t, brand }: { t: Dictionary; brand: string }) {
@@ -44,6 +44,7 @@ export function Showcase({ t, brand }: { t: Dictionary; brand: string }) {
             {tab === "photos" && <PhotosPane s={s} />}
             {tab === "docs" && <DocsPane s={s} />}
             {tab === "places" && <PlacesPane s={s} />}
+            {tab === "files" && <FilesPane s={s} />}
             {tab === "flights" && <FlightsPane s={s} />}
             {tab === "assistant" && <AssistantPane s={s} t={t} />}
           </div>
@@ -133,6 +134,34 @@ function PlacesPane({ s }: { s: Sample }) {
           ))}
         </svg>
         <span className="map-chip">{s.placesStat}</span>
+      </div>
+    </>
+  );
+}
+
+function FilesPane({ s }: { s: Sample }) {
+  const rows = [
+    ["▣", "Ferien Tessin 2026", "48 · 1.2 GB", true],
+    ["▣", "Steuern", "12 · 34 MB", false],
+    ["▣", "Schule Lena", "27 · 210 MB", false],
+    ["▤", "Budget 2026.xlsx", "86 KB · 🔒", false],
+    ["▤", "Rezepte Grosi.pdf", "4.1 MB", false],
+  ] as const;
+  return (
+    <>
+      <Toolbar s={s} title={s.filesTitle} />
+      <div className="mock-docs mock-files">
+        <ul>
+          {rows.map(([icon, name, meta, active]) => (
+            <li key={name} className={active ? "active" : ""}>
+              <span aria-hidden>{icon}</span>
+              <span>
+                <b>{name}</b>
+                <small>{meta}</small>
+              </span>
+            </li>
+          ))}
+        </ul>
       </div>
     </>
   );

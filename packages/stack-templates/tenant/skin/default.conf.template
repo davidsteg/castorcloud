@@ -4,6 +4,8 @@
 #    portal's server only, with the member's key; see the second server)
 #  - injects brand CSS + iframe bridge into every HTML page
 #  - lets the tenant portal (and only it) embed the services
+#  - files-<slug> (OpenCloud) has its own server: OpenCloud's CSP, rendered
+#    by castord, already allows the portal and nothing else, so it is kept
 # ${PORTAL_ORIGIN} is filled in by the nginx image's envsubst at startup;
 # nginx's own $variables are left alone.
 
@@ -61,6 +63,45 @@ server {
         proxy_hide_header X-Frame-Options;
         proxy_hide_header Content-Security-Policy;
         add_header Content-Security-Policy "frame-ancestors ${PORTAL_ORIGIN}" always;
+    }
+}
+
+# Files: OpenCloud. Its own CSP (opencloud-csp.yaml) stays; only its
+# X-Frame-Options (SAMEORIGIN) goes, so the portal can embed it.
+server {
+    listen 80;
+    server_name ~^files-;
+    resolver 127.0.0.11 valid=30s ipv6=off;
+    set $pc_files http://opencloud:9200;
+
+    client_max_body_size 0;          # large uploads
+    proxy_request_buffering off;
+    proxy_read_timeout 600s;
+    proxy_send_timeout 600s;
+
+    location /_brand/ {
+        alias /usr/share/nginx/brand/;
+        add_header Cache-Control "public, max-age=300";
+    }
+
+    location / {
+        proxy_pass $pc_files;
+        proxy_http_version 1.1;
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $http_x_forwarded_proto;
+        proxy_set_header X-Forwarded-Host $host;
+        proxy_set_header Upgrade $http_upgrade;
+        proxy_set_header Connection $connection_upgrade;
+        # Server-sent events (notifications) and big downloads stream through.
+        proxy_buffering off;
+
+        proxy_set_header Accept-Encoding "";
+        sub_filter_once on;
+        sub_filter '</head>' '<link rel="stylesheet" href="/_brand/theme.css"><link rel="stylesheet" href="/_brand/services/files.css"><script src="/_brand/bridge.js" defer></script></head>';
+
+        proxy_hide_header X-Frame-Options;
     }
 }
 

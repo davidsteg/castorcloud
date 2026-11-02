@@ -6,6 +6,7 @@ export const SERVICE_ICONS: Record<string, string> = {
   docs: "▤",
   places: "◉",
   flights: "✈",
+  files: "▣",
   assistant: "✦",
 };
 

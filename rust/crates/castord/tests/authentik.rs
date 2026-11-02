@@ -90,6 +90,7 @@ async fn creates_what_is_missing() {
             redirect_uris: &uris,
             launch_url: "https://castor.test/photos",
             allowed_group_pk: "g-new",
+            public: false,
         },
         &d,
     )
@@ -132,6 +133,34 @@ async fn creates_what_is_missing() {
     );
 }
 
+/// A browser app (Files): no secret, short-lived access tokens.
+#[tokio::test]
+async fn public_clients_have_no_secret() {
+    let (url, seen) = http("ak", fresh).await;
+    let ak = client(&url);
+    let d = ak.provider_defaults().await.unwrap();
+    ak.ensure_oidc_app(
+        &OidcApp {
+            slug: "anna-files",
+            name: "Files (anna)",
+            client_id: "anna-files",
+            client_secret: "ignored",
+            redirect_uris: &[],
+            launch_url: "https://castor.test/files",
+            allowed_group_pk: "g-new",
+            public: true,
+        },
+        &d,
+    )
+    .await
+    .unwrap();
+    let oidc = r#"{"name":"anna-files","client_type":"public","client_id":"anna-files","redirect_uris":[],"sub_mode":"hashed_user_id","include_claims_in_id_token":true,"authorization_flow":"flow-authz","invalidation_flow":"flow-inval","property_mappings":["m-openid","m-email","m-profile"],"signing_key":"key-1","access_token_validity":"minutes=5"}"#;
+    assert_eq!(
+        writes(&seen)[0],
+        format!("POST /api/v3/providers/oauth2/ auth=true {oidc}")
+    );
+}
+
 #[tokio::test]
 async fn updates_what_exists() {
     let (url, seen) = http("ak", existing).await;
@@ -153,6 +182,7 @@ async fn updates_what_exists() {
             redirect_uris: &[],
             launch_url: "https://castor.test/docs",
             allowed_group_pk: "g-old",
+            public: false,
         },
         &d,
     )

@@ -195,6 +195,7 @@ fn service_words(s: Service) -> &'static str {
         Service::Docs => "scanned documents (Documents)",
         Service::Places => "location history (Timeline)",
         Service::Flights => "flights (Flights)",
+        Service::Files => "files (Files)",
     }
 }
 

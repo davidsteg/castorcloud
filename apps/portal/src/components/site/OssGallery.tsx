@@ -23,11 +23,16 @@ export function OssGallery({ t, compact = false }: { t: Dictionary; compact?: bo
               {shot ? (
                 <Image src={shot.src} alt={`${project.name} – ${role(key)}`} width={shot.width} height={shot.height}
                   sizes={compact ? "(max-width: 640px) 100vw, 360px" : "(max-width: 960px) 100vw, 560px"} />
-              ) : (
+              ) : key === "hermes" ? (
                 // No official screenshot: the sample chat as it appears in the cloud.
                 <span className="oss-chat" aria-hidden>
                   <span className="bubble user">{t.showcase.sample.question}</span>
                   <span className="bubble bot">{t.showcase.sample.answer}</span>
+                </span>
+              ) : (
+                // No screenshot (OpenCloud: its marks would show; docs/files.md).
+                <span className="oss-chat" aria-hidden>
+                  <span className="bubble bot">{t.services.items[SERVICE_KEYS.find((s) => SERVICES[s].project === key) ?? "files"].text}</span>
                 </span>
               )}
             </a>

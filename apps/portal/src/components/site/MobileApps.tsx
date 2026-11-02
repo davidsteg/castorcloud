@@ -31,7 +31,7 @@ export function ServiceApps({ t, service }: { t: Dictionary; service: ServiceKey
 
 /** All mobile apps, grouped by service (FAQ). */
 export function MobileAppsOverview({ t }: { t: Dictionary }) {
-  const services: ServiceKey[] = ["photos", "docs", "places", "flights", "assistant"];
+  const services: ServiceKey[] = ["photos", "docs", "places", "flights", "files", "assistant"];
   return (
     <div className="apps-overview">
       {services.map((s) => (
